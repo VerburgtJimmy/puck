@@ -44,7 +44,8 @@ puck store gc                # garbage-collect unused store entries
 | Package cache | Per-project / Composer cache | Shared content-addressable store (`~/.puck/store`) |
 | `vendor/` | Written directly | Linked from the store (hardlink / reflink / copy) |
 | Lock file | `composer.lock` | Same format; Composer can still read what puck writes |
-| Laravel discovery | `artisan package:discover` | Generated natively when the standard script is detected |
+| Laravel discovery | `artisan package:discover` | Generated natively; that Composer script is skipped when `packages.php` was written |
+| Event scripts | `post-autoload-dump` / `post-install-cmd` via PHP | `puck_scripts` after install (skip with `--no-scripts`) |
 
 Composer remains the reference for dependency semantics. Deliberate differences will be documented as they land.
 
@@ -61,7 +62,9 @@ crates/
   puck_store/        Global store & linking
   puck_install/      Install planner
   puck_autoload/     Autoload generation
+  puck_scripts/      Composer event scripts (`post-autoload-dump`, …)
   puck_laravel/      Package discovery & Laravel helpers
+  puck_php/          Locate PHP for user scripts only
   ...
 fixtures/            Pinned projects for parity tests
 parity/              Composer vs puck comparison harness

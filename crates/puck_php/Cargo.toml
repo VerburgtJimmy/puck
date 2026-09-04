@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "puck: php crate (M0 stub)"
+description = "puck: locate PHP for user Composer scripts"
 
 [dependencies]
 thiserror.workspace = true

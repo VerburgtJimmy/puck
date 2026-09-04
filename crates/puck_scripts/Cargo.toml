@@ -6,7 +6,13 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "puck: scripts crate (M0 stub)"
+description = "puck: run Composer event scripts after install"
 
 [dependencies]
+indexmap.workspace = true
+puck_php.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

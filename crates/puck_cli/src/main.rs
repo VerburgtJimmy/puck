@@ -8,6 +8,7 @@ use puck_install::{
 use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::LockFile;
 use puck_manifest::Manifest;
+use puck_scripts::{RunScriptsOptions, run_install_scripts};
 use puck_store::Store;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -39,6 +40,10 @@ enum Commands {
         /// Succeed with zero network calls (warm store + lock required)
         #[arg(long)]
         offline: bool,
+
+        /// Skip composer.json scripts (default: run them, matching Composer)
+        #[arg(long)]
+        no_scripts: bool,
 
         /// Fail if any plugin lacks a native adapter
         #[arg(long)]
@@ -93,6 +98,7 @@ fn main() -> ExitCode {
             no_dev,
             optimize,
             offline,
+            no_scripts,
             strict_native: _,
             working_dir,
         } => {
@@ -103,7 +109,13 @@ fn main() -> ExitCode {
                     return ExitCode::from(1);
                 }
             };
-            match runtime.block_on(run_install(working_dir, no_dev, offline, optimize)) {
+            match runtime.block_on(run_install(
+                working_dir,
+                no_dev,
+                offline,
+                optimize,
+                no_scripts,
+            )) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
                     eprintln!("puck: {err}");
@@ -134,6 +146,7 @@ async fn run_install(
     no_dev: bool,
     offline: bool,
     optimize: bool,
+    no_scripts: bool,
 ) -> Result<(), String> {
     let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
     let manifest_path = root.join("composer.json");
@@ -200,11 +213,49 @@ async fn run_install(
     .map_err(|e| e.to_string())?;
     eprintln!("puck: dumped autoload");
 
+    let mut packages_written = false;
     match discover(&root).map_err(|e| e.to_string())? {
         DiscoverStatus::Written { package_count, .. } => {
             eprintln!("puck: discovered {package_count} packages");
+            packages_written = true;
         }
         DiscoverStatus::Skipped => {}
+    }
+
+    if !no_scripts
+        && let Some(ref manifest) = manifest
+    {
+        let report = run_install_scripts(
+            &root,
+            &manifest.scripts,
+            &RunScriptsOptions {
+                skip_package_discover: packages_written,
+                php: None,
+            },
+        )
+        .map_err(|e| e.to_string())?;
+        for note in &report.notes {
+            eprintln!("puck: {note}");
+        }
+        if report.ran > 0 || report.skipped > 0 {
+            eprintln!(
+                "puck: scripts  ran={}  skipped={}",
+                report.ran, report.skipped
+            );
+        }
+
+        // ComposerScripts::clearCompiled deletes packages.php; rewrite if gone.
+        if packages_written {
+            let packages_php = root.join("bootstrap/cache/packages.php");
+            if !packages_php.is_file() {
+                match discover(&root).map_err(|e| e.to_string())? {
+                    DiscoverStatus::Written { package_count, .. } => {
+                        eprintln!("puck: rediscovered {package_count} packages after scripts");
+                    }
+                    DiscoverStatus::Skipped => {}
+                }
+            }
+        }
     }
 
     eprintln!("puck: done");
