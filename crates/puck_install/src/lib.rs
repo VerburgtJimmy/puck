@@ -13,7 +13,10 @@ pub use bins::install_binaries;
 pub use execute::execute_install;
 pub use installed::{InstalledPackage, InstalledState, read_installed};
 pub use installed_php::RootPackageMeta;
-pub use plan::{InstallAction, InstallOptions, InstallPlan, PlannedPackage, plan_install};
+pub use plan::{
+    InstallAction, InstallOptions, InstallPlan, PlannedPackage, plan_install,
+    reconcile_vendor_presence,
+};
 
 /// Errors from install planning and execution.
 #[derive(Debug, thiserror::Error)]

@@ -4,6 +4,7 @@ use crate::Result;
 use crate::installed::InstalledState;
 use indexmap::IndexMap;
 use puck_lock::{LockFile, LockedPackage};
+use std::path::{Path, PathBuf};
 
 /// Options that affect which packages are planned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -107,6 +108,26 @@ pub fn plan_install(
     Ok(InstallPlan { packages })
 }
 
+/// If a Keep package's directory is missing under `vendor/`, promote it to Install.
+pub fn reconcile_vendor_presence(plan: &mut InstallPlan, vendor_dir: &Path) {
+    for pkg in &mut plan.packages {
+        if pkg.action != InstallAction::Keep {
+            continue;
+        }
+        if !vendor_package_dir(vendor_dir, &pkg.name).is_dir() {
+            pkg.action = InstallAction::Install;
+        }
+    }
+}
+
+fn vendor_package_dir(vendor: &Path, name: &str) -> PathBuf {
+    let mut path = vendor.to_path_buf();
+    for part in name.split('/') {
+        path.push(part);
+    }
+    path
+}
+
 fn planned_from_locked(pkg: &LockedPackage, is_dev: bool, action: InstallAction) -> PlannedPackage {
     PlannedPackage {
         name: pkg.name.to_ascii_lowercase(),
@@ -188,5 +209,23 @@ mod tests {
             .find(|p| p.name == first.name.to_ascii_lowercase());
         assert!(kept.is_some());
         assert_eq!(plan.to_install().count(), lock.packages.len() - 1);
+    }
+
+    #[test]
+    fn reconcile_promotes_keep_when_vendor_missing() {
+        let mut plan = InstallPlan {
+            packages: vec![PlannedPackage {
+                name: "acme/lib".into(),
+                version: "1.0.0".into(),
+                is_dev: false,
+                action: InstallAction::Keep,
+                dist_url: None,
+                dist_shasum: None,
+                dist_type: None,
+            }],
+        };
+        let tmp = tempfile::tempdir().expect("temp");
+        reconcile_vendor_presence(&mut plan, &tmp.path().join("vendor"));
+        assert_eq!(plan.packages[0].action, InstallAction::Install);
     }
 }

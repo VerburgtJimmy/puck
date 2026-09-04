@@ -103,8 +103,9 @@ echo "timing: cold puck…"
 COLD_PUCK_MS="$(time_cmd_ms run_puck "$COLD_P")"
 
 # --- Warm: second install ---
-# Composer: vendor already present (typical second install / up-to-date).
-# Also measure composer with wiped vendor but warm Composer cache.
+# Fair comparisons:
+# 1) vendor already present (typical up-to-date CI / local re-run)
+# 2) wiped vendor with warm package cache / store
 WARM_C="$WORKDIR/warm-composer"
 WARM_P="$WORKDIR/warm-puck"
 prepare_tree "$WARM_C"
@@ -117,9 +118,12 @@ run_puck "$WARM_P" >/dev/null
 echo "timing: warm composer (vendor present)…"
 WARM_COMPOSER_PRESENT_MS="$(time_cmd_ms run_composer "$WARM_C")"
 
+echo "timing: warm puck (vendor present)…"
+WARM_PUCK_PRESENT_MS="$(time_cmd_ms run_puck "$WARM_P")"
+
 echo "timing: warm puck (store warm, wipe vendor)…"
 rm -rf "$WARM_P/vendor"
-WARM_PUCK_MS="$(time_cmd_ms run_puck "$WARM_P")"
+WARM_PUCK_WIPE_MS="$(time_cmd_ms run_puck "$WARM_P")"
 
 echo "timing: warm composer (wipe vendor, cache warm)…"
 rm -rf "$WARM_C/vendor"
@@ -132,8 +136,8 @@ TABLE=$(cat <<EOF
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
 | cold (empty vendor) | ${COLD_COMPOSER_MS} | ${COLD_PUCK_MS} |
-| warm (composer vendor present / puck store warm + wipe vendor) | ${WARM_COMPOSER_PRESENT_MS} | ${WARM_PUCK_MS} |
-| warm (wipe vendor, composer cache warm) | ${WARM_COMPOSER_CACHE_MS} | ${WARM_PUCK_MS} |
+| warm (vendor present) | ${WARM_COMPOSER_PRESENT_MS} | ${WARM_PUCK_PRESENT_MS} |
+| warm (wipe vendor, cache/store warm) | ${WARM_COMPOSER_CACHE_MS} | ${WARM_PUCK_WIPE_MS} |
 EOF
 )
 

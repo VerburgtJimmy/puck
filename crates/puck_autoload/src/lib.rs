@@ -66,7 +66,7 @@ pub fn dump(
 }
 
 /// Stable suffix: `md5(content-hash)` hex, or md5 of package names if hash empty.
-fn autoload_suffix(lock: &LockFile) -> String {
+pub fn autoload_suffix(lock: &LockFile) -> String {
     if !lock.content_hash.is_empty() {
         return md5_hex(lock.content_hash.as_bytes());
     }
@@ -78,6 +78,16 @@ fn autoload_suffix(lock: &LockFile) -> String {
         .collect();
     names.sort_unstable();
     md5_hex(names.join("\n").as_bytes())
+}
+
+/// True when `vendor/autoload.php` already references this lock's autoload suffix.
+pub fn dump_is_current(project_root: &Path, lock: &LockFile) -> bool {
+    let path = project_root.join("vendor/autoload.php");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return false;
+    };
+    let suffix = autoload_suffix(lock);
+    text.contains(&format!("ComposerAutoloaderInit{suffix}"))
 }
 
 fn md5_hex(bytes: &[u8]) -> String {
@@ -198,6 +208,7 @@ mod tests {
         let autoload = fs::read_to_string(vendor.join("autoload.php")).expect("autoload");
         let suffix = autoload_suffix(&lock);
         assert!(autoload.contains(&format!("ComposerAutoloaderInit{suffix}")));
+        assert!(dump_is_current(dir.path(), &lock));
     }
 
     #[test]

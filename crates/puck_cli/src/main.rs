@@ -1,9 +1,10 @@
 //! `puck` - native PHP package manager (Laravel-first).
 
 use clap::{Parser, Subcommand};
-use puck_autoload::{DumpOptions, dump};
+use puck_autoload::{DumpOptions, dump, dump_is_current};
 use puck_install::{
-    InstallAction, InstallOptions, execute_install, install_binaries, plan_install, read_installed,
+    InstallAction, InstallOptions, execute_install, install_binaries, plan_install,
+    read_installed, reconcile_vendor_presence,
 };
 use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::LockFile;
@@ -170,7 +171,8 @@ async fn run_install(
     let lock = LockFile::from_path(&lock_path).map_err(|e| e.to_string())?;
     let installed = read_installed(root.join("vendor/composer")).map_err(|e| e.to_string())?;
     let options = InstallOptions { no_dev, offline };
-    let plan = plan_install(&lock, &installed, options).map_err(|e| e.to_string())?;
+    let mut plan = plan_install(&lock, &installed, options).map_err(|e| e.to_string())?;
+    reconcile_vendor_presence(&mut plan, &root.join("vendor"));
 
     let mut install = 0usize;
     let mut update = 0usize;
@@ -190,7 +192,8 @@ async fn run_install(
         lock.content_hash
     );
 
-    if install + update + remove == 0 {
+    let packages_changed = install + update + remove > 0;
+    if !packages_changed {
         eprintln!("puck: nothing to install");
         install_binaries(&root, &lock, no_dev).map_err(|e| e.to_string())?;
     } else {
@@ -198,6 +201,15 @@ async fn run_install(
         execute_install(&root, &lock, &plan, options, &store, manifest.as_ref())
             .await
             .map_err(|e| e.to_string())?;
+    }
+
+    // Warm keep: skip regenerating autoload / discovery / scripts when the tree is
+    // already current (unless -o was requested, which always forces a dump).
+    let need_dump = packages_changed || optimize || !dump_is_current(&root, &lock);
+    if !need_dump {
+        eprintln!("puck: autoload up to date");
+        eprintln!("puck: done");
+        return Ok(());
     }
 
     dump(
