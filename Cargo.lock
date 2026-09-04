@@ -834,6 +834,7 @@ dependencies = [
  "puck_lock",
  "puck_manifest",
  "puck_version",
+ "regex",
  "serde_json",
  "tempfile",
  "thiserror",

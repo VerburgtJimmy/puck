@@ -18,7 +18,7 @@ pub struct CollectedAutoloads {
     pub psr0: IndexMap<String, Vec<RelPath>>,
     /// file-id -> relative path (project-root relative before path-code).
     pub files: IndexMap<String, RelPath>,
-    /// Classmap dirs/files (unused for empty M1 classmap output).
+    /// Declared classmap dirs/files (scanned during dump).
     pub classmap: Vec<RelPath>,
 }
 
