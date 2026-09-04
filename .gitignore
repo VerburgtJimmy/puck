@@ -8,6 +8,11 @@
 # Local puck state (never commit)
 .puck/
 
+# Parity / timing scratch trees
+.tmp-parity*/
+.tmp-timing*/
+.tmp-bin*/
+
 # Composer artifacts from fixtures / local experiments
 **/vendor/
 composer.phar
