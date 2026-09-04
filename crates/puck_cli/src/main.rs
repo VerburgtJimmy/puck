@@ -134,6 +134,15 @@ fn main() -> ExitCode {
             println!("{}", puck_store::default_store_root().display());
             ExitCode::SUCCESS
         }
+        Commands::Store {
+            command: StoreCommands::Gc,
+        } => match run_store_gc() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("puck: {err}");
+                ExitCode::from(1)
+            }
+        },
         Commands::DumpAutoload {
             optimize,
             authoritative,
@@ -149,7 +158,6 @@ fn main() -> ExitCode {
         Commands::Update { .. }
         | Commands::Require { .. }
         | Commands::Remove { .. }
-        | Commands::Store { .. }
         | Commands::Php { .. } => {
             eprintln!("puck: this command is not implemented yet");
             ExitCode::from(2)
@@ -324,6 +332,16 @@ fn run_dump_autoload(
     eprintln!(
         "puck: dumped autoload{}",
         if optimize { " (-o)" } else { "" }
+    );
+    Ok(())
+}
+
+fn run_store_gc() -> Result<(), String> {
+    let store = Store::default_global();
+    let report = puck_store::gc(&store).map_err(|e| e.to_string())?;
+    eprintln!(
+        "puck: gc  removed_packages={}  removed_index_keys={}  kept={}",
+        report.removed_packages, report.removed_index_keys, report.kept_packages
     );
     Ok(())
 }

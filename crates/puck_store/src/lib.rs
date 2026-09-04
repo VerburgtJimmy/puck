@@ -4,11 +4,13 @@
 
 #![warn(clippy::unwrap_used)]
 
+mod gc;
 mod index;
 mod link;
 mod paths;
 mod store;
 
+pub use gc::{GcReport, gc};
 pub use index::{lookup, remember};
 pub use link::{LinkError, LinkKind, LinkResult, link_file, reflink_file};
 pub use paths::{default_store_root, package_store_path};
