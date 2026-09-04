@@ -158,6 +158,7 @@ mod tests {
         let vendor = dir.path().join("vendor");
         assert!(vendor.join("autoload.php").is_file());
         assert!(vendor.join("composer/ClassLoader.php").is_file());
+        assert!(vendor.join("composer/InstalledVersions.php").is_file());
         assert!(vendor.join("composer/LICENSE").is_file());
         assert!(vendor.join("composer/autoload_real.php").is_file());
         assert!(vendor.join("composer/autoload_static.php").is_file());
@@ -166,6 +167,11 @@ mod tests {
         assert!(vendor.join("composer/autoload_classmap.php").is_file());
         assert!(vendor.join("composer/autoload_files.php").is_file());
         assert!(vendor.join("composer/platform_check.php").is_file());
+
+        let classmap =
+            fs::read_to_string(vendor.join("composer/autoload_classmap.php")).expect("classmap");
+        assert!(classmap.contains("Composer\\\\InstalledVersions"));
+        assert!(classmap.contains("InstalledVersions.php"));
 
         let platform =
             fs::read_to_string(vendor.join("composer/platform_check.php")).expect("platform");
