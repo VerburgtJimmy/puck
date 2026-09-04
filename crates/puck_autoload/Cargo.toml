@@ -13,6 +13,7 @@ indexmap.workspace = true
 md-5.workspace = true
 puck_lock.workspace = true
 puck_manifest.workspace = true
+puck_version.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 

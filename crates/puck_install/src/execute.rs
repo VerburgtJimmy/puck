@@ -1,9 +1,11 @@
 //! Execute an install plan: fetch, store, link, write installed metadata.
 
+use crate::installed_php::{RootPackageMeta, build_installed_php};
 use crate::plan::{InstallAction, InstallOptions, InstallPlan, PlannedPackage};
 use crate::{Error, Result};
 use puck_dist::{ArchiveKind, download};
 use puck_lock::{LockFile, LockedPackage};
+use puck_manifest::Manifest;
 use puck_store::{Store, link_tree, put_archive};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -22,6 +24,7 @@ pub async fn execute_install(
     plan: &InstallPlan,
     options: InstallOptions,
     store: &Store,
+    manifest: Option<&Manifest>,
 ) -> Result<()> {
     let vendor = project_root.join("vendor");
     fs::create_dir_all(&vendor).map_err(|source| Error::Io {
@@ -75,7 +78,7 @@ pub async fn execute_install(
         eprintln!("puck: {} {}", action_word(pkg.action), pkg.name);
     }
 
-    write_installed_json(&vendor, lock, plan, &lock_by_name)?;
+    write_installed_json(&vendor, lock, plan, &lock_by_name, manifest, options)?;
     Ok(())
 }
 
@@ -192,6 +195,8 @@ fn write_installed_json(
     lock: &LockFile,
     plan: &InstallPlan,
     lock_by_name: &HashMap<String, &LockedPackage>,
+    manifest: Option<&Manifest>,
+    options: InstallOptions,
 ) -> Result<()> {
     let composer_dir = vendor.join("composer");
     fs::create_dir_all(&composer_dir).map_err(|source| Error::Io {
@@ -221,9 +226,10 @@ fn write_installed_json(
         packages.push(entry);
     }
 
+    let dev_mode = !options.no_dev;
     let installed = json!({
         "packages": packages,
-        "dev": !dev_names.is_empty(),
+        "dev": dev_mode,
         "dev-package-names": dev_names,
     });
 
@@ -235,19 +241,14 @@ fn write_installed_json(
         source,
     })?;
 
-    // Minimal installed.php so Composer's ClassLoader consumers find something.
-    // Full parity (byte-identical) lands with puck_autoload.
+    let root = RootPackageMeta::from_manifest(manifest);
+    let php = build_installed_php(lock, &plan.packages, &root, dev_mode)?;
     let php_path = composer_dir.join("installed.php");
-    let php = format!(
-        "<?php return {};\n",
-        installed_php_array(lock, &plan.packages)
-    );
     fs::write(&php_path, php).map_err(|source| Error::Io {
         path: php_path.display().to_string(),
         source,
     })?;
 
-    let _ = lock; // used in installed_php_array
     Ok(())
 }
 
@@ -278,37 +279,4 @@ fn locked_to_installed_value(pkg: &LockedPackage) -> Value {
         map.insert(k.clone(), v.clone());
     }
     Value::Object(map)
-}
-
-fn installed_php_array(lock: &LockFile, planned: &[PlannedPackage]) -> String {
-    // Enough structure for tooling that only checks keys exist.
-    let root_version = "1.0.0+no-version-set";
-    let mut versions = String::from("array (\n");
-    versions.push_str(&format!(
-        "    '__root__' => array (\n        'pretty_version' => '{root_version}',\n        'version' => '{root_version}',\n        'reference' => NULL,\n        'type' => 'library',\n        'install_path' => __DIR__ . '/../../',\n        'aliases' => array (),\n        'dev' => true,\n    ),\n"
-    ));
-    let active: HashMap<&str, &PlannedPackage> = planned
-        .iter()
-        .filter(|p| p.action != InstallAction::Remove)
-        .map(|p| (p.name.as_str(), p))
-        .collect();
-    for pkg in lock.packages.iter().chain(lock.packages_dev.iter()) {
-        let key = pkg.name.to_ascii_lowercase();
-        if !active.contains_key(key.as_str()) {
-            continue;
-        }
-        let is_dev = active.get(key.as_str()).map(|p| p.is_dev).unwrap_or(false);
-        let install_path = format!("__DIR__ . '/../{}'", pkg.name.replace('\\', "\\\\"));
-        versions.push_str(&format!(
-            "    '{name}' => array (\n        'pretty_version' => '{ver}',\n        'version' => '{ver}',\n        'reference' => NULL,\n        'type' => 'library',\n        'install_path' => {install_path},\n        'aliases' => array (),\n        'dev' => {dev},\n    ),\n",
-            name = pkg.name.replace('\'', "\\'"),
-            ver = pkg.version.replace('\'', "\\'"),
-            install_path = install_path,
-            dev = if is_dev { "true" } else { "false" },
-        ));
-    }
-    versions.push(')');
-    format!(
-        "array (\n    'root' => array (\n        'pretty_version' => '{root_version}',\n        'version' => '{root_version}',\n        'reference' => NULL,\n        'type' => 'library',\n        'install_path' => __DIR__ . '/../../',\n        'aliases' => array (),\n        'dev' => true,\n    ),\n    'versions' => {versions},\n)"
-    )
 }

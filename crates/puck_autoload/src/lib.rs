@@ -10,6 +10,7 @@
 mod collect;
 mod generate;
 mod php;
+mod platform_check;
 
 use collect::CollectedAutoloads;
 use puck_lock::LockFile;
@@ -51,7 +52,15 @@ pub fn dump(
     let _ = options.optimize; // classmap scan lands later
     let collected = CollectedAutoloads::from_lock_and_manifest(lock, manifest, options.no_dev);
     let suffix = autoload_suffix(lock);
-    generate::write_autoload_files(project_root, &collected, &suffix, options.authoritative)
+    generate::write_autoload_files(
+        project_root,
+        &collected,
+        &suffix,
+        options.authoritative,
+        lock,
+        manifest,
+        options.no_dev,
+    )
 }
 
 /// Stable suffix: `md5(content-hash)` hex, or md5 of package names if hash empty.
@@ -128,6 +137,7 @@ mod tests {
         .expect("lock");
         let manifest = Manifest::from_value(serde_json::json!({
             "name": "acme/app",
+            "require": { "php": "^8.3" },
             "autoload": { "psr-4": { "App\\": "app/" } },
             "autoload-dev": { "psr-4": { "Tests\\": "tests/" } }
         }))
@@ -155,6 +165,15 @@ mod tests {
         assert!(vendor.join("composer/autoload_namespaces.php").is_file());
         assert!(vendor.join("composer/autoload_classmap.php").is_file());
         assert!(vendor.join("composer/autoload_files.php").is_file());
+        assert!(vendor.join("composer/platform_check.php").is_file());
+
+        let platform =
+            fs::read_to_string(vendor.join("composer/platform_check.php")).expect("platform");
+        assert!(platform.contains("PHP_VERSION_ID >= 80300"));
+
+        let real =
+            fs::read_to_string(vendor.join("composer/autoload_real.php")).expect("real");
+        assert!(real.contains("require __DIR__ . '/platform_check.php';"));
 
         let psr4 = fs::read_to_string(vendor.join("composer/autoload_psr4.php")).expect("psr4");
         assert!(psr4.contains("Acme\\\\Lib\\\\"));

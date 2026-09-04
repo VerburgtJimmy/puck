@@ -178,7 +178,7 @@ async fn run_install(
         eprintln!("puck: nothing to install");
     } else {
         let store = Store::default_global();
-        execute_install(&root, &lock, &plan, options, &store)
+        execute_install(&root, &lock, &plan, options, &store, manifest.as_ref())
             .await
             .map_err(|e| e.to_string())?;
     }

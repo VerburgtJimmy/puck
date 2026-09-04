@@ -4,7 +4,10 @@ use crate::collect::{
     CollectedAutoloads, RelPath, prefix_lengths_psr4, prefixes_psr0,
 };
 use crate::php::{path_code, php_export_string, static_path_code};
+use crate::platform_check::render_platform_check;
 use crate::{Error, Result};
+use puck_lock::LockFile;
+use puck_manifest::Manifest;
 use std::fs;
 use std::path::Path;
 
@@ -16,6 +19,9 @@ pub fn write_autoload_files(
     collected: &CollectedAutoloads,
     suffix: &str,
     authoritative: bool,
+    lock: &LockFile,
+    manifest: Option<&Manifest>,
+    no_dev: bool,
 ) -> Result<()> {
     let vendor = project_root.join("vendor");
     let composer_dir = vendor.join("composer");
@@ -51,9 +57,22 @@ pub fn write_autoload_files(
         &composer_dir.join("autoload_static.php"),
         &static_file(suffix, collected, &psr4, &psr0),
     )?;
+
+    let platform_check = render_platform_check(lock, manifest, no_dev);
+    let check_platform = platform_check.is_some();
+    let platform_path = composer_dir.join("platform_check.php");
+    if let Some(contents) = platform_check {
+        write_file(&platform_path, &contents)?;
+    } else if platform_path.exists() {
+        fs::remove_file(&platform_path).map_err(|source| Error::Io {
+            path: platform_path.display().to_string(),
+            source,
+        })?;
+    }
+
     write_file(
         &composer_dir.join("autoload_real.php"),
-        &real_file(suffix, has_files, authoritative),
+        &real_file(suffix, has_files, authoritative, check_platform),
     )?;
     write_file(&vendor.join("autoload.php"), &autoload_php(suffix))?;
 
@@ -143,7 +162,7 @@ return ComposerAutoloaderInit{suffix}::getLoader();
     )
 }
 
-fn real_file(suffix: &str, has_files: bool, authoritative: bool) -> String {
+fn real_file(suffix: &str, has_files: bool, authoritative: bool, check_platform: bool) -> String {
     let mut out = format!(
         r#"<?php
 
@@ -169,7 +188,15 @@ class ComposerAutoloaderInit{suffix}
             return self::$loader;
         }}
 
-        spl_autoload_register(array('ComposerAutoloaderInit{suffix}', 'loadClassLoader'), true, true);
+"#
+    );
+
+    if check_platform {
+        out.push_str("        require __DIR__ . '/platform_check.php';\n\n");
+    }
+
+    out.push_str(&format!(
+        r#"        spl_autoload_register(array('ComposerAutoloaderInit{suffix}', 'loadClassLoader'), true, true);
         self::$loader = $loader = new \Composer\Autoload\ClassLoader(\dirname(__DIR__));
         spl_autoload_unregister(array('ComposerAutoloaderInit{suffix}', 'loadClassLoader'));
 
@@ -177,7 +204,7 @@ class ComposerAutoloaderInit{suffix}
         call_user_func(\Composer\Autoload\ComposerStaticInit{suffix}::getInitializer($loader));
 
 "#
-    );
+    ));
 
     if authoritative {
         out.push_str("        $loader->setClassMapAuthoritative(true);\n\n");

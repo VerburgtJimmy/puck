@@ -5,10 +5,12 @@
 
 mod execute;
 mod installed;
+mod installed_php;
 mod plan;
 
 pub use execute::execute_install;
 pub use installed::{InstalledPackage, InstalledState, read_installed};
+pub use installed_php::RootPackageMeta;
 pub use plan::{InstallAction, InstallOptions, InstallPlan, PlannedPackage, plan_install};
 
 /// Errors from install planning and execution.
