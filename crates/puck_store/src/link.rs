@@ -106,11 +106,7 @@ fn try_reflink(from: &Path, to: &Path) -> io::Result<()> {
     }
     #[cfg(target_os = "linux")]
     {
-        let _ = (from, to);
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "reflink/FICLONE not wired yet",
-        ))
+        ficlone_linux(from, to)
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
@@ -140,6 +136,29 @@ fn clonefile_macos(from: &Path, to: &Path) -> io::Result<()> {
         Ok(())
     } else {
         Err(io::Error::last_os_error())
+    }
+}
+
+/// `ioctl(FICLONE)` COW clone on btrfs/xfs (and other supporting filesystems).
+///
+/// Creates the destination file, then clones extents from `from`. Falls through
+/// to the caller on EXDEV / EOPNOTSUPP so `link_file` can copy.
+#[cfg(target_os = "linux")]
+fn ficlone_linux(from: &Path, to: &Path) -> io::Result<()> {
+    use std::fs::OpenOptions;
+    use std::os::fd::AsRawFd;
+
+    let src = fs::File::open(from)?;
+    let dst = OpenOptions::new().write(true).create_new(true).open(to)?;
+
+    // SAFETY: both fds are open files we own; FICLONE is a well-defined ioctl.
+    let rc = unsafe { libc::ioctl(dst.as_raw_fd(), libc::FICLONE, src.as_raw_fd()) };
+    if rc == 0 {
+        Ok(())
+    } else {
+        let err = io::Error::last_os_error();
+        let _ = fs::remove_file(to);
+        Err(err)
     }
 }
 
@@ -182,6 +201,28 @@ mod tests {
                 // Non-APFS volumes (or sandboxed FS) may reject clonefile.
                 let msg = err.to_string();
                 eprintln!("clonefile unavailable in this environment: {msg}");
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn ficlone_when_supported() {
+        let dir = tempdir().expect("tempdir");
+        let from = dir.path().join("src.txt");
+        let to = dir.path().join("dst.txt");
+        {
+            let mut f = fs::File::create(&from).expect("create");
+            f.write_all(b"puck-ficlone").expect("write");
+        }
+        match reflink_file(&from, &to) {
+            Ok(result) => {
+                assert_eq!(result.kind, LinkKind::Reflink);
+                assert_eq!(fs::read_to_string(&to).expect("read"), "puck-ficlone");
+            }
+            Err(err) => {
+                // ext4 without reflink, overlayfs, etc.
+                eprintln!("FICLONE unavailable in this environment: {err}");
             }
         }
     }
