@@ -100,6 +100,12 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
+        Commands::Store {
+            command: StoreCommands::Path,
+        } => {
+            println!("{}", puck_store::default_store_root().display());
+            ExitCode::SUCCESS
+        }
         Commands::Update { .. }
         | Commands::Require { .. }
         | Commands::Remove { .. }

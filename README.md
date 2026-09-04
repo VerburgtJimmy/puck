@@ -20,7 +20,7 @@ cargo build --release -p puck_cli
 
 The binary is `target/release/puck`.
 
-Requires Rust 1.85+.
+Requires Rust 1.96+.
 
 ## Usage
 

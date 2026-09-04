@@ -24,7 +24,7 @@ default-members = ["crates/puck_cli"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.96"
 license = "MIT"
 repository = "https://github.com/jimmyverburgt/puck"
 authors = ["Jimmy Verburgt"]
@@ -37,6 +37,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
 sha2 = "0.10"
 md-5 = "0.10"
+sha1 = "0.10"
 memchr = "2"
 rustc-hash = "2"
 indexmap = { version = "2", features = ["serde"] }

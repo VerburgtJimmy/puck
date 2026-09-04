@@ -6,7 +6,18 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "puck: dist crate (M0 stub)"
+description = "puck: archive download, checksum verification, and extraction"
 
 [dependencies]
+flate2.workspace = true
+reqwest.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+tar.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
