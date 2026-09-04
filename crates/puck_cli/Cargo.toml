@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
+puck_autoload.workspace = true
 puck_diagnostics.workspace = true
 puck_install.workspace = true
 puck_lock.workspace = true

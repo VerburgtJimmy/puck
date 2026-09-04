@@ -1,6 +1,7 @@
 //! `puck` - native PHP package manager (Laravel-first).
 
 use clap::{Parser, Subcommand};
+use puck_autoload::{DumpOptions, dump};
 use puck_install::{InstallAction, InstallOptions, execute_install, plan_install, read_installed};
 use puck_lock::LockFile;
 use puck_manifest::Manifest;
@@ -87,7 +88,7 @@ fn main() -> ExitCode {
     match cli.command {
         Commands::Install {
             no_dev,
-            optimize: _,
+            optimize,
             offline,
             strict_native: _,
             working_dir,
@@ -99,7 +100,7 @@ fn main() -> ExitCode {
                     return ExitCode::from(1);
                 }
             };
-            match runtime.block_on(run_install(working_dir, no_dev, offline)) {
+            match runtime.block_on(run_install(working_dir, no_dev, offline, optimize)) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
                     eprintln!("puck: {err}");
@@ -129,6 +130,7 @@ async fn run_install(
     working_dir: Option<PathBuf>,
     no_dev: bool,
     offline: bool,
+    optimize: bool,
 ) -> Result<(), String> {
     let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
     let manifest_path = root.join("composer.json");
@@ -141,10 +143,13 @@ async fn run_install(
         ));
     }
 
-    if manifest_path.is_file() {
+    let manifest = if manifest_path.is_file() {
         let manifest = Manifest::from_path(&manifest_path).map_err(|e| e.to_string())?;
         eprintln!("puck: project {}", manifest.pretty_name);
-    }
+        Some(manifest)
+    } else {
+        None
+    };
 
     let lock = LockFile::from_path(&lock_path).map_err(|e| e.to_string())?;
     let installed = read_installed(root.join("vendor/composer")).map_err(|e| e.to_string())?;
@@ -170,14 +175,26 @@ async fn run_install(
     );
 
     if install + update + remove == 0 {
-        eprintln!("puck: nothing to do");
-        return Ok(());
+        eprintln!("puck: nothing to install");
+    } else {
+        let store = Store::default_global();
+        execute_install(&root, &lock, &plan, options, &store)
+            .await
+            .map_err(|e| e.to_string())?;
     }
 
-    let store = Store::default_global();
-    execute_install(&root, &lock, &plan, options, &store)
-        .await
-        .map_err(|e| e.to_string())?;
+    dump(
+        &root,
+        &lock,
+        manifest.as_ref(),
+        DumpOptions {
+            optimize,
+            authoritative: false,
+            no_dev,
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    eprintln!("puck: dumped autoload");
 
     eprintln!("puck: done");
     Ok(())

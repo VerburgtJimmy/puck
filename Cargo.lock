@@ -829,6 +829,12 @@ dependencies = [
 name = "puck_autoload"
 version = "0.1.0"
 dependencies = [
+ "indexmap",
+ "md-5",
+ "puck_lock",
+ "puck_manifest",
+ "serde_json",
+ "tempfile",
  "thiserror",
 ]
 
@@ -837,6 +843,7 @@ name = "puck_cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "puck_autoload",
  "puck_diagnostics",
  "puck_install",
  "puck_lock",
