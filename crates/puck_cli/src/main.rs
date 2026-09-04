@@ -3,6 +3,7 @@
 use clap::{Parser, Subcommand};
 use puck_autoload::{DumpOptions, dump};
 use puck_install::{InstallAction, InstallOptions, execute_install, plan_install, read_installed};
+use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::LockFile;
 use puck_manifest::Manifest;
 use puck_store::Store;
@@ -195,6 +196,13 @@ async fn run_install(
     )
     .map_err(|e| e.to_string())?;
     eprintln!("puck: dumped autoload");
+
+    match discover(&root).map_err(|e| e.to_string())? {
+        DiscoverStatus::Written { package_count, .. } => {
+            eprintln!("puck: discovered {package_count} packages");
+        }
+        DiscoverStatus::Skipped => {}
+    }
 
     eprintln!("puck: done");
     Ok(())

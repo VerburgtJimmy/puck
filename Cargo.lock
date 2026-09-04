@@ -847,6 +847,7 @@ dependencies = [
  "puck_autoload",
  "puck_diagnostics",
  "puck_install",
+ "puck_laravel",
  "puck_lock",
  "puck_manifest",
  "puck_store",
@@ -899,6 +900,8 @@ dependencies = [
 name = "puck_laravel"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
+ "tempfile",
  "thiserror",
 ]
 
