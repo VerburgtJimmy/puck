@@ -1,9 +1,8 @@
 //! Composer-compatible autoload dump (`vendor/autoload.php` + `vendor/composer/*`).
 //!
-//! M1 scans declared `classmap` paths (and always maps `Composer\\InstalledVersions`).
-//! `optimize` (`-o`) would additionally classmap PSR-0/PSR-4 dirs; accepted but ignored
-//! until a later milestone. Files autoload identifiers use `md5("{package}:{path}")`,
-//! matching Composer’s `getFileIdentifier`.
+//! Always scans declared `classmap` paths and maps `Composer\\InstalledVersions`.
+//! With `optimize` (`-o`), also scans PSR-0 / PSR-4 directories into the classmap.
+//! Files autoload identifiers use `md5("{package}:{path}")`, matching Composer.
 
 #![deny(unsafe_code)]
 #![warn(clippy::unwrap_used)]
@@ -22,7 +21,7 @@ use std::path::Path;
 /// Options for [`dump`].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DumpOptions {
-    /// When true, Composer would also scan PSR dirs into the classmap. Ignored for now.
+    /// Scan PSR-0 / PSR-4 dirs into the classmap (Composer `-o`).
     pub optimize: bool,
     /// Class map is authoritative (no PSR fallback). Applied even without optimize.
     pub authoritative: bool,
@@ -51,7 +50,6 @@ pub fn dump(
     manifest: Option<&Manifest>,
     options: DumpOptions,
 ) -> Result<()> {
-    let _ = options.optimize; // PSR→classmap optimize lands later
     let collected = CollectedAutoloads::from_lock_and_manifest(lock, manifest, options.no_dev);
     let suffix = autoload_suffix(lock);
     generate::write_autoload_files(
@@ -59,6 +57,7 @@ pub fn dump(
         &collected,
         &suffix,
         options.authoritative,
+        options.optimize,
         lock,
         manifest,
         options.no_dev,
@@ -269,5 +268,65 @@ mod tests {
                 .expect("static");
         assert!(static_php.contains("Acme\\\\Lib\\\\Widget"));
         assert!(static_php.contains("public static $classMap = array"));
+    }
+
+    #[test]
+    fn dump_optimize_scans_psr4_dirs() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pkg = dir.path().join("vendor/acme/lib/src");
+        fs::create_dir_all(&pkg).expect("mkdir");
+        fs::write(
+            pkg.join("Widget.php"),
+            "<?php\nnamespace Acme\\Lib;\nclass Widget {}\n",
+        )
+        .expect("write");
+
+        let lock = LockFile::from_str(
+            r#"{
+                "content-hash": "opt-test",
+                "packages": [{
+                    "name": "acme/lib",
+                    "version": "1.0.0",
+                    "autoload": {
+                        "psr-4": { "Acme\\Lib\\": "src/" }
+                    }
+                }],
+                "packages-dev": []
+            }"#,
+        )
+        .expect("lock");
+
+        dump(
+            dir.path(),
+            &lock,
+            None,
+            DumpOptions {
+                optimize: false,
+                authoritative: false,
+                no_dev: false,
+            },
+        )
+        .expect("dump");
+        let plain =
+            fs::read_to_string(dir.path().join("vendor/composer/autoload_classmap.php")).expect("cm");
+        assert!(!plain.contains("Acme\\\\Lib\\\\Widget"));
+
+        dump(
+            dir.path(),
+            &lock,
+            None,
+            DumpOptions {
+                optimize: true,
+                authoritative: true,
+                no_dev: false,
+            },
+        )
+        .expect("dump -o");
+        let optimized =
+            fs::read_to_string(dir.path().join("vendor/composer/autoload_classmap.php")).expect("cm");
+        assert!(optimized.contains("Acme\\\\Lib\\\\Widget"));
+        let real =
+            fs::read_to_string(dir.path().join("vendor/composer/autoload_real.php")).expect("real");
+        assert!(real.contains("setClassMapAuthoritative(true)"));
     }
 }

@@ -1,6 +1,7 @@
-//! Declared classmap scanning (Composer ClassMapGenerator, without `-o` PSR scan).
+//! Classmap scanning (Composer ClassMapGenerator).
 //!
-//! On name collisions, first-wins (Composer: "the first will be used").
+//! Declared `autoload.classmap` paths are always scanned. With `-o` / optimize,
+//! PSR-0 and PSR-4 directories are scanned too. On name collisions, first-wins.
 
 use crate::collect::RelPath;
 use regex::Regex;
@@ -26,13 +27,18 @@ static CLASS_OR_NS: LazyLock<Regex> = LazyLock::new(|| {
     .expect("classmap regex")
 });
 
-/// Scan declared classmap paths under `project_root` into FQCN -> project-relative path.
+/// Scan classmap paths under `project_root` into FQCN -> project-relative path.
 ///
-/// Always includes [`INSTALLED_VERSIONS_CLASS`]. Existing paths that are missing are skipped.
-pub fn build_classmap(project_root: &Path, declared: &[RelPath]) -> BTreeMap<String, RelPath> {
+/// `declared` is always scanned. `extra` is used for `-o` PSR directory scans.
+/// Always includes [`INSTALLED_VERSIONS_CLASS`]. Missing paths are skipped.
+pub fn build_classmap(
+    project_root: &Path,
+    declared: &[RelPath],
+    extra: &[RelPath],
+) -> BTreeMap<String, RelPath> {
     let mut map = BTreeMap::new();
 
-    for rel in declared {
+    for rel in declared.iter().chain(extra.iter()) {
         let abs = project_root.join(rel);
         if !abs.exists() {
             continue;
@@ -47,6 +53,23 @@ pub fn build_classmap(project_root: &Path, declared: &[RelPath]) -> BTreeMap<Str
     );
 
     map
+}
+
+/// Flatten PSR-4 / PSR-0 path lists for optimize scans (deduped, stable order).
+pub fn psr_scan_paths(
+    psr4: &[(&str, &Vec<RelPath>)],
+    psr0: &[(&str, &Vec<RelPath>)],
+) -> Vec<RelPath> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out = Vec::new();
+    for (_, paths) in psr4.iter().chain(psr0.iter()) {
+        for path in *paths {
+            if seen.insert(path.clone()) {
+                out.push(path.clone());
+            }
+        }
+    }
+    out
 }
 
 fn scan_entry(project_root: &Path, path: &Path, map: &mut BTreeMap<String, RelPath>) {
@@ -345,7 +368,7 @@ enum E: string { case A = 'a'; }
         fs::write(src.join("Foo.php"), "<?php\nnamespace Acme;\nclass Foo {}\n")
             .expect("write");
 
-        let map = build_classmap(dir.path(), &["src".to_owned()]);
+        let map = build_classmap(dir.path(), &["src".to_owned()], &[]);
         assert_eq!(
             map.get("Acme\\Foo").map(String::as_str),
             Some("src/Foo.php")
@@ -366,7 +389,7 @@ enum E: string { case A = 'a'; }
         fs::write(a.join("Foo.php"), "<?php\nclass Foo {}\n").expect("write a");
         fs::write(b.join("Foo.php"), "<?php\nclass Foo {}\n").expect("write b");
 
-        let map = build_classmap(dir.path(), &["a".to_owned(), "b".to_owned()]);
+        let map = build_classmap(dir.path(), &["a".to_owned(), "b".to_owned()], &[]);
         assert_eq!(map.get("Foo").map(String::as_str), Some("a/Foo.php"));
     }
 
@@ -378,7 +401,7 @@ enum E: string { case A = 'a'; }
         fs::write(src.join("Foo.php"), "<?php\nclass Foo {}\n").expect("write");
         fs::write(src.join(".puck-ok"), "ok").expect("marker");
 
-        let map = build_classmap(dir.path(), &["src".to_owned()]);
+        let map = build_classmap(dir.path(), &["src".to_owned()], &[]);
         assert!(map.contains_key("Foo"));
         // marker is not a php file; ensure we did not error walking past it
         assert!(!map.values().any(|p| p.contains(".puck-ok")));

@@ -17,11 +17,13 @@ const CLASS_LOADER: &str = include_str!("../vendor_composer/ClassLoader.php");
 const INSTALLED_VERSIONS: &str = include_str!("../vendor_composer/InstalledVersions.php");
 const LICENSE: &str = include_str!("../vendor_composer/LICENSE");
 
+#[allow(clippy::too_many_arguments)]
 pub fn write_autoload_files(
     project_root: &Path,
     collected: &CollectedAutoloads,
     suffix: &str,
     authoritative: bool,
+    optimize: bool,
     lock: &LockFile,
     manifest: Option<&Manifest>,
     no_dev: bool,
@@ -41,7 +43,13 @@ pub fn write_autoload_files(
     let psr0 = collected.psr0_sorted();
     let has_files = !collected.files.is_empty();
     // Declared classmap scan after packages are linked under project_root.
-    let classmap = build_classmap(project_root, &collected.classmap);
+    // With optimize (-o), also scan PSR-0 / PSR-4 dirs into the classmap.
+    let extra = if optimize {
+        crate::classmap::psr_scan_paths(&psr4, &psr0)
+    } else {
+        Vec::new()
+    };
+    let classmap = build_classmap(project_root, &collected.classmap, &extra);
 
     write_file(
         &composer_dir.join("autoload_namespaces.php"),

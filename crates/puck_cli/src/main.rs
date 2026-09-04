@@ -64,13 +64,17 @@ enum Commands {
     },
     /// Remove a package (M2)
     Remove { packages: Vec<String> },
-    /// Regenerate autoload files (M2)
+    /// Regenerate autoload files
     #[command(name = "dump-autoload", visible_alias = "dumpautoload")]
     DumpAutoload {
         #[arg(long, short = 'o')]
         optimize: bool,
         #[arg(long, short = 'a')]
         authoritative: bool,
+        #[arg(long)]
+        no_dev: bool,
+        #[arg(long, value_name = "DIR")]
+        working_dir: Option<PathBuf>,
     },
     /// Shared store utilities (M2)
     Store {
@@ -130,10 +134,21 @@ fn main() -> ExitCode {
             println!("{}", puck_store::default_store_root().display());
             ExitCode::SUCCESS
         }
+        Commands::DumpAutoload {
+            optimize,
+            authoritative,
+            no_dev,
+            working_dir,
+        } => match run_dump_autoload(working_dir, optimize, authoritative, no_dev) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("puck: {err}");
+                ExitCode::from(1)
+            }
+        },
         Commands::Update { .. }
         | Commands::Require { .. }
         | Commands::Remove { .. }
-        | Commands::DumpAutoload { .. }
         | Commands::Store { .. }
         | Commands::Php { .. } => {
             eprintln!("puck: this command is not implemented yet");
@@ -271,5 +286,44 @@ async fn run_install(
     }
 
     eprintln!("puck: done");
+    Ok(())
+}
+
+fn run_dump_autoload(
+    working_dir: Option<PathBuf>,
+    optimize: bool,
+    authoritative: bool,
+    no_dev: bool,
+) -> Result<(), String> {
+    let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
+    let lock_path = root.join("composer.lock");
+    if !lock_path.is_file() {
+        return Err(format!("no composer.lock in {}", root.display()));
+    }
+    let lock = LockFile::from_path(&lock_path).map_err(|e| e.to_string())?;
+    let manifest = {
+        let path = root.join("composer.json");
+        if path.is_file() {
+            Some(Manifest::from_path(&path).map_err(|e| e.to_string())?)
+        } else {
+            None
+        }
+    };
+
+    dump(
+        &root,
+        &lock,
+        manifest.as_ref(),
+        DumpOptions {
+            optimize,
+            authoritative: authoritative || optimize,
+            no_dev,
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    eprintln!(
+        "puck: dumped autoload{}",
+        if optimize { " (-o)" } else { "" }
+    );
     Ok(())
 }
