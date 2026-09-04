@@ -79,6 +79,7 @@ pub async fn execute_install(
     }
 
     write_installed_json(&vendor, lock, plan, &lock_by_name, manifest, options)?;
+    crate::bins::install_binaries(project_root, lock, options.no_dev)?;
     Ok(())
 }
 
@@ -275,7 +276,17 @@ fn locked_to_installed_value(pkg: &LockedPackage) -> Value {
         }
         map.insert("dist".into(), Value::Object(d));
     }
+    let bins = pkg.bins();
+    if !bins.is_empty() {
+        map.insert(
+            "bin".into(),
+            Value::Array(bins.into_iter().map(Value::String).collect()),
+        );
+    }
     for (k, v) in &pkg.extra {
+        if k == "bin" {
+            continue;
+        }
         map.insert(k.clone(), v.clone());
     }
     Value::Object(map)

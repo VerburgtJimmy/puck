@@ -3,11 +3,13 @@
 #![deny(unsafe_code)]
 #![warn(clippy::unwrap_used)]
 
+mod bins;
 mod execute;
 mod installed;
 mod installed_php;
 mod plan;
 
+pub use bins::install_binaries;
 pub use execute::execute_install;
 pub use installed::{InstalledPackage, InstalledState, read_installed};
 pub use installed_php::RootPackageMeta;

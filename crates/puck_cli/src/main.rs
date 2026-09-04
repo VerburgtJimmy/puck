@@ -2,7 +2,9 @@
 
 use clap::{Parser, Subcommand};
 use puck_autoload::{DumpOptions, dump};
-use puck_install::{InstallAction, InstallOptions, execute_install, plan_install, read_installed};
+use puck_install::{
+    InstallAction, InstallOptions, execute_install, install_binaries, plan_install, read_installed,
+};
 use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::LockFile;
 use puck_manifest::Manifest;
@@ -177,6 +179,7 @@ async fn run_install(
 
     if install + update + remove == 0 {
         eprintln!("puck: nothing to install");
+        install_binaries(&root, &lock, no_dev).map_err(|e| e.to_string())?;
     } else {
         let store = Store::default_global();
         execute_install(&root, &lock, &plan, options, &store, manifest.as_ref())

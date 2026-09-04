@@ -46,9 +46,29 @@ pub struct LockedPackage {
     pub dist: Option<Dist>,
     #[serde(default)]
     pub source: Option<Source>,
+    /// Executable paths relative to the package root (`composer.json` `bin`).
+    #[serde(default)]
+    pub bin: Vec<String>,
     /// Remaining package fields (`require`, `type`, `autoload`, …).
     #[serde(flatten)]
     pub extra: Map<String, Value>,
+}
+
+impl LockedPackage {
+    /// Bin entries from the lock, including a fallback if `bin` landed in `extra`.
+    pub fn bins(&self) -> Vec<String> {
+        if !self.bin.is_empty() {
+            return self.bin.clone();
+        }
+        match self.extra.get("bin") {
+            Some(Value::Array(items)) => items
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect(),
+            Some(Value::String(s)) => vec![s.clone()],
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// Dist reference on a locked package.
