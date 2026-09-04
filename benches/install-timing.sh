@@ -70,7 +70,7 @@ run_puck() {
   local dir="$1"
   (
     cd "$ROOT"
-    rustup run 1.96.0 cargo run -q -p puck_cli -- install --working-dir "$dir" --no-dev
+    "$PUCK_BIN" install --working-dir "$dir" --no-dev --no-scripts
   )
 }
 
@@ -82,14 +82,22 @@ run_composer() {
   )
 }
 
-echo "timing: fixture=$FIXTURE_NAME (--no-dev)"
+echo "timing: fixture=$FIXTURE_NAME (--no-dev --no-scripts)"
 echo "timing: composer=$COMPOSER_BIN"
-echo "timing: warming puck binary (cargo run once)…"
-# Warm the puck binary compile so cold install timings exclude rustc.
-DUMMY="$WORKDIR/warm-compile"
-prepare_tree "$DUMMY"
-# Ensure lock-only tree; install may fail offline briefly — still builds binary.
-rustup run 1.96.0 cargo build -q -p puck_cli
+
+if [[ -n "${PUCK_BIN:-}" && -x "${PUCK_BIN}" ]]; then
+  echo "timing: using PUCK_BIN=$PUCK_BIN"
+else
+  echo "timing: building release puck…"
+  rustup run 1.96.0 cargo build --release -q -p puck_cli
+  TARGET_DIR="$(rustup run 1.96.0 cargo metadata --format-version 1 --no-deps | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
+  PUCK_BIN="$TARGET_DIR/release/puck"
+  if [[ ! -x "$PUCK_BIN" ]]; then
+    echo "timing: missing release binary at $PUCK_BIN" >&2
+    exit 2
+  fi
+  echo "timing: puck=$PUCK_BIN"
+fi
 
 # --- Cold: empty vendor ---
 COLD_C="$WORKDIR/cold-composer"
