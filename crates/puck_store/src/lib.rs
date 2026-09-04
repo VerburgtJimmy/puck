@@ -6,7 +6,7 @@
 
 mod link;
 
-pub use link::{link_file, reflink_file, LinkError, LinkKind, LinkResult};
+pub use link::{LinkError, LinkKind, LinkResult, link_file, reflink_file};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

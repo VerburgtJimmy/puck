@@ -15,7 +15,7 @@ mod parser;
 mod version;
 
 pub use compare::{php_version_compare, version_compare, version_compare_with_branches};
-pub use constraint::{parse_constraints, satisfies, ConstraintExpr, Operator};
+pub use constraint::{ConstraintExpr, Operator, parse_constraints, satisfies};
 pub use parser::{
     normalize, normalize_branch, normalize_stability, parse_numeric_alias_prefix, parse_stability,
 };
@@ -176,10 +176,9 @@ mod fixture_tests {
     }
 
     fn assert_constraint_fixtures(name: &str) {
-        let cases: Vec<ConstraintCase> = serde_json::from_str(
-            &fs::read_to_string(fixture(name)).expect("read fixture"),
-        )
-        .expect("parse fixture");
+        let cases: Vec<ConstraintCase> =
+            serde_json::from_str(&fs::read_to_string(fixture(name)).expect("read fixture"))
+                .expect("parse fixture");
         for case in cases {
             let got = parse_constraints(&case.input).unwrap_or_else(|e| {
                 panic!("parse_constraints({:?}) failed: {e}", case.input);

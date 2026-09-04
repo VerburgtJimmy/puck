@@ -51,10 +51,7 @@ pub fn content_hash(composer_json_contents: &str) -> Result<String> {
         if let Some(platform) = config.get("platform") {
             if !platform.is_null() {
                 let mut config_obj = Map::new();
-                config_obj.insert(
-                    "platform".to_owned(),
-                    php_assoc_normalize(platform.clone()),
-                );
+                config_obj.insert("platform".to_owned(), php_assoc_normalize(platform.clone()));
                 relevant.insert("config", Value::Object(config_obj));
             }
         }
@@ -80,9 +77,7 @@ fn php_assoc_normalize(value: Value) -> Value {
                 )
             }
         }
-        Value::Array(items) => {
-            Value::Array(items.into_iter().map(php_assoc_normalize).collect())
-        }
+        Value::Array(items) => Value::Array(items.into_iter().map(php_assoc_normalize).collect()),
         other => other,
     }
 }

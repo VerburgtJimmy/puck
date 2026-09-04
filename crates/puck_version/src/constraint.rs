@@ -11,24 +11,19 @@ use regex::Regex;
 use std::fmt;
 use std::sync::LazyLock;
 
-static RE_OR_SPLIT: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\s*\|\|?\s*").expect("regex"));
+static RE_OR_SPLIT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*\|\|?\s*").expect("regex"));
 static RE_ALIAS: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^([^,\s]+) +as +([^,\s]+)$").expect("regex"));
-static RE_STABILITY_FLAG: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(r"(?i)^([^,\s]*?)@({STABILITIES})$")).expect("regex")
-});
-static RE_HASH_REF: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^(dev-[^,\s@]+?|[^,\s@]+?\.x-dev)#.+$").expect("regex")
-});
+static RE_STABILITY_FLAG: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(&format!(r"(?i)^([^,\s]*?)@({STABILITIES})$")).expect("regex"));
+static RE_HASH_REF: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^(dev-[^,\s@]+?|[^,\s@]+?\.x-dev)#.+$").expect("regex"));
 static RE_MATCH_ALL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^(v)?[xX*](\.[xX*])*$").expect("regex"));
-static RE_TILDE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(r"(?i)^~>?{VERSION_REGEX}$")).expect("regex")
-});
-static RE_CARET: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(r"(?i)^\^{VERSION_REGEX}($)")).expect("regex")
-});
+static RE_TILDE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(&format!(r"(?i)^~>?{VERSION_REGEX}$")).expect("regex"));
+static RE_CARET: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(&format!(r"(?i)^\^{VERSION_REGEX}($)")).expect("regex"));
 static RE_X_RANGE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.[xX*])+$").expect("regex")
 });
@@ -124,9 +119,7 @@ impl ConstraintExpr {
     /// Composer `Constraint::__toString` form used by contiguous-OR optimisation.
     fn composer_string(&self) -> Option<String> {
         match self {
-            Self::Simple { operator, version } => {
-                Some(format!("{} {version}", operator.as_str()))
-            }
+            Self::Simple { operator, version } => Some(format!("{} {version}", operator.as_str())),
             _ => None,
         }
     }
@@ -146,9 +139,7 @@ impl ConstraintExpr {
                 constraints,
             } => {
                 if !*conjunctive {
-                    return constraints
-                        .iter()
-                        .any(|c| provider.matches_provider(c));
+                    return constraints.iter().any(|c| provider.matches_provider(c));
                 }
                 if let Self::Multi {
                     conjunctive: false, ..
@@ -156,9 +147,7 @@ impl ConstraintExpr {
                 {
                     return provider.matches_provider(self);
                 }
-                constraints
-                    .iter()
-                    .all(|c| provider.matches_provider(c))
+                constraints.iter().all(|c| provider.matches_provider(c))
             }
         }
     }
@@ -338,7 +327,10 @@ fn optimize_constraints(
     }
 }
 
-fn try_collapse_contiguous(left: &ConstraintExpr, right: &ConstraintExpr) -> Option<ConstraintExpr> {
+fn try_collapse_contiguous(
+    left: &ConstraintExpr,
+    right: &ConstraintExpr,
+) -> Option<ConstraintExpr> {
     let ConstraintExpr::Multi {
         conjunctive: true,
         constraints: left_cs,
@@ -486,10 +478,7 @@ fn parse_constraint(constraint: &str) -> Result<Vec<ConstraintExpr>> {
         let has_v = caps.get(1).is_some_and(|m| !m.as_str().is_empty());
         let has_rest = caps.get(2).is_some_and(|m| !m.as_str().is_empty());
         if has_v || has_rest {
-            return Ok(vec![ConstraintExpr::simple(
-                Operator::Gte,
-                "0.0.0.0-dev",
-            )]);
+            return Ok(vec![ConstraintExpr::simple(Operator::Gte, "0.0.0.0-dev")]);
         }
         return Ok(vec![ConstraintExpr::MatchAll]);
     }
@@ -524,11 +513,9 @@ fn parse_constraint(constraint: &str) -> Result<Vec<ConstraintExpr>> {
         let segments = version_segments_from_caps(&caps);
         let high_position = position.max(1) - 1;
         let high_position = high_position.max(1);
-        let high_version = manipulate_version_string(&segments, high_position, 1, "0")
-            .ok_or_else(|| {
-                Error::InvalidConstraint(format!(
-                    "Could not parse version constraint {constraint}"
-                ))
+        let high_version =
+            manipulate_version_string(&segments, high_position, 1, "0").ok_or_else(|| {
+                Error::InvalidConstraint(format!("Could not parse version constraint {constraint}"))
             })?;
 
         return Ok(vec![
@@ -554,11 +541,10 @@ fn parse_constraint(constraint: &str) -> Result<Vec<ConstraintExpr>> {
         let low_version = normalize(&format!("{}{stability_suffix}", &constraint[1..]))
             .map_err(|e| wrap_constraint_err(&constraint, e))?;
         let segments = version_segments_from_caps(&caps);
-        let high_version = manipulate_version_string(&segments, position, 1, "0").ok_or_else(|| {
-            Error::InvalidConstraint(format!(
-                "Could not parse version constraint {constraint}"
-            ))
-        })?;
+        let high_version =
+            manipulate_version_string(&segments, position, 1, "0").ok_or_else(|| {
+                Error::InvalidConstraint(format!("Could not parse version constraint {constraint}"))
+            })?;
 
         return Ok(vec![
             ConstraintExpr::simple(Operator::Gte, low_version),
@@ -576,17 +562,14 @@ fn parse_constraint(constraint: &str) -> Result<Vec<ConstraintExpr>> {
         };
 
         let segments = version_segments_from_caps(&caps);
-        let low_version = manipulate_version_string(&segments, position, 0, "0")
-            .ok_or_else(|| {
-                Error::InvalidConstraint(format!(
-                    "Could not parse version constraint {constraint}"
-                ))
+        let low_version =
+            manipulate_version_string(&segments, position, 0, "0").ok_or_else(|| {
+                Error::InvalidConstraint(format!("Could not parse version constraint {constraint}"))
             })?;
-        let high_version = manipulate_version_string(&segments, position, 1, "0").ok_or_else(|| {
-            Error::InvalidConstraint(format!(
-                "Could not parse version constraint {constraint}"
-            ))
-        })?;
+        let high_version =
+            manipulate_version_string(&segments, position, 1, "0").ok_or_else(|| {
+                Error::InvalidConstraint(format!("Could not parse version constraint {constraint}"))
+            })?;
 
         let low = format!("{low_version}-dev");
         let high = format!("{high_version}-dev");
@@ -638,11 +621,12 @@ fn parse_constraint(constraint: &str) -> Result<Vec<ConstraintExpr>> {
             } else {
                 2
             };
-            let high_version = manipulate_version_string(&high_match, pos, 1, "0").ok_or_else(|| {
-                Error::InvalidConstraint(format!(
-                    "Could not parse version constraint {constraint}"
-                ))
-            })?;
+            let high_version =
+                manipulate_version_string(&high_match, pos, 1, "0").ok_or_else(|| {
+                    Error::InvalidConstraint(format!(
+                        "Could not parse version constraint {constraint}"
+                    ))
+                })?;
             ConstraintExpr::simple(Operator::Lt, format!("{high_version}-dev"))
         };
 
@@ -667,9 +651,7 @@ fn parse_constraint(constraint: &str) -> Result<Vec<ConstraintExpr>> {
         };
 
         let op = Operator::parse(op_raw.unwrap_or("=")).ok_or_else(|| {
-            Error::InvalidConstraint(format!(
-                "Could not parse version constraint {constraint}"
-            ))
+            Error::InvalidConstraint(format!("Could not parse version constraint {constraint}"))
         })?;
 
         if !matches!(op, Operator::Eq)
