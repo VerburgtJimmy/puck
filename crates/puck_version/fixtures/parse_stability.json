@@ -1,0 +1,90 @@
+[
+    {
+        "version": "1",
+        "stability": "stable"
+    },
+    {
+        "version": "1.0",
+        "stability": "stable"
+    },
+    {
+        "version": "3.2.1",
+        "stability": "stable"
+    },
+    {
+        "version": "v3.2.1",
+        "stability": "stable"
+    },
+    {
+        "version": "v2.0.x-dev",
+        "stability": "dev"
+    },
+    {
+        "version": "v2.0.x-dev#abc123",
+        "stability": "dev"
+    },
+    {
+        "version": "v2.0.x-dev#trunk/@123",
+        "stability": "dev"
+    },
+    {
+        "version": "3.0-RC2",
+        "stability": "RC"
+    },
+    {
+        "version": "dev-master",
+        "stability": "dev"
+    },
+    {
+        "version": "3.1.2-dev",
+        "stability": "dev"
+    },
+    {
+        "version": "dev-feature+issue-1",
+        "stability": "dev"
+    },
+    {
+        "version": "3.1.2-p1",
+        "stability": "stable"
+    },
+    {
+        "version": "3.1.2-pl2",
+        "stability": "stable"
+    },
+    {
+        "version": "3.1.2-patch",
+        "stability": "stable"
+    },
+    {
+        "version": "3.1.2-alpha5",
+        "stability": "alpha"
+    },
+    {
+        "version": "3.1.2-beta",
+        "stability": "beta"
+    },
+    {
+        "version": "2.0B1",
+        "stability": "beta"
+    },
+    {
+        "version": "1.2.0a1",
+        "stability": "alpha"
+    },
+    {
+        "version": "1.2_a1",
+        "stability": "alpha"
+    },
+    {
+        "version": "2.0.0rc1",
+        "stability": "RC"
+    },
+    {
+        "version": "1.0.0-alpha11+cs-1.1.0",
+        "stability": "alpha"
+    },
+    {
+        "version": "1-2_dev",
+        "stability": "dev"
+    }
+]

@@ -1,0 +1,1 @@
+Fixtures exported from composer/semver 3.4.3 test providers (MIT).

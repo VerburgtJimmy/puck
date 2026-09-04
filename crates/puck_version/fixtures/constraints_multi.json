@@ -1,0 +1,202 @@
+[
+    {
+        "input": ">2.0,<=3.0",
+        "pretty": ">2.0,<=3.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    },
+    {
+        "input": ">2.0 <=3.0",
+        "pretty": ">2.0 <=3.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    },
+    {
+        "input": ">2.0  <=3.0",
+        "pretty": ">2.0  <=3.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    },
+    {
+        "input": ">2.0, <=3.0",
+        "pretty": ">2.0, <=3.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    },
+    {
+        "input": ">2.0 ,<=3.0",
+        "pretty": ">2.0 ,<=3.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    },
+    {
+        "input": ">2.0 , <=3.0",
+        "pretty": ">2.0 , <=3.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    },
+    {
+        "input": ">2.0   , <=3.0",
+        "pretty": ">2.0   , <=3.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    },
+    {
+        "input": "> 2.0   <=  3.0",
+        "pretty": "> 2.0   <=  3.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    },
+    {
+        "input": "> 2.0  ,  <=  3.0",
+        "pretty": "> 2.0  ,  <=  3.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    },
+    {
+        "input": "  > 2.0  ,  <=  3.0 ",
+        "pretty": "  > 2.0  ,  <=  3.0 ",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">",
+                    "version": "2.0.0.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<=",
+                    "version": "3.0.0.0"
+                }
+            ]
+        }
+    }
+]

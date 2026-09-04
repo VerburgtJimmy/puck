@@ -1,0 +1,279 @@
+[
+    {
+        "input": "*",
+        "pretty": "*",
+        "tree": {
+            "type": "match_all"
+        }
+    },
+    {
+        "input": "v*",
+        "pretty": "v*",
+        "tree": {
+            "type": "constraint",
+            "operator": ">=",
+            "version": "0.0.0.0-dev"
+        }
+    },
+    {
+        "input": "*.*",
+        "pretty": "*.*",
+        "tree": {
+            "type": "constraint",
+            "operator": ">=",
+            "version": "0.0.0.0-dev"
+        }
+    },
+    {
+        "input": "v*.*",
+        "pretty": "v*.*",
+        "tree": {
+            "type": "constraint",
+            "operator": ">=",
+            "version": "0.0.0.0-dev"
+        }
+    },
+    {
+        "input": "*.x.*",
+        "pretty": "*.x.*",
+        "tree": {
+            "type": "constraint",
+            "operator": ">=",
+            "version": "0.0.0.0-dev"
+        }
+    },
+    {
+        "input": "x.X.x.*",
+        "pretty": "x.X.x.*",
+        "tree": {
+            "type": "constraint",
+            "operator": ">=",
+            "version": "0.0.0.0-dev"
+        }
+    },
+    {
+        "input": "<>1.0.0",
+        "pretty": "<>1.0.0",
+        "tree": {
+            "type": "constraint",
+            "operator": "!=",
+            "version": "1.0.0.0"
+        }
+    },
+    {
+        "input": "!=1.0.0",
+        "pretty": "!=1.0.0",
+        "tree": {
+            "type": "constraint",
+            "operator": "!=",
+            "version": "1.0.0.0"
+        }
+    },
+    {
+        "input": ">1.0.0",
+        "pretty": ">1.0.0",
+        "tree": {
+            "type": "constraint",
+            "operator": ">",
+            "version": "1.0.0.0"
+        }
+    },
+    {
+        "input": "<1.2.3.4",
+        "pretty": "<1.2.3.4",
+        "tree": {
+            "type": "constraint",
+            "operator": "<",
+            "version": "1.2.3.4-dev"
+        }
+    },
+    {
+        "input": "<=1.2.3",
+        "pretty": "<=1.2.3",
+        "tree": {
+            "type": "constraint",
+            "operator": "<=",
+            "version": "1.2.3.0"
+        }
+    },
+    {
+        "input": ">=1.2.3",
+        "pretty": ">=1.2.3",
+        "tree": {
+            "type": "constraint",
+            "operator": ">=",
+            "version": "1.2.3.0-dev"
+        }
+    },
+    {
+        "input": "=1.2.3",
+        "pretty": "=1.2.3",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "1.2.3.0"
+        }
+    },
+    {
+        "input": "==1.2.3",
+        "pretty": "==1.2.3",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "1.2.3.0"
+        }
+    },
+    {
+        "input": "1.2.3",
+        "pretty": "1.2.3",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "1.2.3.0"
+        }
+    },
+    {
+        "input": "=1.0",
+        "pretty": "=1.0",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "1.0.0.0"
+        }
+    },
+    {
+        "input": "1.2.3b5",
+        "pretty": "1.2.3b5",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "1.2.3.0-beta5"
+        }
+    },
+    {
+        "input": "1.2.3a1",
+        "pretty": "1.2.3a1",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "1.2.3.0-alpha1"
+        }
+    },
+    {
+        "input": "1.2.3p1234",
+        "pretty": "1.2.3p1234",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "1.2.3.0-patch1234"
+        }
+    },
+    {
+        "input": "1.2.3pl1234",
+        "pretty": "1.2.3pl1234",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "1.2.3.0-patch1234"
+        }
+    },
+    {
+        "input": ">= 1.2.3",
+        "pretty": ">= 1.2.3",
+        "tree": {
+            "type": "constraint",
+            "operator": ">=",
+            "version": "1.2.3.0-dev"
+        }
+    },
+    {
+        "input": "< 1.2.3",
+        "pretty": "< 1.2.3",
+        "tree": {
+            "type": "constraint",
+            "operator": "<",
+            "version": "1.2.3.0-dev"
+        }
+    },
+    {
+        "input": "> 1.2.3",
+        "pretty": "> 1.2.3",
+        "tree": {
+            "type": "constraint",
+            "operator": ">",
+            "version": "1.2.3.0"
+        }
+    },
+    {
+        "input": ">=dev-master",
+        "pretty": ">=dev-master",
+        "tree": {
+            "type": "constraint",
+            "operator": ">=",
+            "version": "dev-master"
+        }
+    },
+    {
+        "input": "dev-master",
+        "pretty": "dev-master",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "dev-master"
+        }
+    },
+    {
+        "input": "dev-feature-a",
+        "pretty": "dev-feature-a",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "dev-feature-a"
+        }
+    },
+    {
+        "input": "dev-some-fix",
+        "pretty": "dev-some-fix",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "dev-some-fix"
+        }
+    },
+    {
+        "input": "dev-CAPS",
+        "pretty": "dev-CAPS",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "dev-CAPS"
+        }
+    },
+    {
+        "input": "dev-master as 1.0.0",
+        "pretty": "dev-master as 1.0.0",
+        "tree": {
+            "type": "constraint",
+            "operator": "==",
+            "version": "dev-master"
+        }
+    },
+    {
+        "input": "<1.2.3.4-stable",
+        "pretty": "<1.2.3.4-stable",
+        "tree": {
+            "type": "constraint",
+            "operator": "<",
+            "version": "1.2.3.4"
+        }
+    },
+    {
+        "input": ">=1.2.3.4-stable",
+        "pretty": ">=1.2.3.4-stable",
+        "tree": {
+            "type": "constraint",
+            "operator": ">=",
+            "version": "1.2.3.4"
+        }
+    }
+]

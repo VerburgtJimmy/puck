@@ -1,0 +1,20 @@
+[package]
+name = "puck_cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "puck: native PHP package manager CLI"
+default-run = "puck"
+
+[[bin]]
+name = "puck"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+puck_diagnostics.workspace = true
+puck_version.workspace = true
+thiserror.workspace = true

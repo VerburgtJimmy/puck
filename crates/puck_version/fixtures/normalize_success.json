@@ -1,0 +1,294 @@
+[
+    {
+        "input": "1.0.0",
+        "normalized": "1.0.0.0"
+    },
+    {
+        "input": "1.2.3.4",
+        "normalized": "1.2.3.4"
+    },
+    {
+        "input": "1.0.0RC1dev",
+        "normalized": "1.0.0.0-RC1-dev"
+    },
+    {
+        "input": "1.0.0-rC15-dev",
+        "normalized": "1.0.0.0-RC15-dev"
+    },
+    {
+        "input": "1.0.0.RC.15-dev",
+        "normalized": "1.0.0.0-RC15-dev"
+    },
+    {
+        "input": "1.0.0-rc1",
+        "normalized": "1.0.0.0-RC1"
+    },
+    {
+        "input": "1.0.0.pl3-dev",
+        "normalized": "1.0.0.0-patch3-dev"
+    },
+    {
+        "input": "1.0-dev",
+        "normalized": "1.0.0.0-dev"
+    },
+    {
+        "input": "0",
+        "normalized": "0.0.0.0"
+    },
+    {
+        "input": "99999",
+        "normalized": "99999.0.0.0"
+    },
+    {
+        "input": "10.4.13-beta",
+        "normalized": "10.4.13.0-beta"
+    },
+    {
+        "input": "10.4.13beta2",
+        "normalized": "10.4.13.0-beta2"
+    },
+    {
+        "input": "10.4.13beta.2",
+        "normalized": "10.4.13.0-beta2"
+    },
+    {
+        "input": "v1.13.11-beta.0",
+        "normalized": "1.13.11.0-beta0"
+    },
+    {
+        "input": "1.13.11.0-beta0",
+        "normalized": "1.13.11.0-beta0"
+    },
+    {
+        "input": "10.4.13-b",
+        "normalized": "10.4.13.0-beta"
+    },
+    {
+        "input": "10.4.13-b5",
+        "normalized": "10.4.13.0-beta5"
+    },
+    {
+        "input": "v1.0.0",
+        "normalized": "1.0.0.0"
+    },
+    {
+        "input": "2010.01",
+        "normalized": "2010.01.0.0"
+    },
+    {
+        "input": "2010.01.02",
+        "normalized": "2010.01.02.0"
+    },
+    {
+        "input": "2010.1.555",
+        "normalized": "2010.1.555.0"
+    },
+    {
+        "input": "2010.10.200",
+        "normalized": "2010.10.200.0"
+    },
+    {
+        "input": "20230131.0.0",
+        "normalized": "20230131.0.0"
+    },
+    {
+        "input": "202301310000.0.0",
+        "normalized": "202301310000.0.0"
+    },
+    {
+        "input": "v20100102",
+        "normalized": "20100102"
+    },
+    {
+        "input": "20100102",
+        "normalized": "20100102"
+    },
+    {
+        "input": "20100102.0",
+        "normalized": "20100102.0"
+    },
+    {
+        "input": "20100102.1.0",
+        "normalized": "20100102.1.0"
+    },
+    {
+        "input": "20100102.0.3",
+        "normalized": "20100102.0.3"
+    },
+    {
+        "input": "100000",
+        "normalized": "100000"
+    },
+    {
+        "input": "2010-01-02-10-20-30.0.3",
+        "normalized": "2010.01.02.10.20.30.0.3"
+    },
+    {
+        "input": "2010-01-02-10-20-30.5",
+        "normalized": "2010.01.02.10.20.30.5"
+    },
+    {
+        "input": "2010-01-02",
+        "normalized": "2010.01.02"
+    },
+    {
+        "input": "2012.06.07",
+        "normalized": "2012.06.07.0"
+    },
+    {
+        "input": "2010-01-02.5",
+        "normalized": "2010.01.02.5"
+    },
+    {
+        "input": "2010.1.555",
+        "normalized": "2010.1.555.0"
+    },
+    {
+        "input": "20100102-203040",
+        "normalized": "20100102.203040"
+    },
+    {
+        "input": "20100102.x-dev",
+        "normalized": "20100102.9999999.9999999.9999999-dev"
+    },
+    {
+        "input": "20100102.203040.x-dev",
+        "normalized": "20100102.203040.9999999.9999999-dev"
+    },
+    {
+        "input": "20100102203040-10",
+        "normalized": "20100102203040.10"
+    },
+    {
+        "input": "20100102-203040-p1",
+        "normalized": "20100102.203040-patch1"
+    },
+    {
+        "input": "201903.0",
+        "normalized": "201903.0"
+    },
+    {
+        "input": "201903.x-dev",
+        "normalized": "201903.9999999.9999999.9999999-dev"
+    },
+    {
+        "input": "201903.0-p2",
+        "normalized": "201903.0-patch2"
+    },
+    {
+        "input": "dev-master",
+        "normalized": "dev-master"
+    },
+    {
+        "input": "master",
+        "normalized": "dev-master"
+    },
+    {
+        "input": "dev-trunk",
+        "normalized": "dev-trunk"
+    },
+    {
+        "input": "1.x-dev",
+        "normalized": "1.9999999.9999999.9999999-dev"
+    },
+    {
+        "input": "dev-feature-foo",
+        "normalized": "dev-feature-foo"
+    },
+    {
+        "input": "DEV-FOOBAR",
+        "normalized": "dev-FOOBAR"
+    },
+    {
+        "input": "dev-feature/foo",
+        "normalized": "dev-feature/foo"
+    },
+    {
+        "input": "dev-feature+issue-1",
+        "normalized": "dev-feature+issue-1"
+    },
+    {
+        "input": "dev-master as 1.0.0",
+        "normalized": "dev-master"
+    },
+    {
+        "input": "dev-load-varnish-only-when-used as ^2.0",
+        "normalized": "dev-load-varnish-only-when-used"
+    },
+    {
+        "input": "dev-load-varnish-only-when-used@dev as ^2.0@dev",
+        "normalized": "dev-load-varnish-only-when-used"
+    },
+    {
+        "input": "1.0.0+foo@dev",
+        "normalized": "1.0.0.0"
+    },
+    {
+        "input": "dev-load-varnish-only-when-used@stable",
+        "normalized": "dev-load-varnish-only-when-used"
+    },
+    {
+        "input": "1.0.0-beta.5+foo",
+        "normalized": "1.0.0.0-beta5"
+    },
+    {
+        "input": "1.0.0+foo",
+        "normalized": "1.0.0.0"
+    },
+    {
+        "input": "1.0.0-alpha.3.1+foo",
+        "normalized": "1.0.0.0-alpha3.1"
+    },
+    {
+        "input": "1.0.0-alpha2.1+foo",
+        "normalized": "1.0.0.0-alpha2.1"
+    },
+    {
+        "input": "1.0.0-alpha-2.1-3+foo",
+        "normalized": "1.0.0.0-alpha2.1-3"
+    },
+    {
+        "input": "1.0.0+foo as 2.0",
+        "normalized": "1.0.0.0"
+    },
+    {
+        "input": "00.01.03.04",
+        "normalized": "00.01.03.04"
+    },
+    {
+        "input": "000.001.003.004",
+        "normalized": "000.001.003.004"
+    },
+    {
+        "input": "0.000.103.204",
+        "normalized": "0.000.103.204"
+    },
+    {
+        "input": "0700",
+        "normalized": "0700.0.0.0"
+    },
+    {
+        "input": "041.x-dev",
+        "normalized": "041.9999999.9999999.9999999-dev"
+    },
+    {
+        "input": "dev-041.003",
+        "normalized": "dev-041.003"
+    },
+    {
+        "input": "dev-1.0.0-dev<1.0.5-dev",
+        "normalized": "dev-1.0.0-dev<1.0.5-dev"
+    },
+    {
+        "input": "dev-foo bar",
+        "normalized": "dev-foo bar"
+    },
+    {
+        "input": " 1.0.0",
+        "normalized": "1.0.0.0"
+    },
+    {
+        "input": "1.0.0 ",
+        "normalized": "1.0.0.0"
+    }
+]

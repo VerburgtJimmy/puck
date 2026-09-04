@@ -1,0 +1,119 @@
+[
+    {
+        "input": ""
+    },
+    {
+        "input": "1.0.0-meh"
+    },
+    {
+        "input": ">2.0,,<=3.0"
+    },
+    {
+        "input": ">2.0 ,, <=3.0"
+    },
+    {
+        "input": ">2.0 ||| <=3.0"
+    },
+    {
+        "input": ",^1@dev || ^4@dev"
+    },
+    {
+        "input": ",^1@dev"
+    },
+    {
+        "input": "|| ^1@dev"
+    },
+    {
+        "input": "^1@dev ||"
+    },
+    {
+        "input": "^1@dev ,"
+    },
+    {
+        "input": "^2.0.*"
+    },
+    {
+        "input": "^2.0.x"
+    },
+    {
+        "input": "^2.0.x-beta"
+    },
+    {
+        "input": "^2.*"
+    },
+    {
+        "input": "^2.x"
+    },
+    {
+        "input": "^2.x-beta"
+    },
+    {
+        "input": "^2.1.2.*"
+    },
+    {
+        "input": "^2.1.2.x"
+    },
+    {
+        "input": "^2.1.2.x-beta"
+    },
+    {
+        "input": "~2.0.*"
+    },
+    {
+        "input": "~2.0.x"
+    },
+    {
+        "input": "~2.0.x-beta"
+    },
+    {
+        "input": "~2.*"
+    },
+    {
+        "input": "~2.x"
+    },
+    {
+        "input": "~2.x-beta"
+    },
+    {
+        "input": "~2.1.2.*"
+    },
+    {
+        "input": "~2.1.2.x"
+    },
+    {
+        "input": "~2.1.2.x-beta"
+    },
+    {
+        "input": "1.x - 2.*"
+    },
+    {
+        "input": "2.x.x.x-dev - 3.x.x.x-dev"
+    },
+    {
+        "input": "^1.*-beta-dev"
+    },
+    {
+        "input": "^1. *-dev"
+    },
+    {
+        "input": "~1.*-beta-dev"
+    },
+    {
+        "input": "1.0.0-dev<1.0.5-dev"
+    },
+    {
+        "input": "*-dev"
+    },
+    {
+        "input": "^"
+    },
+    {
+        "input": "^8 || ^"
+    },
+    {
+        "input": "~"
+    },
+    {
+        "input": "~1 ~"
+    }
+]

@@ -1,0 +1,15 @@
+[package]
+name = "puck_lock"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "puck: composer.lock read/write and content-hash"
+
+[dependencies]
+md-5.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true

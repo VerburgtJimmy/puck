@@ -1,0 +1,22 @@
+/target/
+**/*.rs.bk
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Local puck state (never commit)
+.puck/
+
+# Composer artifacts from fixtures / local experiments
+**/vendor/
+composer.phar
+
+# Benchmark / criterion output
+/benches/target/
+/target/criterion/
+
+# IDE
+.idea/
+.vscode/
+*.swp

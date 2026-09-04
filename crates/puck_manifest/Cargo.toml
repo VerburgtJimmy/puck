@@ -1,0 +1,12 @@
+[package]
+name = "puck_manifest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "puck: manifest crate (M0 stub)"
+
+[dependencies]
+thiserror.workspace = true

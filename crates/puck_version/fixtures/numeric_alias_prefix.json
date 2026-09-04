@@ -1,0 +1,34 @@
+[
+    {
+        "input": "0.x-dev",
+        "prefix": "0."
+    },
+    {
+        "input": "1.0.x-dev",
+        "prefix": "1.0."
+    },
+    {
+        "input": "1.x-dev",
+        "prefix": "1."
+    },
+    {
+        "input": "1.2.x-dev",
+        "prefix": "1.2."
+    },
+    {
+        "input": "1.2-dev",
+        "prefix": "1.2."
+    },
+    {
+        "input": "1-dev",
+        "prefix": "1."
+    },
+    {
+        "input": "dev-develop",
+        "prefix": false
+    },
+    {
+        "input": "dev-master",
+        "prefix": false
+    }
+]

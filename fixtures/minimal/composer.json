@@ -1,0 +1,9 @@
+{
+    "name": "puck/minimal-fixture",
+    "description": "Empty lock fixture for harness wiring",
+    "type": "project",
+    "require": {},
+    "config": {
+        "sort-packages": true
+    }
+}

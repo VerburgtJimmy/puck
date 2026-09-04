@@ -1,0 +1,74 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/puck_cli",
+    "crates/puck_manifest",
+    "crates/puck_lock",
+    "crates/puck_version",
+    "crates/puck_registry",
+    "crates/puck_vcs",
+    "crates/puck_dist",
+    "crates/puck_store",
+    "crates/puck_install",
+    "crates/puck_autoload",
+    "crates/puck_platform",
+    "crates/puck_scripts",
+    "crates/puck_plugins",
+    "crates/puck_laravel",
+    "crates/puck_resolver",
+    "crates/puck_php",
+    "crates/puck_diagnostics",
+]
+default-members = ["crates/puck_cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/jimmyverburgt/puck"
+authors = ["Jimmy Verburgt"]
+
+[workspace.dependencies]
+# Workspace-shared third-party deps
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "io-util"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
+sha2 = "0.10"
+md-5 = "0.10"
+memchr = "2"
+rustc-hash = "2"
+indexmap = { version = "2", features = ["serde"] }
+thiserror = "2"
+clap = { version = "4", features = ["derive", "env"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+tar = "0.4"
+flate2 = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+insta = "1"
+tempfile = "3"
+regex = "1"
+
+# Internal crates
+puck_manifest = { path = "crates/puck_manifest" }
+puck_lock = { path = "crates/puck_lock" }
+puck_version = { path = "crates/puck_version" }
+puck_registry = { path = "crates/puck_registry" }
+puck_vcs = { path = "crates/puck_vcs" }
+puck_dist = { path = "crates/puck_dist" }
+puck_store = { path = "crates/puck_store" }
+puck_install = { path = "crates/puck_install" }
+puck_autoload = { path = "crates/puck_autoload" }
+puck_platform = { path = "crates/puck_platform" }
+puck_scripts = { path = "crates/puck_scripts" }
+puck_plugins = { path = "crates/puck_plugins" }
+puck_laravel = { path = "crates/puck_laravel" }
+puck_resolver = { path = "crates/puck_resolver" }
+puck_php = { path = "crates/puck_php" }
+puck_diagnostics = { path = "crates/puck_diagnostics" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

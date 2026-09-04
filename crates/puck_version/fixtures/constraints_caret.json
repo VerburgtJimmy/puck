@@ -1,0 +1,486 @@
+[
+    {
+        "input": "^v1",
+        "pretty": "^v1",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "1.0.0.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "2.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0",
+        "pretty": "^0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.0.0.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "1.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0.0",
+        "pretty": "^0.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.0.0.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "0.1.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^1.2",
+        "pretty": "^1.2",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "1.2.0.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "2.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^1.2.3-beta.2",
+        "pretty": "^1.2.3-beta.2",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "1.2.3.0-beta2"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "2.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^1.2.3.4",
+        "pretty": "^1.2.3.4",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "1.2.3.4-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "2.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^1.2.3",
+        "pretty": "^1.2.3",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "1.2.3.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "2.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0.2.3",
+        "pretty": "^0.2.3",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.2.3.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "0.3.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0.2",
+        "pretty": "^0.2",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.2.0.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "0.3.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0.2.0",
+        "pretty": "^0.2.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.2.0.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "0.3.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0.0.3",
+        "pretty": "^0.0.3",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.0.3.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "0.0.4.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0.0.3-alpha",
+        "pretty": "^0.0.3-alpha",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.0.3.0-alpha"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "0.0.4.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0.0.3-dev",
+        "pretty": "^0.0.3-dev",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.0.3.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "0.0.4.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0.0.3-stable",
+        "pretty": "^0.0.3-stable",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.0.3.0"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "0.0.4.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^201903.0",
+        "pretty": "^201903.0",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "201903.0-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "201904.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^201903.0-beta",
+        "pretty": "^201903.0-beta",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "201903.0-beta"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "201904.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^201903.205830.1-stable",
+        "pretty": "^201903.205830.1-stable",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "201903.205830.1"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "201904.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^2.x-dev",
+        "pretty": "^2.x-dev",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "2.9999999.9999999.9999999-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "3.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^2.0.*-dev",
+        "pretty": "^2.0.*-dev",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "2.0.9999999.9999999-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "3.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^2.0.x-dev",
+        "pretty": "^2.0.x-dev",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "2.0.9999999.9999999-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "3.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^2.0.3.x-dev",
+        "pretty": "^2.0.3.x-dev",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "2.0.3.9999999-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "3.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    },
+    {
+        "input": "^0.x-dev",
+        "pretty": "^0.x-dev",
+        "tree": {
+            "type": "multi",
+            "conjunctive": true,
+            "constraints": [
+                {
+                    "type": "constraint",
+                    "operator": ">=",
+                    "version": "0.9999999.9999999.9999999-dev"
+                },
+                {
+                    "type": "constraint",
+                    "operator": "<",
+                    "version": "1.0.0.0-dev"
+                }
+            ]
+        },
+        "min": {},
+        "max": {}
+    }
+]
