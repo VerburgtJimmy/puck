@@ -6,7 +6,7 @@ use crate::{Error, Result};
 use puck_dist::{ArchiveKind, download};
 use puck_lock::{LockFile, LockedPackage};
 use puck_manifest::Manifest;
-use puck_store::{Store, link_tree, put_archive};
+use puck_store::{Store, link_tree, lookup, put_archive, remember};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use std::fs;
@@ -170,13 +170,15 @@ async fn fetch_one(
         ))
     })?;
 
-    // Warm-store short circuit: if we already have a marker for this URL's content we
-    // still need the sha256. Download path always computes it; offline requires a
-    // prior store hit keyed by re-download skip. For offline, require the archive to
-    // already be cached under a known hash - we probe by downloading only when online.
+    if let Some(sha) = lookup(store, shasum, Some(url)).map_err(|e| Error::Message(e.to_string()))?
+    {
+        eprintln!("puck: cache hit {name}");
+        return Ok(sha);
+    }
+
     if offline {
         return Err(Error::Message(format!(
-            "offline install needs a warm store entry for {name}; offline index lands in M2"
+            "offline install: {name} is not in the warm store (no sha1/url index hit)"
         )));
     }
 
@@ -187,6 +189,8 @@ async fn fetch_one(
     let kind = ArchiveKind::from_type_and_url(dist_type, url)
         .map_err(|e| Error::Message(e.to_string()))?;
     put_archive(store, &downloaded.sha256, &downloaded.bytes, kind)
+        .map_err(|e| Error::Message(e.to_string()))?;
+    remember(store, &downloaded.sha256, shasum, Some(url))
         .map_err(|e| Error::Message(e.to_string()))?;
     Ok(downloaded.sha256)
 }
