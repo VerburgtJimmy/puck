@@ -9,6 +9,7 @@ use puck_lock::{LockFile, LockedPackage};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct InstallOptions {
     pub no_dev: bool,
+    pub offline: bool,
 }
 
 /// What to do with a single package.
@@ -29,6 +30,7 @@ pub struct PlannedPackage {
     pub action: InstallAction,
     pub dist_url: Option<String>,
     pub dist_shasum: Option<String>,
+    pub dist_type: Option<String>,
 }
 
 /// Full install plan.
@@ -98,6 +100,7 @@ pub fn plan_install(
             action: InstallAction::Remove,
             dist_url: None,
             dist_shasum: None,
+            dist_type: None,
         });
     }
 
@@ -112,6 +115,7 @@ fn planned_from_locked(pkg: &LockedPackage, is_dev: bool, action: InstallAction)
         action,
         dist_url: pkg.dist.as_ref().and_then(|d| d.url.clone()),
         dist_shasum: pkg.dist.as_ref().and_then(|d| d.shasum.clone()),
+        dist_type: pkg.dist.as_ref().and_then(|d| d.dist_type.clone()),
     }
 }
 
@@ -146,7 +150,10 @@ mod tests {
         let plan = plan_install(
             &lock,
             &InstalledState::default(),
-            InstallOptions { no_dev: true },
+            InstallOptions {
+                no_dev: true,
+                offline: false,
+            },
         )
         .expect("plan");
         assert_eq!(plan.to_install().count(), lock.packages.len());
@@ -167,7 +174,15 @@ mod tests {
             },
         );
         let installed = InstalledState { packages };
-        let plan = plan_install(&lock, &installed, InstallOptions { no_dev: true }).expect("plan");
+        let plan = plan_install(
+            &lock,
+            &installed,
+            InstallOptions {
+                no_dev: true,
+                offline: false,
+            },
+        )
+        .expect("plan");
         let kept = plan
             .kept()
             .find(|p| p.name == first.name.to_ascii_lowercase());

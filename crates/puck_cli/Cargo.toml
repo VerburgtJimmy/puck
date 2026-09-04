@@ -22,3 +22,4 @@ puck_manifest.workspace = true
 puck_store.workspace = true
 puck_version.workspace = true
 thiserror.workspace = true
+tokio.workspace = true

@@ -9,11 +9,14 @@ authors.workspace = true
 description = "puck: install planner and executor"
 
 [dependencies]
+indexmap.workspace = true
+puck_dist.workspace = true
 puck_lock.workspace = true
+puck_store.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-indexmap.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

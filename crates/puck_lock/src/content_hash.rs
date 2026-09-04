@@ -47,14 +47,13 @@ pub fn content_hash(composer_json_contents: &str) -> Result<String> {
     }
 
     // isset($content['config']['platform']) - false when missing or null.
-    if let Some(config) = obj.get("config").and_then(Value::as_object) {
-        if let Some(platform) = config.get("platform") {
-            if !platform.is_null() {
-                let mut config_obj = Map::new();
-                config_obj.insert("platform".to_owned(), php_assoc_normalize(platform.clone()));
-                relevant.insert("config", Value::Object(config_obj));
-            }
-        }
+    if let Some(config) = obj.get("config").and_then(Value::as_object)
+        && let Some(platform) = config.get("platform")
+        && !platform.is_null()
+    {
+        let mut config_obj = Map::new();
+        config_obj.insert("platform".to_owned(), php_assoc_normalize(platform.clone()));
+        relevant.insert("config", Value::Object(config_obj));
     }
 
     let encoded = encode_php_json_flag0(&relevant)?;

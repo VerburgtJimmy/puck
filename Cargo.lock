@@ -844,6 +844,7 @@ dependencies = [
  "puck_store",
  "puck_version",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -873,11 +874,14 @@ name = "puck_install"
 version = "0.1.0"
 dependencies = [
  "indexmap",
+ "puck_dist",
  "puck_lock",
+ "puck_store",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

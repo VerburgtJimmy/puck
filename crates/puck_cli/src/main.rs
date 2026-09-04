@@ -1,9 +1,10 @@
 //! `puck` - native PHP package manager (Laravel-first).
 
 use clap::{Parser, Subcommand};
-use puck_install::{InstallAction, InstallOptions, plan_install, read_installed};
+use puck_install::{InstallAction, InstallOptions, execute_install, plan_install, read_installed};
 use puck_lock::LockFile;
 use puck_manifest::Manifest;
+use puck_store::Store;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -44,10 +45,7 @@ enum Commands {
         working_dir: Option<PathBuf>,
     },
     /// Update packages within constraints (M3)
-    Update {
-        /// Package names to update; empty means all
-        packages: Vec<String>,
-    },
+    Update { packages: Vec<String> },
     /// Add a package to composer.json and install (M3)
     Require {
         packages: Vec<String>,
@@ -90,16 +88,25 @@ fn main() -> ExitCode {
         Commands::Install {
             no_dev,
             optimize: _,
-            offline: _,
+            offline,
             strict_native: _,
             working_dir,
-        } => match run_install(working_dir, no_dev) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(err) => {
-                eprintln!("puck: {err}");
-                ExitCode::from(1)
+        } => {
+            let runtime = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(err) => {
+                    eprintln!("puck: failed to start async runtime: {err}");
+                    return ExitCode::from(1);
+                }
+            };
+            match runtime.block_on(run_install(working_dir, no_dev, offline)) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("puck: {err}");
+                    ExitCode::from(1)
+                }
             }
-        },
+        }
         Commands::Store {
             command: StoreCommands::Path,
         } => {
@@ -118,7 +125,11 @@ fn main() -> ExitCode {
     }
 }
 
-fn run_install(working_dir: Option<PathBuf>, no_dev: bool) -> Result<(), String> {
+async fn run_install(
+    working_dir: Option<PathBuf>,
+    no_dev: bool,
+    offline: bool,
+) -> Result<(), String> {
     let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
     let manifest_path = root.join("composer.json");
     let lock_path = root.join("composer.lock");
@@ -130,7 +141,6 @@ fn run_install(working_dir: Option<PathBuf>, no_dev: bool) -> Result<(), String>
         ));
     }
 
-    // Validate manifest when present; install still keys off the lock.
     if manifest_path.is_file() {
         let manifest = Manifest::from_path(&manifest_path).map_err(|e| e.to_string())?;
         eprintln!("puck: project {}", manifest.pretty_name);
@@ -138,8 +148,8 @@ fn run_install(working_dir: Option<PathBuf>, no_dev: bool) -> Result<(), String>
 
     let lock = LockFile::from_path(&lock_path).map_err(|e| e.to_string())?;
     let installed = read_installed(root.join("vendor/composer")).map_err(|e| e.to_string())?;
-    let plan =
-        plan_install(&lock, &installed, InstallOptions { no_dev }).map_err(|e| e.to_string())?;
+    let options = InstallOptions { no_dev, offline };
+    let plan = plan_install(&lock, &installed, options).map_err(|e| e.to_string())?;
 
     let mut install = 0usize;
     let mut update = 0usize;
@@ -159,6 +169,16 @@ fn run_install(working_dir: Option<PathBuf>, no_dev: bool) -> Result<(), String>
         lock.content_hash
     );
 
-    // Execution (fetch / link / autoload) lands in M1.
-    Err("install execution is not implemented yet (planner only). Fetch and link come next.".into())
+    if install + update + remove == 0 {
+        eprintln!("puck: nothing to do");
+        return Ok(());
+    }
+
+    let store = Store::default_global();
+    execute_install(&root, &lock, &plan, options, &store)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    eprintln!("puck: done");
+    Ok(())
 }

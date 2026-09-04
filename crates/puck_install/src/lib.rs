@@ -3,13 +3,15 @@
 #![deny(unsafe_code)]
 #![warn(clippy::unwrap_used)]
 
+mod execute;
 mod installed;
 mod plan;
 
+pub use execute::execute_install;
 pub use installed::{InstalledPackage, InstalledState, read_installed};
 pub use plan::{InstallAction, InstallOptions, InstallPlan, PlannedPackage, plan_install};
 
-/// Errors from install planning.
+/// Errors from install planning and execution.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0}")]
