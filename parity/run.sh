@@ -114,7 +114,7 @@ run_puck_install() {
   local dir="$1"
   local bin
   bin="$(resolve_puck)"
-  local extra=()
+  local extra=(--no-scripts)
   if [[ "$NO_DEV" -eq 1 ]]; then
     extra+=(--no-dev)
   fi
@@ -311,6 +311,7 @@ fi
 # 6. PHP smoke
 smoke_php() {
   local root="$1"
+  local with_dev="$2"
   php -r '
     require $argv[1] . "/vendor/autoload.php";
     if (!class_exists("Illuminate\\Foundation\\Application")) {
@@ -321,14 +322,25 @@ smoke_php() {
       fwrite(STDERR, "InstalledVersions missing laravel/framework\n");
       exit(1);
     }
+    if ($argv[2] === "1") {
+      if (!class_exists("PHPUnit\\Framework\\TestCase")) {
+        fwrite(STDERR, "missing PHPUnit\\Framework\\TestCase\n");
+        exit(1);
+      }
+    }
     echo "ok\n";
-  ' "$root"
+  ' "$root" "$with_dev"
 }
 
-if ! smoke_php "$COMPOSER_DIR" >/dev/null; then
+DEV_FLAG=0
+if [[ "$NO_DEV" -eq 0 ]]; then
+  DEV_FLAG=1
+fi
+
+if ! smoke_php "$COMPOSER_DIR" "$DEV_FLAG" >/dev/null; then
   fail "composer PHP smoke failed"
 fi
-if ! out="$(smoke_php "$PUCK_DIR")"; then
+if ! out="$(smoke_php "$PUCK_DIR" "$DEV_FLAG")"; then
   fail "puck PHP smoke failed"
 else
   echo "parity: OK PHP smoke ($out)"
