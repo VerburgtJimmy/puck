@@ -197,6 +197,12 @@ async fn run_install(
     let mut plan = plan_install(&lock, &installed, options).map_err(|e| e.to_string())?;
     reconcile_vendor_presence(&mut plan, &root.join("vendor"));
 
+    // CLI `-o` wins; otherwise honour composer.json `config.optimize-autoloader`.
+    let optimize = optimize
+        || manifest
+            .as_ref()
+            .is_some_and(Manifest::optimize_autoloader);
+
     let mut install = 0usize;
     let mut update = 0usize;
     let mut keep = 0usize;
@@ -214,6 +220,9 @@ async fn run_install(
         "puck: plan  install={install}  update={update}  keep={keep}  remove={remove}  (lock {})",
         lock.content_hash
     );
+    if optimize {
+        eprintln!("puck: optimize-autoloader enabled");
+    }
 
     let packages_changed = install + update + remove > 0;
     if !packages_changed {
@@ -226,9 +235,10 @@ async fn run_install(
             .map_err(|e| e.to_string())?;
     }
 
-    // Warm keep: skip regenerating autoload / discovery / scripts when the tree is
-    // already current (unless -o was requested, which always forces a dump).
-    let need_dump = packages_changed || optimize || !dump_is_current(&root, &lock);
+    // Warm keep: skip dump when packages and dump meta (hash + optimize) match.
+    let need_dump = packages_changed
+        || !dump_is_current(&root, &lock)
+        || !dump_meta_current(&root, &lock.content_hash, optimize);
     if !need_dump {
         eprintln!("puck: autoload up to date");
         eprintln!("puck: done");
@@ -246,7 +256,11 @@ async fn run_install(
         },
     )
     .map_err(|e| e.to_string())?;
-    eprintln!("puck: dumped autoload");
+    write_dump_meta(&root, &lock.content_hash, optimize).map_err(|e| e.to_string())?;
+    eprintln!(
+        "puck: dumped autoload{}",
+        if optimize { " (-o)" } else { "" }
+    );
 
     let mut packages_written = false;
     match discover(&root).map_err(|e| e.to_string())? {
@@ -317,6 +331,7 @@ fn run_dump_autoload(
             None
         }
     };
+    let optimize = optimize || manifest.as_ref().is_some_and(Manifest::optimize_autoloader);
 
     dump(
         &root,
@@ -329,11 +344,35 @@ fn run_dump_autoload(
         },
     )
     .map_err(|e| e.to_string())?;
+    write_dump_meta(&root, &lock.content_hash, optimize).map_err(|e| e.to_string())?;
     eprintln!(
         "puck: dumped autoload{}",
         if optimize { " (-o)" } else { "" }
     );
     Ok(())
+}
+
+fn dump_meta_path(root: &std::path::Path) -> PathBuf {
+    root.join(".puck/autoload-meta")
+}
+
+fn dump_meta_current(root: &std::path::Path, content_hash: &str, optimize: bool) -> bool {
+    let Ok(text) = std::fs::read_to_string(dump_meta_path(root)) else {
+        return false;
+    };
+    let expected = format!("content-hash={content_hash}\noptimize={}\n", optimize as u8);
+    text == expected
+}
+
+fn write_dump_meta(
+    root: &std::path::Path,
+    content_hash: &str,
+    optimize: bool,
+) -> Result<(), String> {
+    let dir = root.join(".puck");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir .puck: {e}"))?;
+    let body = format!("content-hash={content_hash}\noptimize={}\n", optimize as u8);
+    std::fs::write(dump_meta_path(root), body).map_err(|e| format!("write dump meta: {e}"))
 }
 
 fn run_store_gc() -> Result<(), String> {

@@ -149,6 +149,14 @@ impl Manifest {
             _ => false,
         }
     }
+
+    /// `config.optimize-autoloader` (Composer). Absent means false.
+    pub fn optimize_autoloader(&self) -> bool {
+        self.config
+            .get("optimize-autoloader")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
 }
 
 fn take_links(obj: &mut Map<String, Value>, key: &str) -> Result<PackageLinks> {
