@@ -18,6 +18,15 @@ use tokio::task::JoinSet;
 
 const DEFAULT_FETCH_CONCURRENCY: usize = 8;
 
+/// Link concurrency: hardlinks are metadata-heavy; prefer CPU count (min 8)
+/// so warm-wipe can saturate APFS better than the fetch default alone.
+fn link_concurrency() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(DEFAULT_FETCH_CONCURRENCY)
+        .max(DEFAULT_FETCH_CONCURRENCY)
+}
+
 /// Wall-clock phase timings from [`execute_install`] (milliseconds).
 #[derive(Debug, Clone, Default)]
 pub struct ExecuteTimings {
@@ -67,10 +76,11 @@ pub async fn execute_install(
         fetch_into_store(&to_fetch, store, options.offline).await?;
     let fetch_ms = fetch_started.elapsed().as_millis();
 
-    // Link into vendor/ in parallel (same concurrency as fetch). Hardlinks are
-    // mostly metadata; serial linking was ~70% of warm-wipe wall time.
+    // Link into vendor/ in parallel. Hardlinks are mostly metadata; serial
+    // linking was ~70% of warm-wipe wall time. Use at least fetch concurrency,
+    // scaled up to available parallelism when the host has more cores.
     let link_started = Instant::now();
-    let link_sema = Arc::new(Semaphore::new(DEFAULT_FETCH_CONCURRENCY));
+    let link_sema = Arc::new(Semaphore::new(link_concurrency()));
     let mut link_set = JoinSet::new();
     for pkg in &to_fetch {
         let Some(sha) = fetched.get(&pkg.name) else {

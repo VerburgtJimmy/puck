@@ -1276,3 +1276,163 @@ fn solver_install_root_aliases_if_alias_of_is_installed() {
         ]
     );
 }
+
+/// Same name+version, different requires: require order can change the pick
+/// when the "wrong" extension is first in the pool.
+#[test]
+fn solver_multi_package_name_version_depends_on_require_order() {
+    use puck_version::normalize;
+
+    let php74 = Package::new(
+        "ourcustom/php",
+        normalize("7.4.23").unwrap(),
+        "7.4.23",
+    );
+    let php80 = Package::new(
+        "ourcustom/php",
+        normalize("8.0.10").unwrap(),
+        "8.0.10",
+    );
+    let mut ext74 = Package::new(
+        "ourcustom/ext-foobar",
+        normalize("1.0").unwrap(),
+        "1.0",
+    );
+    let mut ext80 = Package::new(
+        "ourcustom/ext-foobar",
+        normalize("1.0").unwrap(),
+        "1.0",
+    );
+    ext74.requires.insert(
+        "ourcustom/php".into(),
+        Link::new(
+            "ourcustom/ext-foobar",
+            "ourcustom/php",
+            ">=7.4.0,<7.5.0",
+            parse_constraints(">=7.4.0,<7.5.0").unwrap(),
+        ),
+    );
+    ext80.requires.insert(
+        "ourcustom/php".into(),
+        Link::new(
+            "ourcustom/ext-foobar",
+            "ourcustom/php",
+            ">=8.0.0,<8.1.0",
+            parse_constraints(">=8.0.0,<8.1.0").unwrap(),
+        ),
+    );
+
+    // Pool order: php74, php80, ext74, ext80 (ext74 first among same-name).
+    let mut pool = Pool::new(vec![php74, php80, ext74, ext80]);
+
+    // PHP before ext -> prefer highest PHP (8.0) then matching ext.
+    let mut request = Request::new();
+    request.require_name("ourcustom/php", None).unwrap();
+    request.require_name("ourcustom/ext-foobar", None).unwrap();
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    let names_versions: Vec<_> = tx
+        .operations()
+        .iter()
+        .filter_map(|op| match op {
+            Operation::Install { package_id } => {
+                let p = pool.package_by_id(*package_id);
+                Some((p.name.as_str(), p.pretty_version.as_str()))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        names_versions,
+        [("ourcustom/php", "8.0.10"), ("ourcustom/ext-foobar", "1.0")]
+    );
+    // Confirm the ext is the php80-linked one (id 4).
+    assert!(matches!(
+        tx.operations(),
+        [
+            Operation::Install { package_id: 2 },
+            Operation::Install { package_id: 4 },
+        ]
+    ));
+
+    // Ext before PHP -> first same-name ext (ext74) wins, pulling php74.
+    let mut request = Request::new();
+    request.require_name("ourcustom/ext-foobar", None).unwrap();
+    request.require_name("ourcustom/php", None).unwrap();
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    assert!(matches!(
+        tx.operations(),
+        [
+            Operation::Install { package_id: 1 },
+            Operation::Install { package_id: 3 },
+        ]
+    ));
+}
+
+/// When the higher PHP-matching extension is first in the pool, require order
+/// no longer matters.
+#[test]
+fn solver_multi_package_name_version_independent_when_ordered_descending() {
+    use puck_version::normalize;
+
+    let php74 = Package::new("ourcustom/php", normalize("7.4").unwrap(), "7.4");
+    let php80 = Package::new("ourcustom/php", normalize("8.0").unwrap(), "8.0");
+    let mut ext80 = Package::new(
+        "ourcustom/ext-foobar",
+        normalize("1.0").unwrap(),
+        "1.0",
+    );
+    let mut ext74 = Package::new(
+        "ourcustom/ext-foobar",
+        normalize("1.0").unwrap(),
+        "1.0",
+    );
+    ext80.requires.insert(
+        "ourcustom/php".into(),
+        Link::new(
+            "ourcustom/ext-foobar",
+            "ourcustom/php",
+            ">=8.0.0,<8.1.0",
+            parse_constraints(">=8.0.0,<8.1.0").unwrap(),
+        ),
+    );
+    ext74.requires.insert(
+        "ourcustom/php".into(),
+        Link::new(
+            "ourcustom/ext-foobar",
+            "ourcustom/php",
+            ">=7.4.0,<7.5.0",
+            parse_constraints(">=7.4.0,<7.5.0").unwrap(),
+        ),
+    );
+
+    // ext80 before ext74 in pool.
+    let mut pool = Pool::new(vec![php74, php80, ext80, ext74]);
+
+    for order in [
+        ["ourcustom/php", "ourcustom/ext-foobar"],
+        ["ourcustom/ext-foobar", "ourcustom/php"],
+    ] {
+        let mut request = Request::new();
+        for name in order {
+            request.require_name(name, None).unwrap();
+        }
+        let tx = Solver::new(&mut pool)
+            .solve(&request, &empty_present())
+            .unwrap();
+        assert!(
+            matches!(
+                tx.operations(),
+                [
+                    Operation::Install { package_id: 2 },
+                    Operation::Install { package_id: 3 },
+                ]
+            ),
+            "order {order:?} => {:?}",
+            tx.operations()
+        );
+    }
+}
