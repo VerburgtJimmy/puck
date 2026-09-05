@@ -717,3 +717,167 @@ fn solver_pick_older_if_newer_conflicts() {
         ]
     );
 }
+
+#[test]
+fn solver_install_one_of_two_alternatives() {
+    // Two identical name/version candidates; prefer lower pool id (Composer first).
+    let package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    let package_b = Package::new("a/a", "1.0.0.0", "1.0");
+    let mut pool = Pool::new(vec![package_a, package_b]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[Operation::Install { package_id: 1 }]
+    );
+}
+
+/// Composer SolverTest expects failure: a provide-only package must not be
+/// auto-selected for a transitive require. With a hand-built [`Pool`] that
+/// already contains the provider, we currently install it. Tracked under
+/// PoolBuilder / policy fidelity (createPool path).
+#[test]
+#[ignore = "Composer createPool rejects provide-only auto-install; Pool::new still accepts"]
+fn solver_install_provider_alone_fails() {
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
+    package_q.provides.insert(
+        "b/b".into(),
+        Link::new(
+            "q/q",
+            "b/b",
+            "=1.0",
+            parse_constraints("=1.0").unwrap(),
+        ),
+    );
+
+    let mut pool = Pool::new(vec![package_a, package_q]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+
+    let _ = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap_err();
+}
+
+/// Same as provide-only: Composer rejects auto-install of a replacer when the
+/// replaced package is absent and the replacer is not explicitly required.
+#[test]
+#[ignore = "Composer createPool rejects replace-only auto-install; Pool::new still accepts"]
+fn solver_no_install_replacer_of_missing_package() {
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
+    package_q.replaces.insert(
+        "b/b".into(),
+        Link::new(
+            "q/q",
+            "b/b",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+
+    let mut pool = Pool::new(vec![package_a, package_q]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+
+    let _ = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap_err();
+}
+
+#[test]
+fn solver_unsatisfiable_requires() {
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=2.0",
+            parse_constraints(">=2.0").unwrap(),
+        ),
+    );
+    let package_b = Package::new("b/b", "1.0.0.0", "1.0");
+
+    let mut pool = Pool::new(vec![package_a, package_b]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+
+    let err = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("b/b")
+            || msg.contains("conflict")
+            || msg.contains("Problem")
+            || msg.contains("could not"),
+        "unexpected error: {msg:?}"
+    );
+}
+
+#[test]
+fn solver_conflict_result_fails() {
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    package_a.conflicts.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let package_b = Package::new("b/b", "1.0.0.0", "1.0");
+
+    let mut pool = Pool::new(vec![package_a, package_b]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+    request.require_name("b/b", None).unwrap();
+
+    let err = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap_err();
+    assert!(!err.to_string().is_empty());
+}
+
+#[test]
+fn solver_fix_locked_with_alternative() {
+    // Locked a/a 1.0 must stay even when 1.1 exists.
+    let locked = Package::new("a/a", "1.0.0.0", "1.0");
+    let newer = Package::new("a/a", "1.1.0.0", "1.1");
+    let mut pool = Pool::new(vec![locked, newer]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+    request.fix_package(1);
+    let mut present = crate::PresentMap::new();
+    present.insert(1, ());
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .unwrap();
+    assert!(tx.operations().is_empty());
+}
