@@ -17,6 +17,9 @@
 **/vendor/
 composer.phar
 
+# Generated Composer file:// mirror of VCR p2 (benches/build-composer-vcr-mirror.sh)
+/fixtures/registry/composer-mirror/
+
 # Benchmark / criterion output
 /benches/target/
 /target/criterion/

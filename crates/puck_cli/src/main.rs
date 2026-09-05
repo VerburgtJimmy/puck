@@ -58,8 +58,6 @@ enum Commands {
         #[arg(long, value_name = "DIR")]
         working_dir: Option<PathBuf>,
     },
-    /// Update packages within constraints (M3)
-    Update { packages: Vec<String> },
     /// Add a package to composer.json and update the lock (M3)
     Require {
         packages: Vec<String>,
@@ -81,6 +79,25 @@ enum Commands {
         #[arg(long)]
         no_install: bool,
         /// Packagist p2 metadata root (contains `packagist/p2/`). Defaults to `$PUCK_REGISTRY`.
+        #[arg(long, value_name = "DIR")]
+        registry: Option<PathBuf>,
+        #[arg(long, value_name = "DIR")]
+        working_dir: Option<PathBuf>,
+    },
+    /// Rewrite composer.lock from registry metadata without changing versions (M3)
+    Lock {
+        #[arg(long)]
+        no_install: bool,
+        #[arg(long, value_name = "DIR")]
+        registry: Option<PathBuf>,
+        #[arg(long, value_name = "DIR")]
+        working_dir: Option<PathBuf>,
+    },
+    /// Update packages within constraints (M3)
+    Update {
+        packages: Vec<String>,
+        #[arg(long)]
+        no_install: bool,
         #[arg(long, value_name = "DIR")]
         registry: Option<PathBuf>,
         #[arg(long, value_name = "DIR")]
@@ -226,7 +243,48 @@ fn main() -> ExitCode {
                 }
             }
         }
-        Commands::Update { .. } | Commands::Php { .. } => {
+        Commands::Lock {
+            no_install,
+            registry,
+            working_dir,
+        } => {
+            let runtime = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(err) => {
+                    eprintln!("puck: failed to start async runtime: {err}");
+                    return ExitCode::from(1);
+                }
+            };
+            match runtime.block_on(run_lock(working_dir, no_install, registry)) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("puck: {err}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        Commands::Update {
+            packages,
+            no_install,
+            registry,
+            working_dir,
+        } => {
+            let runtime = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(err) => {
+                    eprintln!("puck: failed to start async runtime: {err}");
+                    return ExitCode::from(1);
+                }
+            };
+            match runtime.block_on(run_update(working_dir, packages, no_install, registry)) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("puck: {err}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        Commands::Php { .. } => {
             eprintln!("puck: this command is not implemented yet");
             ExitCode::from(2)
         }
@@ -401,6 +459,147 @@ async fn run_remove(
     }
 
     run_install(Some(root), false, false, false, false).await
+}
+
+async fn run_lock(
+    working_dir: Option<PathBuf>,
+    no_install: bool,
+    registry: Option<PathBuf>,
+) -> Result<(), String> {
+    let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
+    let manifest_path = root.join("composer.json");
+    let lock_path = root.join("composer.lock");
+    if !manifest_path.is_file() {
+        return Err(format!("no composer.json in {}", root.display()));
+    }
+    if !lock_path.is_file() {
+        return Err(format!("no composer.lock in {}", root.display()));
+    }
+
+    let registry_root = resolve_registry_root(registry)?;
+    let p2_dir = registry_root.join("packagist/p2");
+    let composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
+    let lock_bytes = std::fs::read(&lock_path).map_err(|e| e.to_string())?;
+
+    // Empty unlock: keep every locked package fixed; rewrite dump from VCR p2.
+    let lock_doc = resolve_lock_document(&composer_text, Some(&lock_bytes), &p2_dir, &[], true)
+        .map_err(|e| e.to_string())?;
+
+    write_lock_file(&lock_path, &lock_doc)?;
+    eprintln!(
+        "puck: wrote composer.lock (content-hash {})",
+        lock_doc
+            .get("content-hash")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?")
+    );
+
+    if no_install {
+        eprintln!("puck: --no-install; skip vendor/");
+        return Ok(());
+    }
+    run_install(Some(root), false, false, false, false).await
+}
+
+async fn run_update(
+    working_dir: Option<PathBuf>,
+    packages: Vec<String>,
+    no_install: bool,
+    registry: Option<PathBuf>,
+) -> Result<(), String> {
+    let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
+    let manifest_path = root.join("composer.json");
+    let lock_path = root.join("composer.lock");
+    if !manifest_path.is_file() {
+        return Err(format!("no composer.json in {}", root.display()));
+    }
+
+    let registry_root = resolve_registry_root(registry)?;
+    let p2_dir = registry_root.join("packagist/p2");
+    let composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
+    let lock_bytes = if lock_path.is_file() {
+        Some(std::fs::read(&lock_path).map_err(|e| e.to_string())?)
+    } else {
+        None
+    };
+
+    let unlock: Vec<String> = if packages.is_empty() {
+        // Full update: unlock everything by not fixing (pass all names from lock).
+        match &lock_bytes {
+            Some(bytes) => {
+                let data: Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+                let mut names = Vec::new();
+                for key in ["packages", "packages-dev"] {
+                    if let Some(arr) = data.get(key).and_then(|v| v.as_array()) {
+                        for pkg in arr {
+                            if let Some(name) = pkg.get("name").and_then(|v| v.as_str()) {
+                                names.push(name.to_ascii_lowercase());
+                            }
+                        }
+                    }
+                }
+                names
+            }
+            None => Vec::new(),
+        }
+    } else {
+        packages
+            .iter()
+            .map(|s| {
+                PackageRequirement::parse(s)
+                    .map(|r| r.name)
+                    .or_else(|_| {
+                        let name = s.trim().to_ascii_lowercase();
+                        if name.contains('/') {
+                            Ok(name)
+                        } else {
+                            Err(format!(
+                                "invalid package name {s:?}; expected vendor/package"
+                            ))
+                        }
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+
+    if packages.is_empty() {
+        eprintln!("puck: update (all)");
+    } else {
+        for name in &unlock {
+            eprintln!("puck: update {name}");
+        }
+    }
+
+    let lock_doc = resolve_lock_document(
+        &composer_text,
+        lock_bytes.as_deref(),
+        &p2_dir,
+        &unlock,
+        true,
+    )
+    .map_err(|e| e.to_string())?;
+
+    write_lock_file(&lock_path, &lock_doc)?;
+    eprintln!(
+        "puck: wrote composer.lock (content-hash {})",
+        lock_doc
+            .get("content-hash")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?")
+    );
+
+    if no_install {
+        eprintln!("puck: --no-install; skip vendor/");
+        return Ok(());
+    }
+    run_install(Some(root), false, false, false, false).await
+}
+
+fn write_lock_file(path: &std::path::Path, lock_doc: &Value) -> Result<(), String> {
+    let lock_text =
+        format!("{}\n", serde_json::to_string_pretty(lock_doc).map_err(|e| e.to_string())?);
+    let lock_text = reindent_json_pretty_4(&lock_text);
+    std::fs::write(path, &lock_text).map_err(|e| e.to_string())
 }
 
 fn resolve_registry_root(registry: Option<PathBuf>) -> Result<PathBuf, String> {

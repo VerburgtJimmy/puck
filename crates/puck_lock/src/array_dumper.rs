@@ -57,14 +57,36 @@ pub fn dump_lock_package_from_p2(version: &Value) -> Value {
         }
     }
 
-    if let Some(source) = src.get("source") {
-        if !is_empty_value(source) {
-            data.insert("source".into(), source.clone());
+    if let Some(source) = src.get("source").and_then(|v| v.as_object()) {
+        let mut out = Map::new();
+        // ArrayDumper order: type, url, reference, mirrors
+        for key in ["type", "url", "reference", "mirrors"] {
+            if let Some(v) = source.get(key) {
+                if !is_empty_value(v) || key == "reference" {
+                    // reference may be present even when empty string? skip empty
+                    if !is_empty_value(v) {
+                        out.insert(key.into(), v.clone());
+                    }
+                }
+            }
+        }
+        if !out.is_empty() {
+            data.insert("source".into(), Value::Object(out));
         }
     }
-    if let Some(dist) = src.get("dist") {
-        if !is_empty_value(dist) {
-            data.insert("dist".into(), dist.clone());
+    if let Some(dist) = src.get("dist").and_then(|v| v.as_object()) {
+        let mut out = Map::new();
+        // ArrayDumper order: type, url, reference, shasum, mirrors
+        for key in ["type", "url", "reference", "shasum", "mirrors"] {
+            if let Some(v) = dist.get(key) {
+                // Composer includes empty shasum string
+                if key == "shasum" || !is_empty_value(v) {
+                    out.insert(key.into(), v.clone());
+                }
+            }
+        }
+        if !out.is_empty() {
+            data.insert("dist".into(), Value::Object(out));
         }
     }
 
