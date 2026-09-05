@@ -14,7 +14,7 @@ use crate::request::Request;
 use crate::solver::Solver;
 use crate::transaction::Operation;
 use crate::vcr_pool::array_repository_from_p2_constraints;
-use puck_lock::{format_lock_package, sort_lock_packages};
+use puck_lock::{build_lock_document, LockWriteInput, PLUGIN_API_VERSION};
 use puck_version::{parse_constraints, Stability};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -155,25 +155,145 @@ fn laravel_app_with_dev_solve_matches_constraint_filtered_vcr() {
 
 #[test]
 fn laravel_skeleton_no_dev_lock_packages_match_install_critical_fields() {
-    let dir = skeleton_dir();
-    let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
-    let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
-    let requires = load_root_requires(&json_bytes, false);
-    let repo = array_repository_from_p2_constraints(&p2_dir(), &requires, Stability::Stable)
-        .expect("constraint-filtered vcr pool");
+    assert_written_lock_matches_fixture(&skeleton_dir(), false);
+}
 
+#[test]
+fn laravel_skeleton_with_dev_lock_document_matches_m3_lock_gate() {
+    assert_written_lock_matches_fixture(&skeleton_dir(), true);
+}
+
+#[test]
+fn laravel_app_with_dev_lock_document_matches_m3_lock_gate() {
+    assert_written_lock_matches_fixture(&app_dir(), true);
+}
+
+fn assert_written_lock_matches_fixture(dir: &PathBuf, include_dev: bool) {
+    let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
+    let json_text = fs::read_to_string(dir.join("composer.json")).expect("composer.json");
+    let json_bytes = json_text.as_bytes();
+
+    let prod_requires = load_root_requires(json_bytes, false);
+    let prod_repo =
+        array_repository_from_p2_constraints(&p2_dir(), &prod_requires, Stability::Stable)
+            .expect("prod vcr pool");
+    let prod_names = solve_install_names(&prod_repo, &prod_requires);
+    let prod_name_set: BTreeSet<String> = prod_names.into_iter().map(|(n, _)| n).collect();
+
+    let all_requires = load_root_requires(json_bytes, include_dev);
+    let all_repo = array_repository_from_p2_constraints(&p2_dir(), &all_requires, Stability::Stable)
+        .expect("full vcr pool");
+    let installed = solve_install_packages(&all_repo, &all_requires);
+
+    let mut packages = Vec::new();
+    let mut packages_dev = Vec::new();
+    for (name, pretty) in &installed {
+        let path = p2_dir().join(format!("{}.json", name.replace('/', "$")));
+        let bytes = fs::read(&path).expect("p2");
+        let raw = find_p2_version_value(&bytes, pretty)
+            .unwrap()
+            .unwrap_or_else(|| panic!("missing p2 body for {name} {pretty}"));
+        if prod_name_set.contains(name) {
+            packages.push(raw);
+        } else if include_dev {
+            packages_dev.push(raw);
+        } else {
+            panic!("unexpected non-prod package under --no-dev: {name} {pretty}");
+        }
+    }
+
+    let root: Value = serde_json::from_str(&json_text).unwrap();
+    let written = build_lock_document(
+        &json_text,
+        LockWriteInput {
+            packages,
+            packages_dev: if include_dev {
+                Some(packages_dev)
+            } else {
+                Some(Vec::new())
+            },
+            platform: platform_reqs_from_root(&root, false),
+            platform_dev: platform_reqs_from_root(&root, true),
+            aliases: Vec::new(),
+            minimum_stability: root
+                .get("minimum-stability")
+                .and_then(|v| v.as_str())
+                .unwrap_or("stable")
+                .to_string(),
+            stability_flags: serde_json::Map::new(),
+            prefer_stable: root
+                .get("prefer-stable")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            prefer_lowest: root
+                .get("prefer-lowest")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            plugin_api_version: PLUGIN_API_VERSION.into(),
+        },
+    )
+    .expect("build lock");
+
+    let expected: Value = serde_json::from_slice(&lock_bytes).unwrap();
+    assert_eq!(written["content-hash"], expected["content-hash"]);
+    assert_eq!(written["minimum-stability"], expected["minimum-stability"]);
+    assert_eq!(written["prefer-stable"], expected["prefer-stable"]);
+    assert_eq!(written["prefer-lowest"], expected["prefer-lowest"]);
+    assert_eq!(written["plugin-api-version"], expected["plugin-api-version"]);
+    assert_eq!(written["platform"], expected["platform"]);
+    assert_eq!(written["platform-dev"], expected["platform-dev"]);
+    assert_eq!(written["aliases"], expected["aliases"]);
+
+    assert_critical_package_fields(
+        written["packages"].as_array().unwrap(),
+        expected["packages"].as_array().unwrap(),
+        "packages",
+    );
+    if include_dev {
+        assert_critical_package_fields(
+            written["packages-dev"].as_array().unwrap(),
+            expected["packages-dev"].as_array().unwrap(),
+            "packages-dev",
+        );
+    }
+}
+
+fn platform_reqs_from_root(root: &Value, dev: bool) -> serde_json::Map<String, Value> {
+    let key = if dev { "require-dev" } else { "require" };
+    let mut out = serde_json::Map::new();
+    let Some(map) = root.get(key).and_then(|v| v.as_object()) else {
+        return out;
+    };
+    for (name, constraint) in map {
+        if is_platform_package(name) {
+            out.insert(name.clone(), constraint.clone());
+        }
+    }
+    out
+}
+
+fn solve_install_names(
+    repo: &ArrayRepository,
+    requires: &[(String, String)],
+) -> BTreeSet<(String, String)> {
+    solve_install_packages(repo, requires).into_iter().collect()
+}
+
+fn solve_install_packages(
+    repo: &ArrayRepository,
+    requires: &[(String, String)],
+) -> Vec<(String, String)> {
     let mut request = Request::new();
-    for (name, constraint) in &requires {
+    for (name, constraint) in requires {
         request
             .require_name(name.clone(), Some(parse_constraints(constraint).unwrap()))
             .unwrap();
     }
-    let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
+    let (mut pool, present) = PoolBuilder::build(&[repo], &[], &[], &mut request).unwrap();
     let tx = Solver::new(&mut pool)
         .solve(&request, &present)
         .expect("solve");
-
-    let mut written: Vec<Value> = Vec::new();
+    let mut out = Vec::new();
     for op in tx.operations() {
         let package_id = match op {
             Operation::Install { package_id } | Operation::Update { to: package_id, .. } => {
@@ -182,34 +302,29 @@ fn laravel_skeleton_no_dev_lock_packages_match_install_critical_fields() {
             Operation::Remove { .. } => continue,
         };
         let p = pool.package_by_id(package_id);
-        let path = p2_dir().join(format!("{}.json", p.name.replace('/', "$")));
-        let bytes = fs::read(&path).expect("p2");
-        let raw = find_p2_version_value(&bytes, &p.pretty_version)
-            .unwrap()
-            .unwrap_or_else(|| panic!("missing p2 body for {} {}", p.name, p.pretty_version));
-        written.push(format_lock_package(raw));
+        out.push((p.name.clone(), p.pretty_version.clone()));
     }
-    sort_lock_packages(&mut written);
+    out
+}
 
-    let lock: Value = serde_json::from_slice(&lock_bytes).unwrap();
-    let expected = lock.get("packages").and_then(|v| v.as_array()).unwrap();
-    assert_eq!(written.len(), expected.len());
-    for (got, want) in written.iter().zip(expected.iter()) {
-        assert_eq!(got.get("name"), want.get("name"));
-        assert_eq!(got.get("version"), want.get("version"));
+fn assert_critical_package_fields(got: &[Value], want: &[Value], label: &str) {
+    assert_eq!(got.len(), want.len(), "{label} length");
+    for (g, w) in got.iter().zip(want.iter()) {
+        assert_eq!(g.get("name"), w.get("name"), "{label} name");
+        assert_eq!(g.get("version"), w.get("version"), "{label} version");
         assert_eq!(
-            got.pointer("/dist/reference"),
-            want.pointer("/dist/reference"),
-            "dist.reference mismatch for {:?}",
-            want.get("name")
+            g.pointer("/dist/reference"),
+            w.pointer("/dist/reference"),
+            "{label} dist.reference for {:?}",
+            w.get("name")
         );
         assert_eq!(
-            got.pointer("/source/reference"),
-            want.pointer("/source/reference"),
-            "source.reference mismatch for {:?}",
-            want.get("name")
+            g.pointer("/source/reference"),
+            w.pointer("/source/reference"),
+            "{label} source.reference for {:?}",
+            w.get("name")
         );
-        assert_eq!(got.get("time"), want.get("time"));
+        assert_eq!(g.get("time"), w.get("time"), "{label} time for {:?}", w.get("name"));
     }
 }
 
