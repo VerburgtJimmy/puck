@@ -881,3 +881,108 @@ fn solver_fix_locked_with_alternative() {
         .unwrap();
     assert!(tx.operations().is_empty());
 }
+
+#[test]
+fn solver_update_only_updates_selected_package() {
+    let old_a = Package::new("a/a", "1.0.0.0", "1.0");
+    let old_b = Package::new("b/b", "1.0.0.0", "1.0");
+    let new_a = Package::new("a/a", "1.1.0.0", "1.1");
+    let new_b = Package::new("b/b", "1.1.0.0", "1.1");
+    let mut pool = Pool::new(vec![old_a, old_b, new_a, new_b]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+    request.fix_package(2); // keep b/b 1.0
+    let mut present = crate::PresentMap::new();
+    present.insert(1, ());
+    present.insert(2, ());
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[Operation::Update { from: 1, to: 3 }]
+    );
+}
+
+#[test]
+fn solver_update_does_only_update() {
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=1.0.0.0",
+            parse_constraints(">=1.0.0.0").unwrap(),
+        ),
+    );
+    let old_b = Package::new("b/b", "1.0.0.0", "1.0");
+    let new_b = Package::new("b/b", "1.1.0.0", "1.1");
+    let mut pool = Pool::new(vec![package_a, old_b, new_b]);
+    let mut request = Request::new();
+    request.fix_package(1);
+    request
+        .require_name("b/b", Some(parse_constraints("=1.1.0.0").unwrap()))
+        .unwrap();
+    let mut present = crate::PresentMap::new();
+    present.insert(1, ());
+    present.insert(2, ());
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[Operation::Update { from: 2, to: 3 }]
+    );
+}
+
+#[test]
+fn solver_all_jobs() {
+    let package_d = Package::new("d/d", "1.0.0.0", "1.0");
+    let old_c = Package::new("c/c", "1.0.0.0", "1.0");
+    let mut package_a = Package::new("a/a", "2.0.0.0", "2.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            "<1.1",
+            parse_constraints("<1.1").unwrap(),
+        ),
+    );
+    let package_b = Package::new("b/b", "1.0.0.0", "1.0");
+    let new_b = Package::new("b/b", "1.1.0.0", "1.1");
+    let package_c = Package::new("c/c", "1.1.0.0", "1.1");
+    let package_d_same = Package::new("d/d", "1.0.0.0", "1.0");
+
+    let mut pool = Pool::new(vec![
+        package_d,
+        old_c,
+        package_a,
+        package_b,
+        new_b,
+        package_c,
+        package_d_same,
+    ]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+    request.require_name("c/c", None).unwrap();
+    let mut present = crate::PresentMap::new();
+    present.insert(1, ()); // d/d
+    present.insert(2, ()); // c/c 1.0
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[
+            Operation::Remove { package_id: 1 },
+            Operation::Install { package_id: 4 }, // b/b 1.0
+            Operation::Install { package_id: 3 }, // a/a
+            Operation::Update { from: 2, to: 6 }, // c/c
+        ]
+    );
+}
