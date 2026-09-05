@@ -1648,3 +1648,102 @@ fn solver_learn_literals_with_sorted_rule_literals() {
         ]
     );
 }
+
+/// Composer `testLearnPositiveLiteral` - complex graph that forces learning a
+/// positive assertion from a negative decision. Assert install **set** (order
+/// may differ); Composer also asserts an internal learn-path flag we omit.
+#[test]
+fn solver_learn_positive_literal() {
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    let mut package_b = Package::new("b/b", "1.0.0.0", "1.0");
+    let mut package_c1 = Package::new("c/c", "1.0.0.0", "1.0");
+    let mut package_c2 = Package::new("c/c", "2.0.0.0", "2.0");
+    let mut package_d = Package::new("d/d", "1.0.0.0", "1.0");
+    let mut package_e = Package::new("e/e", "1.0.0.0", "1.0");
+    let package_f1 = Package::new("f/f", "1.0.0.0", "1.0");
+    let package_f2 = Package::new("f/f", "2.0.0.0", "2.0");
+    let package_g1 = Package::new("g/g", "1.0.0.0", "1.0");
+    let package_g2 = Package::new("g/g", "2.0.0.0", "2.0");
+    let package_g3 = Package::new("g/g", "3.0.0.0", "3.0");
+
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new("a/a", "b/b", "=1.0", parse_constraints("=1.0").unwrap()),
+    );
+    package_a.requires.insert(
+        "c/c".into(),
+        Link::new("a/a", "c/c", ">=1.0", parse_constraints(">=1.0").unwrap()),
+    );
+    package_a.requires.insert(
+        "d/d".into(),
+        Link::new("a/a", "d/d", "=1.0", parse_constraints("=1.0").unwrap()),
+    );
+    package_b.requires.insert(
+        "e/e".into(),
+        Link::new("b/b", "e/e", "=1.0", parse_constraints("=1.0").unwrap()),
+    );
+    package_c1.requires.insert(
+        "f/f".into(),
+        Link::new("c/c", "f/f", "=1.0", parse_constraints("=1.0").unwrap()),
+    );
+    package_c2.requires.insert(
+        "f/f".into(),
+        Link::new("c/c", "f/f", "=1.0", parse_constraints("=1.0").unwrap()),
+    );
+    package_c2.requires.insert(
+        "g/g".into(),
+        Link::new("c/c", "g/g", ">=1.0", parse_constraints(">=1.0").unwrap()),
+    );
+    package_d.requires.insert(
+        "f/f".into(),
+        Link::new("d/d", "f/f", ">=1.0", parse_constraints(">=1.0").unwrap()),
+    );
+    package_e.requires.insert(
+        "g/g".into(),
+        Link::new("e/e", "g/g", "<=2.0", parse_constraints("<=2.0").unwrap()),
+    );
+
+    let mut pool = Pool::new(vec![
+        package_a,
+        package_b,
+        package_c1,
+        package_c2,
+        package_d,
+        package_e,
+        package_f1,
+        package_f2,
+        package_g1,
+        package_g2,
+        package_g3,
+    ]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    let mut names: Vec<_> = tx
+        .operations()
+        .iter()
+        .filter_map(|op| match op {
+            Operation::Install { package_id } => {
+                let p = pool.package_by_id(*package_id);
+                Some(format!("{}@{}", p.name, p.pretty_version))
+            }
+            _ => None,
+        })
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "a/a@1.0",
+            "b/b@1.0",
+            "c/c@2.0",
+            "d/d@1.0",
+            "e/e@1.0",
+            "f/f@1.0",
+            "g/g@2.0",
+        ]
+    );
+}
