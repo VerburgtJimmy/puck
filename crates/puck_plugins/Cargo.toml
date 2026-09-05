@@ -6,7 +6,11 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "puck: plugins crate (M0 stub)"
+description = "puck: native Composer plugin adapters (Tier 1)"
 
 [dependencies]
+serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

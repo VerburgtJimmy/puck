@@ -21,6 +21,7 @@ puck_install.workspace = true
 puck_laravel.workspace = true
 puck_lock.workspace = true
 puck_manifest.workspace = true
+puck_plugins.workspace = true
 puck_scripts.workspace = true
 puck_store.workspace = true
 puck_version.workspace = true

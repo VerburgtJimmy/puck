@@ -8,7 +8,8 @@ use puck_install::{
 };
 use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::LockFile;
-use puck_manifest::{add_requirement, remove_requirement, PackageRequirement, Manifest};
+use puck_manifest::{PackageRequirement, Manifest, add_requirement, remove_requirement};
+use puck_plugins::{PhpstanExtensionInstallStatus, run_phpstan_extension_installer};
 use puck_registry::p2_path;
 use puck_resolver::resolve_lock_document;
 use puck_scripts::{RunScriptsOptions, run_install_scripts};
@@ -763,6 +764,20 @@ async fn run_install(
         DiscoverStatus::Skipped => {}
     }
     let mut discover_ms = discover_started.elapsed().as_millis();
+
+    // Tier 1: phpstan/extension-installer (POST_INSTALL_CMD equivalent).
+    let allow_phpstan_plugin = manifest
+        .as_ref()
+        .is_none_or(|m| m.allows_plugin("phpstan/extension-installer"));
+    match run_phpstan_extension_installer(&root, allow_phpstan_plugin).map_err(|e| e.to_string())?
+    {
+        PhpstanExtensionInstallStatus::Written {
+            extension_count, ..
+        } => {
+            eprintln!("puck: phpstan extensions registered ({extension_count})");
+        }
+        PhpstanExtensionInstallStatus::Skipped => {}
+    }
 
     let mut scripts_ms = 0u128;
     if !no_scripts
