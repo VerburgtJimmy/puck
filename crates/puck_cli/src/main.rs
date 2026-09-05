@@ -69,6 +69,12 @@ enum Commands {
         packages: Vec<String>,
         #[arg(long)]
         dev: bool,
+        /// Also unlock dependencies of newly required packages, except root requirements (`-w`)
+        #[arg(long, short = 'w', alias = "update-with-dependencies")]
+        with_dependencies: bool,
+        /// Also unlock dependencies including root requirements (`-W`)
+        #[arg(long, short = 'W', alias = "update-with-all-dependencies")]
+        with_all_dependencies: bool,
         /// Edit composer.json and lock only; do not install into vendor/
         #[arg(long)]
         no_install: bool,
@@ -209,6 +215,8 @@ fn main() -> ExitCode {
         Commands::Require {
             packages,
             dev,
+            with_dependencies,
+            with_all_dependencies,
             no_install,
             registry,
             working_dir,
@@ -224,6 +232,8 @@ fn main() -> ExitCode {
                 working_dir,
                 packages,
                 dev,
+                with_dependencies,
+                with_all_dependencies,
                 no_install,
                 registry,
             )) {
@@ -316,6 +326,8 @@ async fn run_require(
     working_dir: Option<PathBuf>,
     packages: Vec<String>,
     dev: bool,
+    with_dependencies: bool,
+    with_all_dependencies: bool,
     no_install: bool,
     registry: Option<PathBuf>,
 ) -> Result<(), String> {
@@ -368,6 +380,41 @@ async fn run_require(
     } else {
         None
     };
+
+    let mode = if with_all_dependencies {
+        UpdateAllowTransitive::ListedWithTransitiveDeps
+    } else if with_dependencies {
+        UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire
+    } else {
+        UpdateAllowTransitive::OnlyListed
+    };
+
+    if !matches!(mode, UpdateAllowTransitive::OnlyListed) {
+        let Some(bytes) = lock_bytes.as_deref() else {
+            return Err("--with-dependencies requires an existing composer.lock".into());
+        };
+        let mut root_names = Vec::new();
+        for key in ["require", "require-dev"] {
+            if let Some(map) = root_json.get(key).and_then(|v| v.as_object()) {
+                for name in map.keys() {
+                    if name.contains('/') {
+                        root_names.push(name.to_ascii_lowercase());
+                    }
+                }
+            }
+        }
+        unlock = expand_update_unlock(bytes, &root_names, &unlock, mode).map_err(|e| e.to_string())?;
+        eprintln!(
+            "puck: unlock {} package{} ({})",
+            unlock.len(),
+            if unlock.len() == 1 { "" } else { "s" },
+            match mode {
+                UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire => "-w",
+                UpdateAllowTransitive::ListedWithTransitiveDeps => "-W",
+                UpdateAllowTransitive::OnlyListed => unreachable!(),
+            }
+        );
+    }
 
     let lock_doc = resolve_lock_document(
         &composer_text,

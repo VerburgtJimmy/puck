@@ -525,3 +525,195 @@ fn solver_illuminate_support_via_framework_replace_from_p2() {
     };
     assert_eq!(pool.package_by_id(package_id).name, "laravel/framework");
 }
+
+#[test]
+fn solver_install_circular_require() {
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let package_b1 = Package::new("b/b", "0.9.0.0", "0.9");
+    let mut package_b2 = Package::new("b/b", "1.1.0.0", "1.1");
+    package_b2.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "b/b",
+            "a/a",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+
+    let mut pool = Pool::new(vec![package_a, package_b1, package_b2]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    // Circular: Composer installs b then a; we may differ on order. Both must appear.
+    let mut ids: Vec<_> = tx
+        .operations()
+        .iter()
+        .map(|op| match op {
+            Operation::Install { package_id } => *package_id,
+            other => panic!("unexpected op {other:?}"),
+        })
+        .collect();
+    ids.sort();
+    assert_eq!(ids, vec![1, 3]);
+}
+
+#[test]
+fn solver_use_replacer_if_necessary() {
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    package_a.requires.insert(
+        "c/c".into(),
+        Link::new(
+            "a/a",
+            "c/c",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let package_b = Package::new("b/b", "1.0.0.0", "1.0");
+    let mut package_d = Package::new("d/d", "1.0.0.0", "1.0");
+    let mut package_d2 = Package::new("d/d", "1.1.0.0", "1.1");
+    for pkg in [&mut package_d, &mut package_d2] {
+        pkg.replaces.insert(
+            "b/b".into(),
+            Link::new(
+                "d/d",
+                "b/b",
+                ">=1.0",
+                parse_constraints(">=1.0").unwrap(),
+            ),
+        );
+        pkg.replaces.insert(
+            "c/c".into(),
+            Link::new(
+                "d/d",
+                "c/c",
+                ">=1.0",
+                parse_constraints(">=1.0").unwrap(),
+            ),
+        );
+    }
+
+    let mut pool = Pool::new(vec![package_a, package_b, package_d, package_d2]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+    request.require_name("d/d", None).unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[
+            Operation::Install { package_id: 4 }, // d/d 1.1
+            Operation::Install { package_id: 1 }, // a/a
+        ]
+    );
+}
+
+#[test]
+fn solver_pick_older_if_newer_conflicts() {
+    let mut package_x = Package::new("x/x", "1.0.0.0", "1.0");
+    package_x.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "x/x",
+            "a/a",
+            ">=2.0.0.0",
+            parse_constraints(">=2.0.0.0").unwrap(),
+        ),
+    );
+    package_x.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "x/x",
+            "b/b",
+            ">=2.0.0.0",
+            parse_constraints(">=2.0.0.0").unwrap(),
+        ),
+    );
+
+    let mut package_a = Package::new("a/a", "2.0.0.0", "2.0.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=2.0.0.0",
+            parse_constraints(">=2.0.0.0").unwrap(),
+        ),
+    );
+    let mut new_package_a = Package::new("a/a", "2.1.0.0", "2.1.0");
+    new_package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=2.2.0.0",
+            parse_constraints(">=2.2.0.0").unwrap(),
+        ),
+    );
+    let new_package_b = Package::new("b/b", "2.1.0.0", "2.1.0");
+    let mut package_s = Package::new("s/s", "2.0.0.0", "2.0.0");
+    package_s.replaces.insert(
+        "a/a".into(),
+        Link::new(
+            "s/s",
+            "a/a",
+            ">=2.0.0.0",
+            parse_constraints(">=2.0.0.0").unwrap(),
+        ),
+    );
+    package_s.replaces.insert(
+        "b/b".into(),
+        Link::new(
+            "s/s",
+            "b/b",
+            ">=2.0.0.0",
+            parse_constraints(">=2.0.0.0").unwrap(),
+        ),
+    );
+
+    let mut pool = Pool::new(vec![
+        package_x,
+        package_a,
+        new_package_a,
+        new_package_b,
+        package_s,
+    ]);
+    let mut request = Request::new();
+    request.require_name("x/x", None).unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[
+            Operation::Install { package_id: 4 }, // b/b 2.1
+            Operation::Install { package_id: 2 }, // a/a 2.0
+            Operation::Install { package_id: 1 }, // x/x
+        ]
+    );
+}
