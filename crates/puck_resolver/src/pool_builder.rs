@@ -4,15 +4,19 @@
 //! package name** only - matching Composer `ArrayRepository::loadPackages`,
 //! which keys on `Package::getName()` and does **not** pull in provide/replace
 //! providers. Those enter the pool only when their own name is required (or via
-//! a ComposerRepository provider map, not modeled here). Full
-//! stability/alias/partial-update filtering comes later.
+//! a ComposerRepository provider map, not modeled here).
+//!
+//! Applies [`is_package_acceptable`](crate::stability::is_package_acceptable)
+//! like Composer (default minimum: stable). Locked and fixed packages are always kept.
 
 use crate::order::PresentMap;
 use crate::package::Package;
 use crate::pool::Pool;
 use crate::request::Request;
+use crate::stability::is_package_acceptable;
 use crate::{PackageId, Result};
 use indexmap::{IndexMap, IndexSet};
+use puck_version::Stability;
 use std::collections::VecDeque;
 
 /// In-memory package repository (`ArrayRepository` subset).
@@ -39,15 +43,34 @@ impl ArrayRepository {
 pub struct PoolBuilder;
 
 impl PoolBuilder {
-    /// Returns `(pool, present_map)` where `present_map` contains locked/fixed package ids.
-    ///
-    /// Updates `request` so `lock_package` / `fix_package` ids match the new pool.
-    /// Locked and fixed packages are placed first in the pool (stable ids for present map).
+    /// Build with Composer default `minimum-stability: stable` and no flags.
     pub fn build(
         repos: &[&ArrayRepository],
         locked: &[Package],
         fixed: &[Package],
         request: &mut Request,
+    ) -> Result<(Pool, PresentMap)> {
+        Self::build_with_stability(
+            repos,
+            locked,
+            fixed,
+            request,
+            Stability::Stable,
+            &IndexMap::new(),
+        )
+    }
+
+    /// Returns `(pool, present_map)` where `present_map` contains locked/fixed package ids.
+    ///
+    /// Updates `request` so `lock_package` / `fix_package` ids match the new pool.
+    /// Locked and fixed packages are placed first in the pool (stable ids for present map).
+    pub fn build_with_stability(
+        repos: &[&ArrayRepository],
+        locked: &[Package],
+        fixed: &[Package],
+        request: &mut Request,
+        minimum_stability: Stability,
+        stability_flags: &IndexMap<String, Stability>,
     ) -> Result<(Pool, PresentMap)> {
         let mut repo_packages: Vec<Package> = Vec::new();
         for repo in repos {
@@ -82,6 +105,13 @@ impl PoolBuilder {
                 continue;
             };
             for idx in idxs {
+                if !is_package_acceptable(
+                    &repo_packages[idx],
+                    minimum_stability,
+                    stability_flags,
+                ) {
+                    continue;
+                }
                 if !needed_repo.insert(idx) {
                     continue;
                 }
@@ -94,7 +124,13 @@ impl PoolBuilder {
         for name in request.requires.keys() {
             if let Some(idxs) = by_name.get(name) {
                 for &idx in idxs {
-                    needed_repo.insert(idx);
+                    if is_package_acceptable(
+                        &repo_packages[idx],
+                        minimum_stability,
+                        stability_flags,
+                    ) {
+                        needed_repo.insert(idx);
+                    }
                 }
             }
         }
@@ -254,5 +290,45 @@ mod tests {
         let (pool, _) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
         assert!(pool.packages().iter().any(|p| p.name == "a/a"));
         assert!(!pool.packages().iter().any(|p| p.name == "q/q"));
+    }
+
+    #[test]
+    fn stable_minimum_skips_dev_packages() {
+        let stable = Package::new("a/a", "1.0.0.0", "1.0");
+        let dev = Package::new("a/a", "1.1.0.0-dev", "1.1-dev");
+        let mut repo = ArrayRepository::new();
+        repo.add_package(stable);
+        repo.add_package(dev);
+
+        let mut request = Request::new();
+        request.require_name("a/a", None).unwrap();
+
+        let (pool, _) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
+        assert_eq!(pool.len(), 1);
+        assert_eq!(pool.package_by_id(1).version, "1.0.0.0");
+    }
+
+    #[test]
+    fn stability_flag_allows_dev_package() {
+        let dev = Package::new("c/c", "2.0.0.0-dev", "2.0-dev");
+        let mut repo = ArrayRepository::new();
+        repo.add_package(dev);
+
+        let mut flags = IndexMap::new();
+        flags.insert("c/c".into(), Stability::Dev);
+        let mut request = Request::new();
+        request.require_name("c/c", None).unwrap();
+
+        let (pool, _) = PoolBuilder::build_with_stability(
+            &[&repo],
+            &[],
+            &[],
+            &mut request,
+            Stability::Stable,
+            &flags,
+        )
+        .unwrap();
+        assert_eq!(pool.len(), 1);
+        assert_eq!(pool.package_by_id(1).version, "2.0.0.0-dev");
     }
 }

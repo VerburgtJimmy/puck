@@ -1436,3 +1436,103 @@ fn solver_multi_package_name_version_independent_when_ordered_descending() {
         );
     }
 }
+
+/// Composer Issue #265 / SolverTest: with default minimum-stability stable,
+/// createPool rejects -dev packages (no stability flags), so the root require
+/// cannot be satisfied.
+#[test]
+fn solver_issue_265_unsatisfiable() {
+    use crate::pool_builder::{ArrayRepository, PoolBuilder};
+    use puck_version::normalize;
+
+    let a1 = Package::new(
+        "a/a",
+        normalize("2.0.999999-dev").unwrap(),
+        "2.0.999999-dev",
+    );
+    let a2 = Package::new("a/a", normalize("2.1-dev").unwrap(), "2.1-dev");
+    let a3 = Package::new("a/a", normalize("2.2-dev").unwrap(), "2.2-dev");
+    let mut b1 = Package::new("b/b", normalize("2.0.10").unwrap(), "2.0.10");
+    let mut b2 = Package::new("b/b", normalize("2.0.9").unwrap(), "2.0.9");
+    let mut c = Package::new("c/c", normalize("2.0-dev").unwrap(), "2.0-dev");
+    let mut d = Package::new("d/d", normalize("2.0.9").unwrap(), "2.0.9");
+
+    c.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "c/c",
+            "a/a",
+            ">=2.0",
+            parse_constraints(">=2.0").unwrap(),
+        ),
+    );
+    c.requires.insert(
+        "d/d".into(),
+        Link::new(
+            "c/c",
+            "d/d",
+            ">=2.0",
+            parse_constraints(">=2.0").unwrap(),
+        ),
+    );
+    d.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "d/d",
+            "a/a",
+            ">=2.1",
+            parse_constraints(">=2.1").unwrap(),
+        ),
+    );
+    d.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "d/d",
+            "b/b",
+            ">=2.0-dev",
+            parse_constraints(">=2.0-dev").unwrap(),
+        ),
+    );
+    b1.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "b/b",
+            "a/a",
+            "=2.1.0.0-dev",
+            parse_constraints("=2.1.0.0-dev").unwrap(),
+        ),
+    );
+    b2.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "b/b",
+            "a/a",
+            "=2.1.0.0-dev",
+            parse_constraints("=2.1.0.0-dev").unwrap(),
+        ),
+    );
+    b2.replaces.insert(
+        "d/d".into(),
+        Link::new(
+            "b/b",
+            "d/d",
+            "=2.0.9.0",
+            parse_constraints("=2.0.9.0").unwrap(),
+        ),
+    );
+
+    let mut repo = ArrayRepository::new();
+    for p in [a1, a2, a3, b1, b2, c, d] {
+        repo.add_package(p);
+    }
+
+    let mut request = Request::new();
+    request
+        .require_name("c/c", Some(parse_constraints("=2.0.0.0-dev").unwrap()))
+        .unwrap();
+    let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
+
+    let _ = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .unwrap_err();
+}
