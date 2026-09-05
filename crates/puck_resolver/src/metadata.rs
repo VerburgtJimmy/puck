@@ -1,4 +1,7 @@
 //! Load packages from Packagist Composer 2 (`/p2`) metadata JSON and lock files.
+//!
+//! Packagist p2 bodies with `"minified": "composer/2.0"` are expanded with the
+//! same algorithm as `Composer\MetadataMinifier\MetadataMinifier::expand`.
 
 use crate::link::Link;
 use crate::package::Package;
@@ -6,12 +9,48 @@ use crate::Error;
 use crate::Result;
 use indexmap::IndexMap;
 use puck_version::{normalize, parse_constraints};
-use serde_json::Value;
+use serde_json::{Map, Value};
+
+const MINIFIED_MARKER: &str = "composer/2.0";
+const UNSET: &str = "__unset";
+
+/// Expand a minified p2 version list (`composer/metadata-minifier`).
+///
+/// Each entry after the first is a sparse diff against the running expanded
+/// object; `"__unset"` removes a key.
+pub fn expand_minified_versions(versions: &[Value]) -> Vec<Value> {
+    let mut expanded = Vec::with_capacity(versions.len());
+    let mut running: Option<Map<String, Value>> = None;
+    for version_data in versions {
+        let Some(delta) = version_data.as_object() else {
+            expanded.push(version_data.clone());
+            continue;
+        };
+        match &mut running {
+            None => {
+                running = Some(delta.clone());
+                expanded.push(Value::Object(delta.clone()));
+            }
+            Some(cur) => {
+                for (key, val) in delta {
+                    if val.as_str() == Some(UNSET) {
+                        cur.remove(key);
+                    } else {
+                        cur.insert(key.clone(), val.clone());
+                    }
+                }
+                expanded.push(Value::Object(cur.clone()));
+            }
+        }
+    }
+    expanded
+}
 
 /// Parse all versions of a package from a Packagist p2 response body.
 pub fn packages_from_p2_json(bytes: &[u8]) -> Result<Vec<Package>> {
     let data: Value = serde_json::from_slice(bytes)
         .map_err(|e| Error::Message(format!("invalid p2 json: {e}")))?;
+    let minified = data.get("minified").and_then(|v| v.as_str()) == Some(MINIFIED_MARKER);
     let packages = data
         .get("packages")
         .and_then(|p| p.as_object())
@@ -22,7 +61,12 @@ pub fn packages_from_p2_json(bytes: &[u8]) -> Result<Vec<Package>> {
         let Some(versions) = versions.as_array() else {
             continue;
         };
-        for version in versions {
+        let versions = if minified {
+            expand_minified_versions(versions)
+        } else {
+            versions.clone()
+        };
+        for version in &versions {
             if let Some(package) = package_from_composer_package(version)? {
                 out.push(package);
             }
@@ -124,11 +168,69 @@ fn parse_link_map(
 }
 
 /// Find a single version in a p2 document by pretty or normalized version.
-pub fn find_p2_version<'a>(bytes: &'a [u8], pretty_or_normalized: &str) -> Result<Option<Package>> {
-    let packages = packages_from_p2_json(bytes)?;
-    Ok(packages.into_iter().find(|p| {
-        p.pretty_version == pretty_or_normalized || p.version == pretty_or_normalized
-    }))
+pub fn find_p2_version(bytes: &[u8], pretty_or_normalized: &str) -> Result<Option<Package>> {
+    let data: Value = serde_json::from_slice(bytes)
+        .map_err(|e| Error::Message(format!("invalid p2 json: {e}")))?;
+    let minified = data.get("minified").and_then(|v| v.as_str()) == Some(MINIFIED_MARKER);
+    let packages = data
+        .get("packages")
+        .and_then(|p| p.as_object())
+        .ok_or_else(|| Error::Message("p2 json missing packages object".into()))?;
+
+    for (_name, versions) in packages {
+        let Some(versions) = versions.as_array() else {
+            continue;
+        };
+        let versions = if minified {
+            expand_minified_versions(versions)
+        } else {
+            versions.clone()
+        };
+        for version in &versions {
+            let pretty = version.get("version").and_then(|v| v.as_str()).unwrap_or("");
+            let normalized = version
+                .get("version_normalized")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if pretty == pretty_or_normalized || normalized == pretty_or_normalized {
+                return package_from_composer_package(version);
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Load packages from recorded p2 files for each lock pin (name + pretty version).
+///
+/// Uses VCR metadata rather than the lock dump as the package body source.
+pub fn packages_from_p2_lock_pins(p2_dir: &std::path::Path, lock_bytes: &[u8]) -> Result<Vec<Package>> {
+    let data: Value = serde_json::from_slice(lock_bytes)
+        .map_err(|e| Error::Message(format!("invalid lock json: {e}")))?;
+    let Some(packages) = data.get("packages").and_then(|v| v.as_array()) else {
+        return Ok(Vec::new());
+    };
+
+    let mut out = Vec::with_capacity(packages.len());
+    for entry in packages {
+        let name = entry
+            .get("name")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::Message("lock package missing name".into()))?
+            .to_ascii_lowercase();
+        let pretty = entry
+            .get("version")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::Message(format!("lock package {name} missing version")))?;
+        let path = p2_dir.join(format!("{}.json", name.replace('/', "$")));
+        let bytes = std::fs::read(&path).map_err(|e| {
+            Error::Message(format!("missing p2 for {name} at {}: {e}", path.display()))
+        })?;
+        let package = find_p2_version(&bytes, pretty)?.ok_or_else(|| {
+            Error::Message(format!("p2 for {name} has no version {pretty}"))
+        })?;
+        out.push(package);
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -162,6 +264,23 @@ mod tests {
     }
 
     #[test]
+    fn expands_minified_p2_inherited_require_and_replace() {
+        let older = find_p2_version(&framework_p2(), "v12.0.0")
+            .unwrap()
+            .expect("v12.0.0 after expand");
+        assert!(
+            older.requires.len() > 10,
+            "minified row must inherit require, got {}",
+            older.requires.len()
+        );
+        assert!(
+            older.replaces.len() > 10,
+            "minified row must inherit replace, got {}",
+            older.replaces.len()
+        );
+    }
+
+    #[test]
     fn loads_skeleton_lock_framework_replaces() {
         let packages = packages_from_lock_json(&skeleton_lock(), false).unwrap();
         assert_eq!(packages.len(), 76);
@@ -171,6 +290,20 @@ mod tests {
             .expect("framework");
         assert_eq!(fw.pretty_version, "v13.30.1");
         assert_eq!(fw.version, "13.30.1.0");
+        assert_eq!(fw.replaces.len(), 38);
+    }
+
+    #[test]
+    fn skeleton_lock_pins_from_vcr_p2_match_lock_replace_count() {
+        let p2_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/registry/packagist/p2");
+        let packages = packages_from_p2_lock_pins(&p2_dir, &skeleton_lock()).unwrap();
+        assert_eq!(packages.len(), 76);
+        let fw = packages
+            .iter()
+            .find(|p| p.name == "laravel/framework")
+            .expect("framework");
+        assert_eq!(fw.pretty_version, "v13.30.1");
         assert_eq!(fw.replaces.len(), 38);
     }
 }

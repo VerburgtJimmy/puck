@@ -1,11 +1,12 @@
 //! Lock-identity gates: solve against recorded lock/VCR metadata.
 //!
-//! M3 exit gate is identical locks vs Composer. This module starts with a
-//! weaker but necessary check: given only the locked package universe, the
-//! solver’s install set for root requires must match `composer.lock`
+//! M3 exit gate is identical locks vs Composer. This module starts with
+//! necessary checks: given a pin universe (from lock dump or VCR p2 pins),
+//! the solver’s install set for root requires must match `composer.lock`
 //! `packages` (name + pretty version).
 
-use crate::metadata::packages_from_lock_json;
+use crate::metadata::{packages_from_lock_json, packages_from_p2_lock_pins};
+use crate::package::Package;
 use crate::platform::is_platform_package;
 use crate::pool_builder::{ArrayRepository, PoolBuilder};
 use crate::request::Request;
@@ -19,6 +20,10 @@ use std::path::PathBuf;
 
 fn skeleton_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/laravel-skeleton")
+}
+
+fn p2_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/registry/packagist/p2")
 }
 
 fn load_root_requires(composer_json: &[u8], dev: bool) -> Vec<(String, String)> {
@@ -40,27 +45,48 @@ fn load_root_requires(composer_json: &[u8], dev: bool) -> Vec<(String, String)> 
 
 #[test]
 fn laravel_skeleton_no_dev_solve_matches_lock_packages() {
-    assert_no_dev_solve_matches_lock(&skeleton_dir());
+    let dir = skeleton_dir();
+    let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
+    let locked = packages_from_lock_json(&lock_bytes, false).expect("parse lock packages");
+    assert_no_dev_solve_matches_lock(&dir, locked, "lock dump");
 }
 
 #[test]
 fn laravel_app_no_dev_solve_matches_lock_packages() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/laravel-app");
-    assert_no_dev_solve_matches_lock(&dir);
+    let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
+    let locked = packages_from_lock_json(&lock_bytes, false).expect("parse lock packages");
+    assert_no_dev_solve_matches_lock(&dir, locked, "lock dump");
 }
 
-fn assert_no_dev_solve_matches_lock(dir: &PathBuf) {
+#[test]
+fn laravel_skeleton_no_dev_solve_matches_vcr_p2_pins() {
+    let dir = skeleton_dir();
+    let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
+    let locked = packages_from_p2_lock_pins(&p2_dir(), &lock_bytes).expect("vcr p2 pins");
+    assert_no_dev_solve_matches_lock(&dir, locked, "vcr p2 pins");
+}
+
+#[test]
+fn laravel_app_no_dev_solve_matches_vcr_p2_pins() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/laravel-app");
+    let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
+    let locked = packages_from_p2_lock_pins(&p2_dir(), &lock_bytes).expect("vcr p2 pins");
+    assert_no_dev_solve_matches_lock(&dir, locked, "vcr p2 pins");
+}
+
+fn assert_no_dev_solve_matches_lock(dir: &PathBuf, pool_packages: Vec<Package>, source: &str) {
     let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
 
-    let locked = packages_from_lock_json(&lock_bytes, false).expect("parse lock packages");
-    let expected: BTreeSet<(String, String)> = locked
-        .iter()
-        .map(|p| (p.name.clone(), p.pretty_version.clone()))
+    let expected: BTreeSet<(String, String)> = packages_from_lock_json(&lock_bytes, false)
+        .expect("parse lock packages")
+        .into_iter()
+        .map(|p| (p.name, p.pretty_version))
         .collect();
 
     let mut repo = ArrayRepository::new();
-    for package in locked {
+    for package in pool_packages {
         repo.add_package(package);
     }
 
@@ -74,7 +100,7 @@ fn assert_no_dev_solve_matches_lock(dir: &PathBuf) {
     let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
     let tx = Solver::new(&mut pool)
         .solve(&request, &present)
-        .unwrap_or_else(|e| panic!("solve {} --no-dev: {e}", dir.display()));
+        .unwrap_or_else(|e| panic!("solve {} --no-dev ({source}): {e}", dir.display()));
 
     let mut got: BTreeSet<(String, String)> = BTreeSet::new();
     for op in tx.operations() {
@@ -89,7 +115,7 @@ fn assert_no_dev_solve_matches_lock(dir: &PathBuf) {
 
     assert_eq!(
         got, expected,
-        "solver install set must match lock packages (--no-dev) for {}\nonly in lock: {:?}\nonly in solve: {:?}",
+        "solver install set must match lock packages (--no-dev, {source}) for {}\nonly in lock: {:?}\nonly in solve: {:?}",
         dir.display(),
         expected.difference(&got).collect::<Vec<_>>(),
         got.difference(&expected).collect::<Vec<_>>()
