@@ -1,20 +1,22 @@
 //! Rule generation (`Composer\DependencyResolver\RuleSetGenerator`).
 
+use crate::order::PresentMap;
 use crate::platform::is_platform_package;
 use crate::pool::Pool;
 use crate::request::Request;
 use crate::rule::{Rule, RuleReason, RuleType};
 use crate::rule_set::RuleSet;
 use crate::{Literal, PackageId, Result};
-use rustc_hash::FxHashMap;
-use std::collections::{HashMap, VecDeque};
+use indexmap::IndexMap;
+use std::collections::VecDeque;
 
 /// Builds the SAT rule set for a request against a pool.
 pub struct RuleSetGenerator<'a> {
     pool: &'a mut Pool,
     rules: RuleSet,
-    added_map: FxHashMap<PackageId, ()>,
-    added_packages_by_names: HashMap<String, Vec<PackageId>>,
+    /// Insertion-ordered so conflict-rule walks match Composer.
+    added_map: PresentMap,
+    added_packages_by_names: IndexMap<String, Vec<PackageId>>,
 }
 
 impl<'a> RuleSetGenerator<'a> {
@@ -22,8 +24,8 @@ impl<'a> RuleSetGenerator<'a> {
         Self {
             pool,
             rules: RuleSet::new(),
-            added_map: FxHashMap::default(),
-            added_packages_by_names: HashMap::new(),
+            added_map: PresentMap::new(),
+            added_packages_by_names: IndexMap::new(),
         }
     }
 
@@ -221,6 +223,7 @@ impl<'a> RuleSetGenerator<'a> {
                 &packages,
                 RuleReason::RootRequire {
                     package_name: package_name.clone(),
+                    constraint: constraint.clone(),
                 },
             );
             self.add_rule(RuleType::Request, Some(rule));

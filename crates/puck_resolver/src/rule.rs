@@ -8,7 +8,10 @@ use std::rc::Rc;
 /// Reason constants (`Rule::RULE_*`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleReason {
-    RootRequire { package_name: String },
+    RootRequire {
+        package_name: String,
+        constraint: puck_version::ConstraintExpr,
+    },
     Fixed { package_id: u32 },
     PackageConflict,
     PackageRequires { target: String },
@@ -44,7 +47,8 @@ pub struct RuleData {
 
 impl Rule {
     pub fn generic(mut literals: Vec<Literal>, reason: RuleReason) -> Self {
-        literals.sort_unstable();
+        // PHP `sort($literals)` - stable since PHP 8.
+        literals.sort();
         Self(Rc::new(RefCell::new(RuleData {
             literals,
             reason,
@@ -55,7 +59,8 @@ impl Rule {
     }
 
     pub fn multi_conflict(mut literals: Vec<Literal>, reason: RuleReason) -> Self {
-        literals.sort_unstable();
+        // PHP `sort($literals)` - stable since PHP 8.
+        literals.sort();
         Self(Rc::new(RefCell::new(RuleData {
             literals,
             reason,
@@ -126,7 +131,7 @@ impl Rule {
 
     pub fn hash_key(&self) -> u64 {
         let data = self.0.borrow();
-        let mut hasher = rustc_hash::FxHasher::default();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
         data.literals.hash(&mut hasher);
         hasher.finish()
     }
@@ -138,7 +143,7 @@ impl Rule {
     /// `Rule::getRequiredPackage`.
     pub fn required_package(&self) -> Option<String> {
         match &self.0.borrow().reason {
-            RuleReason::RootRequire { package_name } => Some(package_name.clone()),
+            RuleReason::RootRequire { package_name, .. } => Some(package_name.clone()),
             RuleReason::Fixed { .. } | RuleReason::LockedFilterListRemoved { .. } => None,
             RuleReason::PackageRequires { target } => Some(target.clone()),
             _ => None,

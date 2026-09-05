@@ -1,13 +1,15 @@
 //! Decisions (`Composer\DependencyResolver\Decisions`).
 
+use crate::order::PresentMap;
 use crate::rule::Rule;
 use crate::{Error, Literal, PackageId, Pool, Result};
-use rustc_hash::FxHashMap;
+use indexmap::IndexMap;
 
 /// Install / remove decisions with reasons.
 #[derive(Debug)]
 pub struct Decisions {
-    decision_map: FxHashMap<PackageId, i32>,
+    /// Package id → signed decision level (lookup only; queue owns order).
+    decision_map: IndexMap<PackageId, i32>,
     decision_queue: Vec<(Literal, Rule)>,
 }
 
@@ -20,7 +22,7 @@ impl Default for Decisions {
 impl Decisions {
     pub fn new() -> Self {
         Self {
-            decision_map: FxHashMap::default(),
+            decision_map: IndexMap::new(),
             decision_queue: Vec::new(),
         }
     }
@@ -141,7 +143,7 @@ impl Decisions {
         let package_id = literal.unsigned_abs();
         let previous = self.decision_map.get(&package_id).copied().unwrap_or(0);
         if previous != 0 {
-            let literal_string = pool.literal_to_pretty_string(literal, &FxHashMap::default());
+            let literal_string = pool.literal_to_pretty_string(literal, &PresentMap::new());
             let package = pool.literal_to_package(literal);
             return Err(Error::SolverBug(format!(
                 "Trying to decide {literal_string} on level {level}, even though {} was previously decided as {previous}.",
@@ -159,8 +161,7 @@ mod tests {
     use super::*;
     use crate::package::Package;
     use crate::rule::{Rule, RuleReason};
-
-    fn pool_one() -> Pool {
+        fn pool_one() -> Pool {
         Pool::new(vec![Package::new("a/a", "1.0.0.0", "1.0")])
     }
 
@@ -168,7 +169,10 @@ mod tests {
     fn decide_install_and_satisfy() {
         let pool = pool_one();
         let mut decisions = Decisions::new();
-        let why = Rule::generic(vec![1], RuleReason::Learned { why: 0 });
+        let why = Rule::generic(
+            vec![1],
+            RuleReason::Learned { why: 0 },
+        );
         decisions.decide(&pool, 1, 1, why).unwrap();
         assert!(decisions.satisfy(1));
         assert!(decisions.conflict(-1));

@@ -1,17 +1,20 @@
 //! Package pool (`Composer\DependencyResolver\Pool`).
 
+use crate::order::PresentMap;
 use crate::package::Package;
 use crate::{Literal, PackageId, Result};
+use indexmap::IndexMap;
 use puck_version::{ConstraintExpr, Operator};
-use rustc_hash::FxHashMap;
-use std::collections::HashMap;
 
 /// All candidate packages for one solve.
+///
+/// `package_by_name` is insertion-ordered like Composer’s PHP arrays: packages
+/// are appended in pool construction order under each provided/replaced name.
 #[derive(Debug, Default)]
 pub struct Pool {
     packages: Vec<Package>,
-    package_by_name: HashMap<String, Vec<PackageId>>,
-    provider_cache: HashMap<(String, String), Vec<PackageId>>,
+    package_by_name: IndexMap<String, Vec<PackageId>>,
+    provider_cache: IndexMap<(String, String), Vec<PackageId>>,
 }
 
 impl Pool {
@@ -21,10 +24,7 @@ impl Pool {
         for mut package in packages.drain(..) {
             package.id = id;
             for name in package.names(true) {
-                pool.package_by_name
-                    .entry(name)
-                    .or_default()
-                    .push(id);
+                pool.package_by_name.entry(name).or_default().push(id);
             }
             pool.packages.push(package);
             id += 1;
@@ -53,14 +53,14 @@ impl Pool {
         self.package_by_id(literal.unsigned_abs())
     }
 
-    pub fn literal_to_pretty_string(
-        &self,
-        literal: Literal,
-        installed: &FxHashMap<PackageId, bool>,
-    ) -> String {
+    pub fn literal_to_pretty_string(&self, literal: Literal, installed: &PresentMap) -> String {
         let package = self.literal_to_package(literal);
         let prefix = if installed.contains_key(&package.id) {
-            if literal > 0 { "keep" } else { "remove" }
+            if literal > 0 {
+                "keep"
+            } else {
+                "remove"
+            }
         } else if literal > 0 {
             "install"
         } else {
@@ -118,8 +118,7 @@ impl Pool {
             return Ok(match constraint {
                 None => true,
                 Some(c) => {
-                    let provider =
-                        ConstraintExpr::simple(Operator::Eq, candidate.version.clone());
+                    let provider = ConstraintExpr::simple(Operator::Eq, candidate.version.clone());
                     c.matches_provider(&provider)
                 }
             });
@@ -166,6 +165,9 @@ mod tests {
             ),
         );
         let pool = Pool::new(vec![fw]);
-        assert_eq!(pool.package_by_name.get("illuminate/support").unwrap(), &vec![1]);
+        assert_eq!(
+            pool.package_by_name.get("illuminate/support").unwrap(),
+            &vec![1]
+        );
     }
 }

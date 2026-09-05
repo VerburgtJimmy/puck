@@ -1,28 +1,30 @@
 //! Rule set (`Composer\DependencyResolver\RuleSet`).
 
 use crate::rule::{Rule, RuleType};
-use rustc_hash::FxHashMap;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 /// Deduplicating store of solver rules by type.
 #[derive(Debug, Default)]
 pub struct RuleSet {
     /// Lookup by rule id (`RuleSet::$ruleById`).
     pub rule_by_id: Vec<Rule>,
-    rules: HashMap<RuleType, Vec<usize>>,
-    rules_by_hash: FxHashMap<u64, Vec<usize>>,
+    /// Insertion-ordered per type (Composer PHP arrays).
+    rules: IndexMap<RuleType, Vec<usize>>,
+    /// Dedup buckets; values are insertion-ordered colliding ids.
+    rules_by_hash: IndexMap<u64, Vec<usize>>,
 }
 
 impl RuleSet {
     pub fn new() -> Self {
-        let mut rules = HashMap::new();
+        let mut rules = IndexMap::new();
+        // Match Composer TYPES key order: PACKAGE, REQUEST, LEARNED.
         for t in [RuleType::Package, RuleType::Request, RuleType::Learned] {
             rules.insert(t, Vec::new());
         }
         Self {
             rule_by_id: Vec::new(),
             rules,
-            rules_by_hash: FxHashMap::default(),
+            rules_by_hash: IndexMap::new(),
         }
     }
 
@@ -58,7 +60,10 @@ impl RuleSet {
     }
 
     pub fn rule_ids_of_type(&self, rule_type: RuleType) -> &[usize] {
-        self.rules.get(&rule_type).map(|v| v.as_slice()).unwrap_or(&[])
+        self.rules
+            .get(&rule_type)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     pub fn rules_of_type(&self, rule_type: RuleType) -> impl Iterator<Item = &Rule> {
@@ -80,6 +85,7 @@ impl RuleSet {
 mod tests {
     use super::*;
     use crate::rule::RuleReason;
+    use puck_version::ConstraintExpr;
 
     #[test]
     fn add_and_count() {
@@ -89,6 +95,7 @@ mod tests {
                 vec![1],
                 RuleReason::RootRequire {
                     package_name: "a/a".into(),
+                    constraint: ConstraintExpr::MatchAll,
                 },
             ),
             RuleType::Request,
@@ -98,6 +105,7 @@ mod tests {
                 vec![2],
                 RuleReason::RootRequire {
                     package_name: "b/b".into(),
+                    constraint: ConstraintExpr::MatchAll,
                 },
             ),
             RuleType::Request,
@@ -111,6 +119,7 @@ mod tests {
         let mut set = RuleSet::new();
         let reason = RuleReason::RootRequire {
             package_name: String::new(),
+            constraint: ConstraintExpr::MatchAll,
         };
         assert!(set
             .add(Rule::generic(vec![], reason.clone()), RuleType::Request)

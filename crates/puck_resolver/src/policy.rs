@@ -2,8 +2,8 @@
 
 use crate::pool::Pool;
 use crate::Literal;
+use indexmap::IndexMap;
 use puck_version::{Operator, version_compare};
-use std::collections::BTreeMap;
 
 /// Selects preferred install candidates from a decision queue.
 #[derive(Debug, Default)]
@@ -28,14 +28,18 @@ impl DefaultPolicy {
         mut literals: Vec<Literal>,
         required_package: Option<&str>,
     ) -> Vec<Literal> {
-        literals.sort_unstable();
-        let mut packages: BTreeMap<String, Vec<Literal>> = BTreeMap::new();
+        // PHP `sort($literals)` - stable since PHP 8.
+        literals.sort();
+        // Group by name in first-seen order after the sort (Composer PHP arrays),
+        // not alphabetical `BTreeMap` order.
+        let mut packages: IndexMap<String, Vec<Literal>> = IndexMap::new();
         for literal in literals {
             let name = pool.literal_to_package(literal).name.clone();
             packages.entry(name).or_default().push(literal);
         }
 
         for name_literals in packages.values_mut() {
+            // PHP `usort` - stable since PHP 8.
             name_literals.sort_by(|&a, &b| {
                 self.compare_by_priority(
                     pool,
@@ -49,6 +53,7 @@ impl DefaultPolicy {
         }
 
         let mut selected: Vec<Literal> = packages.into_values().flatten().collect();
+        // PHP `usort` across packages (replace-aware).
         selected.sort_by(|&a, &b| {
             self.compare_by_priority(
                 pool,
@@ -92,6 +97,7 @@ impl DefaultPolicy {
             }
         }
 
+        // Composer: tie-break by package id (`$a->id < $b->id`).
         a.id.cmp(&b.id)
     }
 
@@ -108,6 +114,7 @@ impl DefaultPolicy {
         } else {
             Operator::Gt
         };
+        // `version_compare` via puck_version (Composer/PHP semantics, not Rust Ord).
         let mut best_literals = vec![literals[0]];
         let mut best_package = pool.literal_to_package(literals[0]);
         for &literal in &literals[1..] {

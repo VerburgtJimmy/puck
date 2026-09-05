@@ -11,7 +11,8 @@ use crate::rule_set_generator::RuleSetGenerator;
 use crate::transaction::Transaction;
 use crate::watch::{RuleWatchGraph, RuleWatchNode};
 use crate::{Error, Literal, PackageId, Result};
-use rustc_hash::FxHashMap;
+use crate::order::PresentMap;
+use indexmap::IndexMap;
 
 /// Composer CDCL dependency solver.
 #[derive(Debug)]
@@ -21,7 +22,10 @@ pub struct SolverProblems {
 
 impl std::fmt::Display for SolverProblems {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} unsolvable problem(s)", self.problems.len())
+        for problem in &self.problems {
+            write!(f, "{}", problem.pretty_string())?;
+        }
+        Ok(())
     }
 }
 
@@ -34,12 +38,12 @@ pub struct Solver<'a> {
     rules: RuleSet,
     watch_graph: RuleWatchGraph,
     decisions: Decisions,
-    fixed_map: FxHashMap<PackageId, ()>,
+    fixed_map: PresentMap,
     propagate_index: i32,
     branches: Vec<(Vec<Literal>, i32)>,
     problems: Vec<Problem>,
     learned_pool: Vec<Vec<Rule>>,
-    learned_why: FxHashMap<usize, usize>,
+    learned_why: IndexMap<usize, usize>,
 }
 
 impl<'a> Solver<'a> {
@@ -50,12 +54,12 @@ impl<'a> Solver<'a> {
             rules: RuleSet::new(),
             watch_graph: RuleWatchGraph::new(),
             decisions: Decisions::new(),
-            fixed_map: FxHashMap::default(),
+            fixed_map: PresentMap::new(),
             propagate_index: 0,
             branches: Vec::new(),
             problems: Vec::new(),
             learned_pool: Vec::new(),
-            learned_why: FxHashMap::default(),
+            learned_why: IndexMap::new(),
         }
     }
 
@@ -68,7 +72,7 @@ impl<'a> Solver<'a> {
     pub fn solve(
         mut self,
         request: &Request,
-        present: &FxHashMap<PackageId, ()>,
+        present: &PresentMap,
     ) -> Result<Transaction> {
         self.setup_fixed_map(request);
         self.rules = RuleSetGenerator::new(self.pool).get_rules_for(request)?;
@@ -84,12 +88,9 @@ impl<'a> Solver<'a> {
         self.run_sat()?;
 
         if !self.problems.is_empty() {
-            return Err(Error::Message(format!(
-                "{}",
-                SolverProblems {
-                    problems: self.problems.clone()
-                }
-            )));
+            return Err(Error::Unsolvable(SolverProblems {
+                problems: self.problems.clone(),
+            }));
         }
 
         Ok(Transaction::from_decisions(
@@ -120,6 +121,7 @@ impl<'a> Solver<'a> {
                     vec![],
                     RuleReason::RootRequire {
                         package_name: package_name.clone(),
+                        constraint: constraint.clone(),
                     },
                 ));
                 self.problems.push(problem);
@@ -304,7 +306,7 @@ impl<'a> Solver<'a> {
         let mut rule_level = 1i32;
         let mut num = 0i32;
         let mut l1num = 0i32;
-        let mut seen: FxHashMap<PackageId, ()> = FxHashMap::default();
+        let mut seen: IndexMap<PackageId, ()> = IndexMap::new();
         let mut learned_literal: Option<Literal> = None;
         let mut other_learned_literals: Vec<Literal> = Vec::new();
         let mut decision_id = self.decisions.len() as i32;
@@ -369,7 +371,7 @@ impl<'a> Solver<'a> {
                     }
                 };
 
-                seen.remove(&literal.unsigned_abs());
+                seen.shift_remove(&literal.unsigned_abs());
 
                 if num != 0 {
                     num -= 1;
@@ -379,7 +381,7 @@ impl<'a> Solver<'a> {
                             break 'outer;
                         }
                         for other in &other_learned_literals {
-                            seen.remove(&other.unsigned_abs());
+                            seen.shift_remove(&other.unsigned_abs());
                         }
                         l1num += 1;
                         l1retry = true;
@@ -445,7 +447,7 @@ impl<'a> Solver<'a> {
         &self,
         problem: &mut Problem,
         conflict_rule: &Rule,
-        rule_seen: &mut FxHashMap<usize, ()>,
+        rule_seen: &mut IndexMap<usize, ()>,
     ) {
         let why = conflict_rule.object_id();
         rule_seen.insert(why, ());
@@ -471,10 +473,10 @@ impl<'a> Solver<'a> {
     fn analyze_unsolvable(&mut self, conflict_rule: &Rule) {
         let mut problem = Problem::new();
         problem.add_rule(conflict_rule.clone());
-        let mut rule_seen = FxHashMap::default();
+        let mut rule_seen = IndexMap::new();
         self.analyze_unsolvable_rule(&mut problem, conflict_rule, &mut rule_seen);
 
-        let mut seen: FxHashMap<PackageId, ()> = FxHashMap::default();
+        let mut seen: IndexMap<PackageId, ()> = IndexMap::new();
         for literal in conflict_rule.literals() {
             if self.decisions.satisfy(literal) {
                 continue;

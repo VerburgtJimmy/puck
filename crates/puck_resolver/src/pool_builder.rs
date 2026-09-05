@@ -4,12 +4,13 @@
 //! including provide/replace providers. Full stability/alias/partial-update
 //! filtering comes later.
 
+use crate::order::PresentMap;
 use crate::package::Package;
 use crate::pool::Pool;
 use crate::request::Request;
 use crate::{PackageId, Result};
-use rustc_hash::FxHashMap;
-use std::collections::{HashMap, HashSet, VecDeque};
+use indexmap::{IndexMap, IndexSet};
+use std::collections::VecDeque;
 
 /// In-memory package repository (`ArrayRepository` subset).
 #[derive(Debug, Default, Clone)]
@@ -44,20 +45,21 @@ impl PoolBuilder {
         locked: &[Package],
         fixed: &[Package],
         request: &mut Request,
-    ) -> Result<(Pool, FxHashMap<PackageId, ()>)> {
+    ) -> Result<(Pool, PresentMap)> {
         let mut repo_packages: Vec<Package> = Vec::new();
         for repo in repos {
             repo_packages.extend(repo.packages.iter().cloned());
         }
 
-        let mut by_name: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut by_name: IndexMap<String, Vec<usize>> = IndexMap::new();
         for (idx, package) in repo_packages.iter().enumerate() {
             for name in package.names(true) {
                 by_name.entry(name).or_default().push(idx);
             }
         }
 
-        let mut needed_repo: HashSet<usize> = HashSet::new();
+        // IndexSet: first-seen load order, not HashSet shuffle before sort.
+        let mut needed_repo: IndexSet<usize> = IndexSet::new();
         let mut queue: VecDeque<String> = VecDeque::new();
 
         for name in request.requires.keys() {
@@ -94,13 +96,13 @@ impl PoolBuilder {
             }
         }
 
-        // Locked/fixed first so present/fix ids are predictable.
         let mut selected: Vec<Package> = locked.iter().chain(fixed.iter()).cloned().collect();
 
         let mut rest: Vec<Package> = needed_repo
             .into_iter()
             .map(|idx| repo_packages[idx].clone())
             .collect();
+        // Explicit sort where Composer sorts pool candidates by name/version.
         rest.sort_by(|a, b| {
             a.name
                 .cmp(&b.name)
@@ -110,7 +112,7 @@ impl PoolBuilder {
 
         let pool = Pool::new(selected);
 
-        let mut present = FxHashMap::default();
+        let mut present = PresentMap::new();
         for (i, _) in locked.iter().enumerate() {
             let id = (i as PackageId) + 1;
             request.lock_package(id);

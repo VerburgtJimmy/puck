@@ -9,6 +9,7 @@
 mod decisions;
 mod link;
 mod metadata;
+mod order;
 mod package;
 mod platform;
 mod policy;
@@ -26,6 +27,7 @@ mod watch;
 pub use decisions::Decisions;
 pub use link::Link;
 pub use metadata::{package_from_p2_version, packages_from_p2_json};
+pub use order::{PackageIdSet, PresentMap};
 pub use package::Package;
 pub use platform::is_platform_package;
 pub use policy::DefaultPolicy;
@@ -47,6 +49,8 @@ pub enum Error {
     Version(#[from] puck_version::Error),
     #[error("solver bug: {0}")]
     SolverBug(String),
+    #[error("{0}")]
+    Unsolvable(SolverProblems),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

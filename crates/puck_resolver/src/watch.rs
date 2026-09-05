@@ -3,7 +3,7 @@
 use crate::decisions::Decisions;
 use crate::rule::Rule;
 use crate::{Literal, Pool, Result};
-use rustc_hash::FxHashMap;
+use indexmap::IndexMap;
 use std::collections::VecDeque;
 
 /// `RuleWatchNode`.
@@ -67,7 +67,7 @@ impl RuleWatchNode {
 pub struct RuleWatchGraph {
     /// Node storage; chains hold indices into this vec.
     nodes: Vec<RuleWatchNode>,
-    watch_chains: FxHashMap<Literal, VecDeque<usize>>,
+    watch_chains: IndexMap<Literal, VecDeque<usize>>,
 }
 
 impl RuleWatchGraph {

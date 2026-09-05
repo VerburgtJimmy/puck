@@ -7,10 +7,9 @@ use crate::request::Request;
 use crate::solver::Solver;
 use crate::transaction::Operation;
 use puck_version::parse_constraints;
-use rustc_hash::FxHashMap;
 
-fn empty_present() -> FxHashMap<u32, ()> {
-    FxHashMap::default()
+fn empty_present() -> crate::PresentMap {
+    crate::PresentMap::new()
 }
 
 #[test]
@@ -35,7 +34,7 @@ fn solver_remove_if_not_requested() {
     let package_a = Package::new("a/a", "1.0.0.0", "1.0");
     let mut pool = Pool::new(vec![package_a]);
     let request = Request::new();
-    let mut present = FxHashMap::default();
+    let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
     let tx = Solver::new(&mut pool)
@@ -163,7 +162,7 @@ fn solver_install_non_existing_fails() {
         .unwrap_err();
     let msg = err.to_string();
     assert!(
-        msg.contains("unsolvable") || msg.contains("problem"),
+        msg.contains("Root composer.json requires b/b") || msg.contains("could not be found"),
         "unexpected error: {msg}"
     );
 }
@@ -174,7 +173,7 @@ fn solver_fix_locked() {
     let mut pool = Pool::new(vec![package_a]);
     let mut request = Request::new();
     request.fix_package(1);
-    let mut present = FxHashMap::default();
+    let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
     let tx = Solver::new(&mut pool)
@@ -190,7 +189,7 @@ fn solver_update_single() {
     let mut pool = Pool::new(vec![old_a, new_a]);
     let mut request = Request::new();
     request.require_name("a/a", None).unwrap();
-    let mut present = FxHashMap::default();
+    let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
     let tx = Solver::new(&mut pool)
@@ -209,7 +208,7 @@ fn solver_update_current_noop() {
     let mut pool = Pool::new(vec![locked, same]);
     let mut request = Request::new();
     request.require_name("a/a", None).unwrap();
-    let mut present = FxHashMap::default();
+    let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
     let tx = Solver::new(&mut pool)
@@ -229,7 +228,7 @@ fn solver_update_constrained() {
     request
         .require_name("a/a", Some(parse_constraints("<2.0.0.0").unwrap()))
         .unwrap();
-    let mut present = FxHashMap::default();
+    let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
     let tx = Solver::new(&mut pool)
@@ -299,7 +298,7 @@ fn solver_obsolete_replaced_package() {
     let mut pool = Pool::new(vec![package_a, package_b]);
     let mut request = Request::new();
     request.require_name("b/b", None).unwrap();
-    let mut present = FxHashMap::default();
+    let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
     let tx = Solver::new(&mut pool)
@@ -446,7 +445,7 @@ fn solver_update_all_with_deps() {
     let mut pool = Pool::new(vec![old_a, old_b, new_a, new_b]);
     let mut request = Request::new();
     request.require_name("a/a", None).unwrap();
-    let mut present = FxHashMap::default();
+    let mut present = crate::PresentMap::new();
     present.insert(1, ());
     present.insert(2, ());
 

@@ -1,9 +1,9 @@
 //! Solver request (`Composer\DependencyResolver\Request`).
 
+use crate::order::PresentMap;
 use crate::PackageId;
+use indexmap::IndexMap;
 use puck_version::ConstraintExpr;
-use rustc_hash::FxHashMap;
-use std::collections::HashMap;
 
 /// Partial-update modes (`Request::UPDATE_*`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,12 +14,15 @@ pub enum UpdateAllowTransitive {
 }
 
 /// Root requires, fixed/locked packages, and partial-update allow list.
+///
+/// `requires` is an [`IndexMap`] so root-require rule order matches Composer
+/// (PHP insertion-ordered arrays).
 #[derive(Debug, Default)]
 pub struct Request {
-    pub requires: HashMap<String, ConstraintExpr>,
-    pub fixed_packages: FxHashMap<PackageId, ()>,
-    pub locked_packages: FxHashMap<PackageId, ()>,
-    pub fixed_locked_packages: FxHashMap<PackageId, ()>,
+    pub requires: IndexMap<String, ConstraintExpr>,
+    pub fixed_packages: PresentMap,
+    pub locked_packages: PresentMap,
+    pub fixed_locked_packages: PresentMap,
     pub update_allow_list: Vec<String>,
     pub update_allow_transitive: Option<UpdateAllowTransitive>,
 }
