@@ -992,3 +992,148 @@ fn solver_all_jobs() {
         ]
     );
 }
+
+/// Composer `testSolverUpdateFullyConstrained` is identical to constrained update
+/// in the fixture; covered by `solver_update_constrained`. This ports the prune
+/// sibling: unlocked installed packages not required are removed.
+#[test]
+fn solver_update_fully_constrained_prunes_installed() {
+    let old_a = Package::new("a/a", "1.0.0.0", "1.0");
+    let package_b = Package::new("b/b", "1.0.0.0", "1.0");
+    let mid_a = Package::new("a/a", "1.2.0.0", "1.2");
+    let high_a = Package::new("a/a", "2.0.0.0", "2.0");
+    let mut pool = Pool::new(vec![old_a, package_b, mid_a, high_a]);
+    let mut request = Request::new();
+    request
+        .require_name("a/a", Some(parse_constraints("<2.0.0.0").unwrap()))
+        .unwrap();
+    let mut present = crate::PresentMap::new();
+    present.insert(1, ());
+    present.insert(2, ());
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[
+            Operation::Remove { package_id: 2 },
+            Operation::Update { from: 1, to: 3 },
+        ]
+    );
+}
+
+#[test]
+fn solver_install_same_package_from_different_repositories() {
+    use crate::pool_builder::{ArrayRepository, PoolBuilder};
+
+    let mut repo1 = ArrayRepository::new();
+    repo1.add_package(Package::new("foo/foo", "1.0.0.0", "1"));
+    let mut repo2 = ArrayRepository::new();
+    repo2.add_package(Package::new("foo/foo", "1.0.0.0", "1"));
+
+    let mut request = Request::new();
+    request.require_name("foo/foo", None).unwrap();
+    let (mut pool, present) =
+        PoolBuilder::build(&[&repo1, &repo2], &[], &[], &mut request).unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .unwrap();
+    // Prefer first repository (lower pool id).
+    assert_eq!(tx.operations(), &[Operation::Install { package_id: 1 }]);
+    assert_eq!(pool.len(), 2);
+}
+
+/// Provider selected by explicit require; circular require through virtual.
+#[test]
+fn solver_install_alternative_with_circular_require() {
+    use crate::pool_builder::{ArrayRepository, PoolBuilder};
+
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let mut package_b = Package::new("b/b", "1.0.0.0", "1.0");
+    package_b.requires.insert(
+        "virtual/virtual".into(),
+        Link::new(
+            "b/b",
+            "virtual/virtual",
+            ">=1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let mut package_c = Package::new("c/c", "1.0.0.0", "1.0");
+    package_c.provides.insert(
+        "virtual/virtual".into(),
+        Link::new(
+            "c/c",
+            "virtual/virtual",
+            "=1.0",
+            parse_constraints("=1.0").unwrap(),
+        ),
+    );
+    package_c.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "c/c",
+            "a/a",
+            "=1.0",
+            parse_constraints("=1.0").unwrap(),
+        ),
+    );
+    let mut package_d = Package::new("d/d", "1.0.0.0", "1.0");
+    package_d.provides.insert(
+        "virtual/virtual".into(),
+        Link::new(
+            "d/d",
+            "virtual/virtual",
+            "=1.0",
+            parse_constraints("=1.0").unwrap(),
+        ),
+    );
+    package_d.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "d/d",
+            "a/a",
+            "=1.0",
+            parse_constraints("=1.0").unwrap(),
+        ),
+    );
+
+    let mut repo = ArrayRepository::new();
+    repo.add_package(package_a);
+    repo.add_package(package_b);
+    repo.add_package(package_c);
+    repo.add_package(package_d);
+
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+    request.require_name("c/c", None).unwrap();
+    let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .unwrap();
+    let mut names: Vec<_> = tx
+        .operations()
+        .iter()
+        .map(|op| match op {
+            Operation::Install { package_id } => {
+                pool.package_by_id(*package_id).name.clone()
+            }
+            other => panic!("unexpected {other:?}"),
+        })
+        .collect();
+    names.sort();
+    assert_eq!(names, ["a/a", "b/b", "c/c"]);
+    assert!(!pool.packages().iter().any(|p| p.name == "d/d"));
+}
