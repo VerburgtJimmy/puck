@@ -1,0 +1,14 @@
+{
+    "name": "puck/path-local-fixture",
+    "description": "Path dist install fixture (locked path package, no Packagist)",
+    "type": "project",
+    "require": {
+        "acme/hello": "*"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "packages/acme-hello"
+        }
+    ]
+}

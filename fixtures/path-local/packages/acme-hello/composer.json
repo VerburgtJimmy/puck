@@ -1,0 +1,10 @@
+{
+    "name": "acme/hello",
+    "description": "Minimal path package for puck install tests",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "Acme\\Hello\\": "src/"
+        }
+    }
+}

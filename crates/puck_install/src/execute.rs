@@ -69,20 +69,35 @@ pub async fn execute_install(
         .map(|p| (p.name.to_ascii_lowercase(), p))
         .collect();
 
-    // Fetch + extract into the store in parallel.
-    let to_fetch: Vec<&PlannedPackage> = plan.to_install().collect();
+    let to_install: Vec<&PlannedPackage> = plan.to_install().collect();
+    let (path_pkgs, archive_pkgs): (Vec<&PlannedPackage>, Vec<&PlannedPackage>) =
+        to_install.iter().copied().partition(|p| is_path_dist(p));
+
+    // Path dist: symlink or mirror from project-relative url (no store fetch).
+    let link_started = Instant::now();
+    for pkg in &path_pkgs {
+        let Some(locked) = lock_by_name.get(&pkg.name) else {
+            return Err(Error::Message(format!(
+                "path package {} missing from lock",
+                pkg.name
+            )));
+        };
+        install_path_package(project_root, &vendor, pkg, locked)?;
+        eprintln!("puck: {} {}", action_word(pkg.action), pkg.name);
+    }
+
+    // Fetch + extract archives into the store in parallel.
     let fetch_started = Instant::now();
     let (fetched, fetch_cache_hit_ms, fetch_download_ms) =
-        fetch_into_store(&to_fetch, store, options.offline).await?;
+        fetch_into_store(&archive_pkgs, store, options.offline).await?;
     let fetch_ms = fetch_started.elapsed().as_millis();
 
     // Link into vendor/ in parallel. Hardlinks are mostly metadata; serial
     // linking was ~70% of warm-wipe wall time. Use at least fetch concurrency,
     // scaled up to available parallelism when the host has more cores.
-    let link_started = Instant::now();
     let link_sema = Arc::new(Semaphore::new(link_concurrency()));
     let mut link_set = JoinSet::new();
-    for pkg in &to_fetch {
+    for pkg in &archive_pkgs {
         let Some(sha) = fetched.get(&pkg.name) else {
             return Err(Error::Message(format!(
                 "missing store entry after fetch for {}",
@@ -143,12 +158,7 @@ fn vendor_package_path(vendor: &Path, name: &str) -> PathBuf {
 }
 
 fn link_one_package(store_dir: &Path, target: &Path) -> Result<()> {
-    if target.exists() {
-        fs::remove_dir_all(target).map_err(|source| Error::Io {
-            path: target.display().to_string(),
-            source,
-        })?;
-    }
+    remove_vendor_path(target)?;
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|source| Error::Io {
             path: parent.display().to_string(),
@@ -165,12 +175,202 @@ fn link_one_package(store_dir: &Path, target: &Path) -> Result<()> {
 
 fn remove_package(vendor: &Path, name: &str) -> Result<()> {
     let target = vendor_package_path(vendor, name);
-    if target.exists() {
-        fs::remove_dir_all(&target).map_err(|source| Error::Io {
+    if vendor_path_present(&target) {
+        remove_vendor_path(&target)?;
+        eprintln!("puck: removed {name}");
+    }
+    Ok(())
+}
+
+fn is_path_dist(pkg: &PlannedPackage) -> bool {
+    pkg.dist_type
+        .as_deref()
+        .is_some_and(|t| t.eq_ignore_ascii_case("path"))
+}
+
+fn path_prefer_symlink(locked: &LockedPackage) -> bool {
+    let opts = locked
+        .extra
+        .get("transport-options")
+        .or_else(|| {
+            locked
+                .dist
+                .as_ref()
+                .and_then(|d| d.extra.get("transport-options"))
+        });
+    match opts.and_then(|v| v.get("symlink")) {
+        Some(Value::Bool(false)) => false,
+        Some(Value::Number(n)) if n.as_u64() == Some(0) => false,
+        Some(Value::String(s)) if s == "false" || s == "0" => false,
+        _ => true,
+    }
+}
+
+fn install_path_package(
+    project_root: &Path,
+    vendor: &Path,
+    pkg: &PlannedPackage,
+    locked: &LockedPackage,
+) -> Result<()> {
+    let rel = pkg.dist_url.as_deref().ok_or_else(|| {
+        Error::Message(format!(
+            "path package {} has no dist url",
+            pkg.name
+        ))
+    })?;
+    let source = {
+        let p = Path::new(rel);
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            project_root.join(p)
+        }
+    };
+    if !source.exists() {
+        return Err(Error::Message(format!(
+            "path package {}: source {} does not exist",
+            pkg.name,
+            source.display()
+        )));
+    }
+
+    let target = vendor_package_path(vendor, &pkg.name);
+    remove_vendor_path(&target)?;
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|source| Error::Io {
+            path: parent.display().to_string(),
+            source,
+        })?;
+    }
+
+    if path_prefer_symlink(locked) {
+        let link_value = relative_symlink_value(&target, &source);
+        symlink_path(&link_value, &target)?;
+    } else {
+        copy_tree(&source, &target)?;
+    }
+    Ok(())
+}
+
+fn relative_symlink_value(link: &Path, source: &Path) -> PathBuf {
+    let Some(parent) = link.parent() else {
+        return source.to_path_buf();
+    };
+    let parent_abs = fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf());
+    let source_abs = fs::canonicalize(source).unwrap_or_else(|_| source.to_path_buf());
+    path_relative_to(&source_abs, &parent_abs).unwrap_or(source_abs)
+}
+
+fn path_relative_to(path: &Path, base: &Path) -> Option<PathBuf> {
+    let path_c: Vec<_> = path.components().collect();
+    let base_c: Vec<_> = base.components().collect();
+    let common = path_c
+        .iter()
+        .zip(base_c.iter())
+        .take_while(|(a, b)| a == b)
+        .count();
+    if common == 0 {
+        return None;
+    }
+    let mut rel = PathBuf::new();
+    for _ in common..base_c.len() {
+        rel.push("..");
+    }
+    for c in &path_c[common..] {
+        rel.push(c.as_os_str());
+    }
+    if rel.as_os_str().is_empty() {
+        Some(PathBuf::from("."))
+    } else {
+        Some(rel)
+    }
+}
+
+fn symlink_path(original: &Path, link: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(original, link).map_err(|source| Error::Io {
+            path: link.display().to_string(),
+            source,
+        })
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = original;
+        Err(Error::Message(format!(
+            "path package symlink is not supported on this platform ({})",
+            link.display()
+        )))
+    }
+}
+
+fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+    let meta = fs::symlink_metadata(from).map_err(|source| Error::Io {
+        path: from.display().to_string(),
+        source,
+    })?;
+    if meta.file_type().is_dir() {
+        fs::create_dir_all(to).map_err(|source| Error::Io {
+            path: to.display().to_string(),
+            source,
+        })?;
+        for entry in fs::read_dir(from).map_err(|source| Error::Io {
+            path: from.display().to_string(),
+            source,
+        })? {
+            let entry = entry.map_err(|source| Error::Io {
+                path: from.display().to_string(),
+                source,
+            })?;
+            copy_tree(&entry.path(), &to.join(entry.file_name()))?;
+        }
+        Ok(())
+    } else if meta.file_type().is_symlink() {
+        let target = fs::read_link(from).map_err(|source| Error::Io {
+            path: from.display().to_string(),
+            source,
+        })?;
+        symlink_path(&target, to)
+    } else {
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|source| Error::Io {
+                path: parent.display().to_string(),
+                source,
+            })?;
+        }
+        fs::copy(from, to).map_err(|source| Error::Io {
+            path: to.display().to_string(),
+            source,
+        })?;
+        Ok(())
+    }
+}
+
+fn vendor_path_present(target: &Path) -> bool {
+    target.exists() || fs::symlink_metadata(target).is_ok()
+}
+
+fn remove_vendor_path(target: &Path) -> Result<()> {
+    let meta = match fs::symlink_metadata(target) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(source) => {
+            return Err(Error::Io {
+                path: target.display().to_string(),
+                source,
+            });
+        }
+    };
+    if meta.file_type().is_symlink() || meta.file_type().is_file() {
+        fs::remove_file(target).map_err(|source| Error::Io {
             path: target.display().to_string(),
             source,
         })?;
-        eprintln!("puck: removed {name}");
+    } else {
+        fs::remove_dir_all(target).map_err(|source| Error::Io {
+            path: target.display().to_string(),
+            source,
+        })?;
     }
     Ok(())
 }
@@ -241,6 +441,12 @@ async fn fetch_one(
     dist_type: Option<&str>,
     offline: bool,
 ) -> Result<(String, FetchKind)> {
+    if dist_type.is_some_and(|t| t.eq_ignore_ascii_case("path")) {
+        return Err(Error::Message(format!(
+            "path package {name} must be linked from dist.url (internal: skipped store fetch)"
+        )));
+    }
+
     let url = url.ok_or_else(|| {
         Error::Message(format!(
             "package {name} has no dist url (source installs not implemented yet)"
@@ -371,4 +577,174 @@ fn locked_to_installed_value(pkg: &LockedPackage) -> Value {
         map.insert(k.clone(), v.clone());
     }
     Value::Object(map)
+}
+
+#[cfg(test)]
+mod path_dist_tests {
+    use super::*;
+    use puck_lock::LockFile;
+    use puck_store::Store;
+    use std::path::PathBuf;
+    use std::str::FromStr;
+
+    fn path_lock(symlink: bool) -> LockFile {
+        let transport = if symlink {
+            r#""transport-options": { "symlink": true, "relative": true },"#
+        } else {
+            r#""transport-options": { "symlink": false },"#
+        };
+        let json = format!(
+            r#"{{
+            "content-hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "packages": [{{
+                "name": "acme/hello",
+                "version": "dev-main",
+                "dist": {{ "type": "path", "url": "packages/acme-hello", "reference": "abc" }},
+                {transport}
+                "type": "library",
+                "autoload": {{ "psr-4": {{ "Acme\\Hello\\": "src/" }} }}
+            }}],
+            "packages-dev": [],
+            "aliases": [],
+            "minimum-stability": "stable",
+            "stability-flags": {{}},
+            "prefer-stable": false,
+            "prefer-lowest": false,
+            "platform": {{}},
+            "platform-dev": {{}},
+            "plugin-api-version": "2.9.0"
+        }}"#
+        );
+        LockFile::from_str(&json).expect("lock")
+    }
+
+    fn write_path_project(root: &Path, symlink: bool) -> LockFile {
+        fs::create_dir_all(root.join("packages/acme-hello/src")).expect("dirs");
+        fs::write(
+            root.join("packages/acme-hello/composer.json"),
+            r#"{"name":"acme/hello","type":"library","autoload":{"psr-4":{"Acme\\Hello\\":"src/"}}}"#,
+        )
+        .expect("pkg composer");
+        fs::write(
+            root.join("packages/acme-hello/src/Hello.php"),
+            "<?php\nnamespace Acme\\Hello;\nclass Hello {}\n",
+        )
+        .expect("php");
+        fs::write(
+            root.join("composer.json"),
+            r#"{"name":"puck/path-local","require":{"acme/hello":"*"},"repositories":[{"type":"path","url":"packages/acme-hello"}]}"#,
+        )
+        .expect("root composer");
+        path_lock(symlink)
+    }
+
+    #[tokio::test]
+    async fn path_dist_installs_symlink_by_default() {
+        let tmp = tempfile::tempdir().expect("temp");
+        let root = tmp.path();
+        let lock = write_path_project(root, true);
+        let plan = crate::plan_install(
+            &lock,
+            &crate::InstalledState::default(),
+            InstallOptions::default(),
+        )
+        .expect("plan");
+        let store_dir = tempfile::tempdir().expect("store");
+        let store = Store::new(store_dir.path());
+        execute_install(root, &lock, &plan, InstallOptions::default(), &store, None)
+            .await
+            .expect("install");
+        let linked = root.join("vendor/acme/hello");
+        assert!(linked.symlink_metadata().expect("meta").file_type().is_symlink());
+        assert!(linked.join("composer.json").is_file());
+        assert!(linked.join("src/Hello.php").is_file());
+    }
+
+    #[tokio::test]
+    async fn path_dist_copies_when_symlink_false() {
+        let tmp = tempfile::tempdir().expect("temp");
+        let root = tmp.path();
+        let lock = write_path_project(root, false);
+        let plan = crate::plan_install(
+            &lock,
+            &crate::InstalledState::default(),
+            InstallOptions::default(),
+        )
+        .expect("plan");
+        let store_dir = tempfile::tempdir().expect("store");
+        let store = Store::new(store_dir.path());
+        execute_install(root, &lock, &plan, InstallOptions::default(), &store, None)
+            .await
+            .expect("install");
+        let dest = root.join("vendor/acme/hello");
+        let meta = dest.symlink_metadata().expect("meta");
+        assert!(meta.is_dir());
+        assert!(!meta.file_type().is_symlink());
+        assert!(dest.join("src/Hello.php").is_file());
+        // Copy is independent of source
+        fs::remove_file(root.join("packages/acme-hello/src/Hello.php")).expect("rm src");
+        assert!(dest.join("src/Hello.php").is_file());
+    }
+
+    #[tokio::test]
+    async fn path_dist_remove_drops_symlink() {
+        let tmp = tempfile::tempdir().expect("temp");
+        let root = tmp.path();
+        let lock = write_path_project(root, true);
+        let plan = crate::plan_install(
+            &lock,
+            &crate::InstalledState::default(),
+            InstallOptions::default(),
+        )
+        .expect("plan");
+        let store_dir = tempfile::tempdir().expect("store");
+        let store = Store::new(store_dir.path());
+        execute_install(root, &lock, &plan, InstallOptions::default(), &store, None)
+            .await
+            .expect("install");
+        let linked = root.join("vendor/acme/hello");
+        assert!(linked.symlink_metadata().is_ok());
+        remove_package(&root.join("vendor"), "acme/hello").expect("remove");
+        assert!(!vendor_path_present(&linked));
+        // Source package untouched
+        assert!(root.join("packages/acme-hello/composer.json").is_file());
+    }
+
+    #[tokio::test]
+    async fn fixture_path_local_installs_symlink() {
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/path-local");
+        let tmp = tempfile::tempdir().expect("temp");
+        // copy fixture tree
+        let root = tmp.path();
+        copy_tree(&fixture, root).expect("copy fixture");
+        // remove vendor if any
+        let _ = fs::remove_dir_all(root.join("vendor"));
+        let lock = LockFile::from_path(root.join("composer.lock")).expect("lock");
+        assert_eq!(
+            lock.packages[0].dist.as_ref().and_then(|d| d.dist_type.as_deref()),
+            Some("path"),
+            "fixture dist.type"
+        );
+        let plan = crate::plan_install(
+            &lock,
+            &crate::InstalledState::default(),
+            InstallOptions::default(),
+        )
+        .expect("plan");
+        assert!(
+            plan.packages[0]
+                .dist_type
+                .as_deref()
+                .is_some_and(|t| t.eq_ignore_ascii_case("path")),
+            "planned dist_type={:?}",
+            plan.packages[0].dist_type
+        );
+        let store_dir = tempfile::tempdir().expect("store");
+        let store = Store::new(store_dir.path());
+        execute_install(root, &lock, &plan, InstallOptions::default(), &store, None)
+            .await
+            .expect("install");
+        let linked = root.join("vendor/acme/hello");
+        assert!(linked.symlink_metadata().expect("meta").file_type().is_symlink());
+    }
 }
