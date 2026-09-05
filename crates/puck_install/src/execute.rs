@@ -12,10 +12,26 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 const DEFAULT_FETCH_CONCURRENCY: usize = 8;
+
+/// Wall-clock phase timings from [`execute_install`] (milliseconds).
+#[derive(Debug, Clone, Default)]
+pub struct ExecuteTimings {
+    /// Store lookup / download / extract (parallel wall clock).
+    pub fetch_ms: u128,
+    /// Sum of per-package cache-hit lookup times (may exceed [`Self::fetch_ms`] under concurrency).
+    pub fetch_cache_hit_ms: u128,
+    /// Sum of per-package download+extract times (may exceed [`Self::fetch_ms`] under concurrency).
+    pub fetch_download_ms: u128,
+    /// Vendor hardlink/copy phase.
+    pub link_ms: u128,
+    /// `installed.json` / `installed.php` + bins.
+    pub installed_meta_ms: u128,
+}
 
 /// Run the plan against `project_root`.
 pub async fn execute_install(
@@ -25,7 +41,7 @@ pub async fn execute_install(
     options: InstallOptions,
     store: &Store,
     manifest: Option<&Manifest>,
-) -> Result<()> {
+) -> Result<ExecuteTimings> {
     let vendor = project_root.join("vendor");
     fs::create_dir_all(&vendor).map_err(|source| Error::Io {
         path: vendor.display().to_string(),
@@ -46,9 +62,13 @@ pub async fn execute_install(
 
     // Fetch + extract into the store in parallel.
     let to_fetch: Vec<&PlannedPackage> = plan.to_install().collect();
-    let fetched = fetch_into_store(&to_fetch, store, options.offline).await?;
+    let fetch_started = Instant::now();
+    let (fetched, fetch_cache_hit_ms, fetch_download_ms) =
+        fetch_into_store(&to_fetch, store, options.offline).await?;
+    let fetch_ms = fetch_started.elapsed().as_millis();
 
     // Link into vendor/ sequentially (filesystem-friendly).
+    let link_started = Instant::now();
     for pkg in &to_fetch {
         let Some(sha) = fetched.get(&pkg.name) else {
             return Err(Error::Message(format!(
@@ -77,10 +97,20 @@ pub async fn execute_install(
         link_tree(&store_dir, &target).map_err(|e| Error::Message(e.to_string()))?;
         eprintln!("puck: {} {}", action_word(pkg.action), pkg.name);
     }
+    let link_ms = link_started.elapsed().as_millis();
 
+    let meta_started = Instant::now();
     write_installed_json(&vendor, lock, plan, &lock_by_name, manifest, options)?;
     crate::bins::install_binaries(project_root, lock, options.no_dev)?;
-    Ok(())
+    let installed_meta_ms = meta_started.elapsed().as_millis();
+
+    Ok(ExecuteTimings {
+        fetch_ms,
+        fetch_cache_hit_ms,
+        fetch_download_ms,
+        link_ms,
+        installed_meta_ms,
+    })
 }
 
 fn action_word(action: InstallAction) -> &'static str {
@@ -112,11 +142,16 @@ fn remove_package(vendor: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
+enum FetchKind {
+    CacheHit,
+    Download,
+}
+
 async fn fetch_into_store(
     packages: &[&PlannedPackage],
     store: &Store,
     offline: bool,
-) -> Result<HashMap<String, String>> {
+) -> Result<(HashMap<String, String>, u128, u128)> {
     let semaphore = Arc::new(Semaphore::new(DEFAULT_FETCH_CONCURRENCY));
     let mut set = JoinSet::new();
 
@@ -134,6 +169,7 @@ async fn fetch_into_store(
 
         set.spawn(async move {
             let _permit = permit;
+            let started = Instant::now();
             let result = fetch_one(
                 &store,
                 &name,
@@ -143,17 +179,25 @@ async fn fetch_into_store(
                 offline,
             )
             .await;
-            (name, result)
+            let elapsed = started.elapsed();
+            (name, result, elapsed)
         });
     }
 
     let mut out = HashMap::new();
+    let mut cache_hit = Duration::ZERO;
+    let mut download = Duration::ZERO;
     while let Some(joined) = set.join_next().await {
-        let (name, result) = joined.map_err(|e| Error::Message(format!("fetch task: {e}")))?;
-        let sha = result?;
+        let (name, result, elapsed) =
+            joined.map_err(|e| Error::Message(format!("fetch task: {e}")))?;
+        let (sha, kind) = result?;
+        match kind {
+            FetchKind::CacheHit => cache_hit += elapsed,
+            FetchKind::Download => download += elapsed,
+        }
         out.insert(name, sha);
     }
-    Ok(out)
+    Ok((out, cache_hit.as_millis(), download.as_millis()))
 }
 
 async fn fetch_one(
@@ -163,7 +207,7 @@ async fn fetch_one(
     shasum: Option<&str>,
     dist_type: Option<&str>,
     offline: bool,
-) -> Result<String> {
+) -> Result<(String, FetchKind)> {
     let url = url.ok_or_else(|| {
         Error::Message(format!(
             "package {name} has no dist url (source installs not implemented yet)"
@@ -173,7 +217,7 @@ async fn fetch_one(
     if let Some(sha) = lookup(store, shasum, Some(url)).map_err(|e| Error::Message(e.to_string()))?
     {
         eprintln!("puck: cache hit {name}");
-        return Ok(sha);
+        return Ok((sha, FetchKind::CacheHit));
     }
 
     if offline {
@@ -192,7 +236,7 @@ async fn fetch_one(
         .map_err(|e| Error::Message(e.to_string()))?;
     remember(store, &downloaded.sha256, shasum, Some(url))
         .map_err(|e| Error::Message(e.to_string()))?;
-    Ok(downloaded.sha256)
+    Ok((downloaded.sha256, FetchKind::Download))
 }
 
 fn write_installed_json(

@@ -3,7 +3,7 @@
 use clap::{Parser, Subcommand};
 use puck_autoload::{DumpOptions, dump, dump_is_current};
 use puck_install::{
-    InstallAction, InstallOptions, execute_install, install_binaries, plan_install,
+    ExecuteTimings, InstallAction, InstallOptions, execute_install, install_binaries, plan_install,
     read_installed, reconcile_vendor_presence,
 };
 use puck_laravel::{DiscoverStatus, discover};
@@ -13,6 +13,7 @@ use puck_scripts::{RunScriptsOptions, run_install_scripts};
 use puck_store::Store;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::Instant;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -172,6 +173,7 @@ async fn run_install(
     optimize: bool,
     no_scripts: bool,
 ) -> Result<(), String> {
+    let total_started = Instant::now();
     let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
     let manifest_path = root.join("composer.json");
     let lock_path = root.join("composer.lock");
@@ -183,6 +185,7 @@ async fn run_install(
         ));
     }
 
+    let plan_started = Instant::now();
     let manifest = if manifest_path.is_file() {
         let manifest = Manifest::from_path(&manifest_path).map_err(|e| e.to_string())?;
         eprintln!("puck: project {}", manifest.pretty_name);
@@ -215,6 +218,7 @@ async fn run_install(
             InstallAction::Remove => remove += 1,
         }
     }
+    let plan_ms = plan_started.elapsed().as_millis();
 
     eprintln!(
         "puck: plan  install={install}  update={update}  keep={keep}  remove={remove}  (lock {})",
@@ -224,13 +228,16 @@ async fn run_install(
         eprintln!("puck: optimize-autoloader enabled");
     }
 
+    let mut exec_timings = ExecuteTimings::default();
     let packages_changed = install + update + remove > 0;
     if !packages_changed {
         eprintln!("puck: nothing to install");
+        let meta_started = Instant::now();
         install_binaries(&root, &lock, no_dev).map_err(|e| e.to_string())?;
+        exec_timings.installed_meta_ms = meta_started.elapsed().as_millis();
     } else {
         let store = Store::default_global();
-        execute_install(&root, &lock, &plan, options, &store, manifest.as_ref())
+        exec_timings = execute_install(&root, &lock, &plan, options, &store, manifest.as_ref())
             .await
             .map_err(|e| e.to_string())?;
     }
@@ -242,9 +249,18 @@ async fn run_install(
     if !need_dump {
         eprintln!("puck: autoload up to date");
         eprintln!("puck: done");
+        print_install_timings(
+            plan_ms,
+            &exec_timings,
+            0,
+            0,
+            0,
+            total_started.elapsed().as_millis(),
+        );
         return Ok(());
     }
 
+    let dump_started = Instant::now();
     dump(
         &root,
         &lock,
@@ -257,12 +273,14 @@ async fn run_install(
     )
     .map_err(|e| e.to_string())?;
     write_dump_meta(&root, &lock.content_hash, optimize).map_err(|e| e.to_string())?;
+    let dump_ms = dump_started.elapsed().as_millis();
     eprintln!(
         "puck: dumped autoload{}",
         if optimize { " (-o)" } else { "" }
     );
 
     let mut packages_written = false;
+    let discover_started = Instant::now();
     match discover(&root).map_err(|e| e.to_string())? {
         DiscoverStatus::Written { package_count, .. } => {
             eprintln!("puck: discovered {package_count} packages");
@@ -270,10 +288,13 @@ async fn run_install(
         }
         DiscoverStatus::Skipped => {}
     }
+    let mut discover_ms = discover_started.elapsed().as_millis();
 
+    let mut scripts_ms = 0u128;
     if !no_scripts
         && let Some(ref manifest) = manifest
     {
+        let scripts_started = Instant::now();
         let report = run_install_scripts(
             &root,
             &manifest.scripts,
@@ -292,23 +313,61 @@ async fn run_install(
                 report.ran, report.skipped
             );
         }
+        scripts_ms = scripts_started.elapsed().as_millis();
 
         // ComposerScripts::clearCompiled deletes packages.php; rewrite if gone.
         if packages_written {
             let packages_php = root.join("bootstrap/cache/packages.php");
             if !packages_php.is_file() {
+                let rediscover_started = Instant::now();
                 match discover(&root).map_err(|e| e.to_string())? {
                     DiscoverStatus::Written { package_count, .. } => {
                         eprintln!("puck: rediscovered {package_count} packages after scripts");
                     }
                     DiscoverStatus::Skipped => {}
                 }
+                discover_ms += rediscover_started.elapsed().as_millis();
             }
         }
     }
 
     eprintln!("puck: done");
+    print_install_timings(
+        plan_ms,
+        &exec_timings,
+        dump_ms,
+        discover_ms,
+        scripts_ms,
+        total_started.elapsed().as_millis(),
+    );
     Ok(())
+}
+
+fn timings_enabled() -> bool {
+    std::env::var_os("PUCK_TIMINGS").is_some()
+}
+
+fn print_install_timings(
+    plan_ms: u128,
+    exec: &ExecuteTimings,
+    dump_ms: u128,
+    discover_ms: u128,
+    scripts_ms: u128,
+    total_ms: u128,
+) {
+    if !timings_enabled() {
+        return;
+    }
+    eprintln!("puck: timing  plan_ms={plan_ms}");
+    eprintln!("puck: timing  fetch_ms={}", exec.fetch_ms);
+    eprintln!("puck: timing  fetch_cache_hit_ms={}", exec.fetch_cache_hit_ms);
+    eprintln!("puck: timing  fetch_download_ms={}", exec.fetch_download_ms);
+    eprintln!("puck: timing  link_ms={}", exec.link_ms);
+    eprintln!("puck: timing  installed_meta_ms={}", exec.installed_meta_ms);
+    eprintln!("puck: timing  dump_ms={dump_ms}");
+    eprintln!("puck: timing  discover_ms={discover_ms}");
+    eprintln!("puck: timing  scripts_ms={scripts_ms}");
+    eprintln!("puck: timing  total_ms={total_ms}");
 }
 
 fn run_dump_autoload(
