@@ -203,32 +203,41 @@ pub fn find_p2_version(bytes: &[u8], pretty_or_normalized: &str) -> Result<Optio
 /// Load packages from recorded p2 files for each lock pin (name + pretty version).
 ///
 /// Uses VCR metadata rather than the lock dump as the package body source.
-pub fn packages_from_p2_lock_pins(p2_dir: &std::path::Path, lock_bytes: &[u8]) -> Result<Vec<Package>> {
+pub fn packages_from_p2_lock_pins(
+    p2_dir: &std::path::Path,
+    lock_bytes: &[u8],
+    include_dev: bool,
+) -> Result<Vec<Package>> {
     let data: Value = serde_json::from_slice(lock_bytes)
         .map_err(|e| Error::Message(format!("invalid lock json: {e}")))?;
-    let Some(packages) = data.get("packages").and_then(|v| v.as_array()) else {
-        return Ok(Vec::new());
-    };
 
-    let mut out = Vec::with_capacity(packages.len());
-    for entry in packages {
-        let name = entry
-            .get("name")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| Error::Message("lock package missing name".into()))?
-            .to_ascii_lowercase();
-        let pretty = entry
-            .get("version")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| Error::Message(format!("lock package {name} missing version")))?;
-        let path = p2_dir.join(format!("{}.json", name.replace('/', "$")));
-        let bytes = std::fs::read(&path).map_err(|e| {
-            Error::Message(format!("missing p2 for {name} at {}: {e}", path.display()))
-        })?;
-        let package = find_p2_version(&bytes, pretty)?.ok_or_else(|| {
-            Error::Message(format!("p2 for {name} has no version {pretty}"))
-        })?;
-        out.push(package);
+    let mut out = Vec::new();
+    for key in ["packages", "packages-dev"] {
+        if key == "packages-dev" && !include_dev {
+            continue;
+        }
+        let Some(packages) = data.get(key).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for entry in packages {
+            let name = entry
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| Error::Message("lock package missing name".into()))?
+                .to_ascii_lowercase();
+            let pretty = entry
+                .get("version")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| Error::Message(format!("lock package {name} missing version")))?;
+            let path = p2_dir.join(format!("{}.json", name.replace('/', "$")));
+            let bytes = std::fs::read(&path).map_err(|e| {
+                Error::Message(format!("missing p2 for {name} at {}: {e}", path.display()))
+            })?;
+            let package = find_p2_version(&bytes, pretty)?.ok_or_else(|| {
+                Error::Message(format!("p2 for {name} has no version {pretty}"))
+            })?;
+            out.push(package);
+        }
     }
     Ok(out)
 }
@@ -297,7 +306,7 @@ mod tests {
     fn skeleton_lock_pins_from_vcr_p2_match_lock_replace_count() {
         let p2_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../fixtures/registry/packagist/p2");
-        let packages = packages_from_p2_lock_pins(&p2_dir, &skeleton_lock()).unwrap();
+        let packages = packages_from_p2_lock_pins(&p2_dir, &skeleton_lock(), false).unwrap();
         assert_eq!(packages.len(), 76);
         let fw = packages
             .iter()
