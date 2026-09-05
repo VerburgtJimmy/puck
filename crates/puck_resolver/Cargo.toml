@@ -6,7 +6,13 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "puck: resolver crate (M0 stub)"
+description = "puck: Composer DependencyResolver port (CDCL)"
 
 [dependencies]
 thiserror.workspace = true
+puck_version.workspace = true
+indexmap.workspace = true
+rustc-hash.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
