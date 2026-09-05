@@ -1,23 +1,28 @@
 #!/usr/bin/env bash
-# M1 parity: compare Composer and puck installs for a fixture.
+# M1/M3 parity: compare Composer and puck installs for a fixture.
 #
-# Usage: ./parity/run.sh <fixture-name> [--no-dev] [--strict]
+# Usage: ./parity/run.sh <fixture-name> [--no-dev] [--strict] [--puck-lock]
 #
 # Default mode is structural (must PASS on laravel-skeleton --no-dev).
 # --strict checksums all of vendor/ (expected FAIL until full byte parity).
+# --puck-lock rewrites composer.lock with `puck lock` before both installs
+#   (M3 gate: composer install from a puck-written lock).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FIXTURE_NAME=""
 NO_DEV=0
 STRICT=0
+PUCK_LOCK=0
+REGISTRY="${PUCK_REGISTRY:-$ROOT/fixtures/registry}"
 
 for arg in "$@"; do
   case "$arg" in
     --no-dev) NO_DEV=1 ;;
     --strict) STRICT=1 ;;
+    --puck-lock) PUCK_LOCK=1 ;;
     -h|--help)
-      echo "usage: $0 <fixture-name> [--no-dev] [--strict]" >&2
+      echo "usage: $0 <fixture-name> [--no-dev] [--strict] [--puck-lock]" >&2
       exit 0
       ;;
     *)
@@ -32,7 +37,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$FIXTURE_NAME" ]]; then
-  echo "usage: $0 <fixture-name> [--no-dev] [--strict]" >&2
+  echo "usage: $0 <fixture-name> [--no-dev] [--strict] [--puck-lock]" >&2
   exit 2
 fi
 
@@ -132,6 +137,27 @@ run_puck_install() {
   fi
 }
 
+run_puck_lock() {
+  local dir="$1"
+  if [[ ! -d "$REGISTRY/packagist/p2" ]]; then
+    echo "parity: --puck-lock needs registry at $REGISTRY/packagist/p2" >&2
+    exit 2
+  fi
+  echo "parity: puck lock --no-install in $dir"
+  (
+    cd "$ROOT"
+    rustup run 1.96.0 cargo run -q -p puck_cli -- lock \
+      --no-install \
+      --working-dir "$dir" \
+      --registry "$REGISTRY"
+  )
+}
+
+if [[ "$PUCK_LOCK" -eq 1 ]]; then
+  run_puck_lock "$COMPOSER_DIR"
+  cp "$COMPOSER_DIR/composer.lock" "$PUCK_DIR/composer.lock"
+fi
+
 WARNINGS=()
 FAILURES=()
 warn() { WARNINGS+=("$1"); echo "parity: WARN $1" >&2; }
@@ -177,6 +203,7 @@ payload_checksums() {
     find vendor -mindepth 3 -type f \
       ! -path 'vendor/composer/*' \
       ! -path 'vendor/bin/*' \
+      ! -path 'vendor/phpstan/extension-installer/src/GeneratedConfig.php' \
       -print0 \
       | sort -z \
       | xargs -0 shasum -a 256 \
@@ -244,7 +271,7 @@ checksum_tree() {
 run_composer_install "$COMPOSER_DIR"
 run_puck_install "$PUCK_DIR"
 
-echo "parity: structural checks for $FIXTURE_NAME"
+echo "parity: structural checks for $FIXTURE_NAME (puck_lock=$PUCK_LOCK)"
 
 # 1. Same package names in installed.json
 C_NAMES="$(package_names "$COMPOSER_DIR/vendor/composer/installed.json")"
@@ -410,6 +437,25 @@ for gen in autoload_real.php autoload_static.php ClassLoader.php InstalledVersio
   fi
 done
 
+
+# Tier 1: puck should write GeneratedConfig / pest-plugins when plugins are present
+if [[ -d "$PUCK_DIR/vendor/phpstan/extension-installer" ]]; then
+  if [[ -f "$PUCK_DIR/vendor/phpstan/extension-installer/src/GeneratedConfig.php" ]] \
+    && grep -qE "nesbot/carbon|larastan/larastan" \
+      "$PUCK_DIR/vendor/phpstan/extension-installer/src/GeneratedConfig.php"; then
+    echo "parity: OK puck GeneratedConfig.php has extensions"
+  else
+    fail "puck missing GeneratedConfig.php extensions"
+  fi
+fi
+if [[ -d "$PUCK_DIR/vendor/pestphp/pest-plugin" ]]; then
+  if [[ -f "$PUCK_DIR/vendor/pest-plugins.json" ]]; then
+    echo "parity: OK puck pest-plugins.json"
+  else
+    fail "puck missing vendor/pest-plugins.json"
+  fi
+fi
+
 if [[ "$STRICT" -eq 1 ]]; then
   echo "parity: strict vendor/ checksum compare"
   checksum_tree "$COMPOSER_DIR" >"$WORKDIR/composer.sha"
@@ -422,7 +468,7 @@ if [[ "$STRICT" -eq 1 ]]; then
 fi
 
 echo
-echo "parity: summary for $FIXTURE_NAME (no_dev=$NO_DEV strict=$STRICT)"
+echo "parity: summary for $FIXTURE_NAME (no_dev=$NO_DEV strict=$STRICT puck_lock=$PUCK_LOCK)"
 echo "  failures: ${#FAILURES[@]}"
 echo "  warnings: ${#WARNINGS[@]}"
 if [[ "${#FAILURES[@]}" -gt 0 ]]; then
