@@ -7,10 +7,15 @@
 #![warn(clippy::unwrap_used)]
 
 mod native;
+mod refusal;
 
 pub use native::pest_plugin::{PestPluginDumpStatus, run_pest_plugin_dump};
 pub use native::phpstan_extension_installer::{
     PhpstanExtensionInstallStatus, run_phpstan_extension_installer,
+};
+pub use refusal::{
+    NATIVE_ADAPTERS, has_native_adapter, is_plugin_package_type, refuse_message,
+    unsupported_allowed_plugins,
 };
 
 #[derive(Debug, thiserror::Error)]

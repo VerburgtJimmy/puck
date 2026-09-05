@@ -69,6 +69,14 @@ impl LockedPackage {
             _ => Vec::new(),
         }
     }
+
+    /// Package `type` from the lock (`extra["type"]`), defaulting to `library`.
+    pub fn package_type(&self) -> &str {
+        self.extra
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("library")
+    }
 }
 
 /// Dist reference on a locked package.
