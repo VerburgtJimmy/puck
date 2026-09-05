@@ -10,3 +10,9 @@ description = "puck: registry crate (M0 stub)"
 
 [dependencies]
 thiserror.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+puck_version.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

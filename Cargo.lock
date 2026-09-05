@@ -959,6 +959,10 @@ dependencies = [
 name = "puck_registry"
 version = "0.1.0"
 dependencies = [
+ "puck_version",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

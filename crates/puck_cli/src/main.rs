@@ -124,6 +124,17 @@ enum Commands {
         #[arg(long, value_name = "DIR")]
         working_dir: Option<PathBuf>,
     },
+    /// Report security advisories for locked packages (offline p2; early M4)
+    Audit {
+        /// Do not audit packages listed under packages-dev
+        #[arg(long)]
+        no_dev: bool,
+        /// Packagist p2 metadata root (contains `packagist/p2/`). Defaults to `$PUCK_REGISTRY`.
+        #[arg(long, value_name = "DIR")]
+        registry: Option<PathBuf>,
+        #[arg(long, value_name = "DIR")]
+        working_dir: Option<PathBuf>,
+    },
     /// Regenerate autoload files
     #[command(name = "dump-autoload", visible_alias = "dumpautoload")]
     DumpAutoload {
@@ -319,6 +330,18 @@ fn main() -> ExitCode {
                 }
             }
         }
+        Commands::Audit {
+            no_dev,
+            registry,
+            working_dir,
+        } => match run_audit(working_dir, no_dev, registry) {
+            Ok(0) => ExitCode::SUCCESS,
+            Ok(_) => ExitCode::from(1),
+            Err(err) => {
+                eprintln!("puck: {err}");
+                ExitCode::from(1)
+            }
+        },
         Commands::Php { .. } => {
             eprintln!("puck: this command is not implemented yet");
             ExitCode::from(2)
@@ -723,6 +746,71 @@ fn write_lock_file(path: &std::path::Path, lock_doc: &Value) -> Result<(), Strin
         format!("{}\n", serde_json::to_string_pretty(lock_doc).map_err(|e| e.to_string())?);
     let lock_text = reindent_json_pretty_4(&lock_text);
     std::fs::write(path, &lock_text).map_err(|e| e.to_string())
+}
+
+fn run_audit(
+    working_dir: Option<PathBuf>,
+    no_dev: bool,
+    registry: Option<PathBuf>,
+) -> Result<u32, String> {
+    let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
+    let lock_path = root.join("composer.lock");
+    if !lock_path.is_file() {
+        return Err(format!("no composer.lock in {}", root.display()));
+    }
+    let lock = LockFile::from_path(&lock_path).map_err(|e| e.to_string())?;
+    let registry_root = resolve_registry_root(registry)?;
+
+    let mut packages: Vec<(&str, &str)> = lock
+        .packages
+        .iter()
+        .map(|p| (p.name.as_str(), p.version.as_str()))
+        .collect();
+    if !no_dev {
+        packages.extend(
+            lock.packages_dev
+                .iter()
+                .map(|p| (p.name.as_str(), p.version.as_str())),
+        );
+    }
+
+    let mut hits: u32 = 0;
+    let mut missing_p2: u32 = 0;
+    for (name, version) in packages {
+        // Platform requirements are not Packagist packages.
+        if !name.contains('/') {
+            continue;
+        }
+        let p2 = puck_registry::p2_path(&registry_root, name);
+        if !p2.is_file() {
+            missing_p2 += 1;
+            continue;
+        }
+        let found = puck_registry::find_advisory_hits(&registry_root, name, version)
+            .map_err(|e| e.to_string())?;
+        for hit in found {
+            hits += 1;
+            println!(
+                "puck: {} {} has advisory {} ({})",
+                hit.package, hit.version, hit.advisory_id, hit.affected_versions
+            );
+        }
+    }
+
+    if missing_p2 > 0 {
+        eprintln!(
+            "puck: skipped {missing_p2} package{} with no recorded p2 metadata",
+            if missing_p2 == 1 { "" } else { "s" }
+        );
+    }
+
+    if hits == 0 {
+        eprintln!("puck: no security vulnerability advisories found");
+    } else {
+        eprintln!("puck: found {hits} security advisories");
+    }
+
+    Ok(hits)
 }
 
 fn resolve_registry_root(registry: Option<PathBuf>) -> Result<PathBuf, String> {
