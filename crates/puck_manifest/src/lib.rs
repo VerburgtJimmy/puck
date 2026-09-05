@@ -7,7 +7,11 @@
 #![warn(clippy::unwrap_used)]
 
 mod manifest;
+mod edit;
 
+pub use edit::{
+    add_requirement, add_requirement_to_file, sort_packages_enabled, PackageRequirement,
+};
 pub use manifest::{Autoload, Manifest, PackageLinks};
 
 use std::path::Path;

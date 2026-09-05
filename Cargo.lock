@@ -851,9 +851,12 @@ dependencies = [
  "puck_laravel",
  "puck_lock",
  "puck_manifest",
+ "puck_registry",
+ "puck_resolver",
  "puck_scripts",
  "puck_store",
  "puck_version",
+ "serde_json",
  "thiserror",
  "tokio",
 ]

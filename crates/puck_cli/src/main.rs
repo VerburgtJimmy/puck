@@ -8,9 +8,12 @@ use puck_install::{
 };
 use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::LockFile;
-use puck_manifest::Manifest;
+use puck_manifest::{add_requirement, PackageRequirement, Manifest};
+use puck_registry::p2_path;
+use puck_resolver::resolve_lock_document;
 use puck_scripts::{RunScriptsOptions, run_install_scripts};
 use puck_store::Store;
+use serde_json::Value;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Instant;
@@ -57,11 +60,19 @@ enum Commands {
     },
     /// Update packages within constraints (M3)
     Update { packages: Vec<String> },
-    /// Add a package to composer.json and install (M3)
+    /// Add a package to composer.json and update the lock (M3)
     Require {
         packages: Vec<String>,
         #[arg(long)]
         dev: bool,
+        /// Edit composer.json and lock only; do not install into vendor/
+        #[arg(long)]
+        no_install: bool,
+        /// Packagist p2 metadata root (contains `packagist/p2/`). Defaults to `$PUCK_REGISTRY`.
+        #[arg(long, value_name = "DIR")]
+        registry: Option<PathBuf>,
+        #[arg(long, value_name = "DIR")]
+        working_dir: Option<PathBuf>,
     },
     /// Remove a package (M2)
     Remove { packages: Vec<String> },
@@ -156,14 +167,156 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
-        Commands::Update { .. }
-        | Commands::Require { .. }
-        | Commands::Remove { .. }
-        | Commands::Php { .. } => {
+        Commands::Require {
+            packages,
+            dev,
+            no_install,
+            registry,
+            working_dir,
+        } => {
+            let runtime = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(err) => {
+                    eprintln!("puck: failed to start async runtime: {err}");
+                    return ExitCode::from(1);
+                }
+            };
+            match runtime.block_on(run_require(
+                working_dir,
+                packages,
+                dev,
+                no_install,
+                registry,
+            )) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("puck: {err}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        Commands::Update { .. } | Commands::Remove { .. } | Commands::Php { .. } => {
             eprintln!("puck: this command is not implemented yet");
             ExitCode::from(2)
         }
     }
+}
+
+async fn run_require(
+    working_dir: Option<PathBuf>,
+    packages: Vec<String>,
+    dev: bool,
+    no_install: bool,
+    registry: Option<PathBuf>,
+) -> Result<(), String> {
+    if packages.is_empty() {
+        return Err("missing package argument (e.g. vendor/package:^1.0)".into());
+    }
+
+    let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
+    let manifest_path = root.join("composer.json");
+    let lock_path = root.join("composer.lock");
+    if !manifest_path.is_file() {
+        return Err(format!("no composer.json in {}", root.display()));
+    }
+
+    let registry_root = registry
+        .or_else(|| std::env::var_os("PUCK_REGISTRY").map(PathBuf::from))
+        .ok_or_else(|| {
+            "need --registry DIR or $PUCK_REGISTRY pointing at a registry root with packagist/p2/"
+                .to_string()
+        })?;
+    let p2_dir = registry_root.join("packagist/p2");
+    if !p2_dir.is_dir() {
+        return Err(format!(
+            "registry p2 dir missing: {} (expected packagist/p2 under registry root)",
+            p2_dir.display()
+        ));
+    }
+
+    let mut unlock = Vec::new();
+    let mut root_json: Value = serde_json::from_str(
+        &std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+
+    for spec in &packages {
+        let req = PackageRequirement::parse(spec).map_err(|e| e.to_string())?;
+        // Ensure VCR has metadata before mutating the project.
+        let meta_path = p2_path(&registry_root, &req.name);
+        if !meta_path.is_file() {
+            return Err(format!(
+                "no recorded p2 metadata for {} at {} (record with benches/record-packagist-p2.sh or widen the VCR)",
+                req.name,
+                meta_path.display()
+            ));
+        }
+        add_requirement(&mut root_json, &req, dev).map_err(|e| e.to_string())?;
+        unlock.push(req.name.clone());
+        eprintln!(
+            "puck: require {} {} ({})",
+            req.name,
+            req.constraint,
+            if dev { "require-dev" } else { "require" }
+        );
+    }
+
+    let composer_text = format_composer_json(&root_json)?;
+    std::fs::write(&manifest_path, &composer_text).map_err(|e| e.to_string())?;
+
+    let lock_bytes = if lock_path.is_file() {
+        Some(std::fs::read(&lock_path).map_err(|e| e.to_string())?)
+    } else {
+        None
+    };
+
+    let lock_doc = resolve_lock_document(
+        &composer_text,
+        lock_bytes.as_deref(),
+        &p2_dir,
+        &unlock,
+        true,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let lock_text = format!("{}\n", serde_json::to_string_pretty(&lock_doc).map_err(|e| e.to_string())?);
+    let lock_text = reindent_json_pretty_4(&lock_text);
+    std::fs::write(&lock_path, &lock_text).map_err(|e| e.to_string())?;
+    eprintln!(
+        "puck: wrote composer.lock (content-hash {})",
+        lock_doc
+            .get("content-hash")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?")
+    );
+
+    if no_install {
+        eprintln!("puck: --no-install; skip vendor/");
+        return Ok(());
+    }
+
+    run_install(Some(root), false, false, false, false).await
+}
+
+fn format_composer_json(root: &Value) -> Result<String, String> {
+    let pretty =
+        serde_json::to_string_pretty(root).map_err(|e| format!("encode composer.json: {e}"))?;
+    Ok(reindent_json_pretty_4(&format!("{pretty}\n")))
+}
+
+fn reindent_json_pretty_4(pretty_2: &str) -> String {
+    let mut out = String::with_capacity(pretty_2.len());
+    for line in pretty_2.lines() {
+        let trimmed = line.trim_start();
+        let spaces = line.len() - trimmed.len();
+        let level = spaces / 2;
+        for _ in 0..level {
+            out.push_str("    ");
+        }
+        out.push_str(trimmed);
+        out.push('\n');
+    }
+    out
 }
 
 async fn run_install(
