@@ -1,8 +1,11 @@
 //! Minimal pool builder (`Composer\DependencyResolver\PoolBuilder` subset).
 //!
-//! Loads locked packages plus packages reachable from root requires (by name),
-//! including provide/replace providers. Full stability/alias/partial-update
-//! filtering comes later.
+//! Loads locked packages plus packages reachable from root requires by **real
+//! package name** only - matching Composer `ArrayRepository::loadPackages`,
+//! which keys on `Package::getName()` and does **not** pull in provide/replace
+//! providers. Those enter the pool only when their own name is required (or via
+//! a ComposerRepository provider map, not modeled here). Full
+//! stability/alias/partial-update filtering comes later.
 
 use crate::order::PresentMap;
 use crate::package::Package;
@@ -51,11 +54,13 @@ impl PoolBuilder {
             repo_packages.extend(repo.packages.iter().cloned());
         }
 
+        // Composer ArrayRepository: match `getName()` only, not provide/replace.
         let mut by_name: IndexMap<String, Vec<usize>> = IndexMap::new();
         for (idx, package) in repo_packages.iter().enumerate() {
-            for name in package.names(true) {
-                by_name.entry(name).or_default().push(idx);
-            }
+            by_name
+                .entry(package.name.clone())
+                .or_default()
+                .push(idx);
         }
 
         // IndexSet: first-seen load order, not HashSet shuffle before sort.
@@ -66,9 +71,7 @@ impl PoolBuilder {
             queue.push_back(name.clone());
         }
         for package in locked.iter().chain(fixed.iter()) {
-            for name in package.names(true) {
-                queue.push_back(name);
-            }
+            queue.push_back(package.name.clone());
             for link in package.requires.values() {
                 queue.push_back(link.target.clone());
             }
@@ -181,5 +184,75 @@ mod tests {
         assert!(present.contains_key(&1));
         assert_eq!(pool.package_by_id(1).version, "1.0.0.0");
         assert!(pool.packages().iter().any(|p| p.version == "1.1.0.0"));
+    }
+
+    #[test]
+    fn does_not_load_provide_only_packages() {
+        let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+        package_a.requires.insert(
+            "b/b".into(),
+            Link::new(
+                "a/a",
+                "b/b",
+                ">=1.0",
+                parse_constraints(">=1.0").unwrap(),
+            ),
+        );
+        let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
+        package_q.provides.insert(
+            "b/b".into(),
+            Link::new(
+                "q/q",
+                "b/b",
+                "=1.0",
+                parse_constraints("=1.0").unwrap(),
+            ),
+        );
+
+        let mut repo = ArrayRepository::new();
+        repo.add_package(package_a);
+        repo.add_package(package_q);
+
+        let mut request = Request::new();
+        request.require_name("a/a", None).unwrap();
+
+        let (pool, _) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
+        assert!(pool.packages().iter().any(|p| p.name == "a/a"));
+        assert!(!pool.packages().iter().any(|p| p.name == "q/q"));
+    }
+
+    #[test]
+    fn does_not_load_replace_only_packages() {
+        let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+        package_a.requires.insert(
+            "b/b".into(),
+            Link::new(
+                "a/a",
+                "b/b",
+                ">=1.0",
+                parse_constraints(">=1.0").unwrap(),
+            ),
+        );
+        let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
+        package_q.replaces.insert(
+            "b/b".into(),
+            Link::new(
+                "q/q",
+                "b/b",
+                ">=1.0",
+                parse_constraints(">=1.0").unwrap(),
+            ),
+        );
+
+        let mut repo = ArrayRepository::new();
+        repo.add_package(package_a);
+        repo.add_package(package_q);
+
+        let mut request = Request::new();
+        request.require_name("a/a", None).unwrap();
+
+        let (pool, _) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
+        assert!(pool.packages().iter().any(|p| p.name == "a/a"));
+        assert!(!pool.packages().iter().any(|p| p.name == "q/q"));
     }
 }

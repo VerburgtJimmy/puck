@@ -487,7 +487,6 @@ fn solver_update_via_pool_builder() {
 #[test]
 fn solver_illuminate_support_via_framework_replace_from_p2() {
     use crate::metadata::packages_from_p2_json;
-    use crate::pool_builder::{ArrayRepository, PoolBuilder};
     use std::fs;
     use std::path::PathBuf;
 
@@ -503,9 +502,10 @@ fn solver_illuminate_support_via_framework_replace_from_p2() {
     fw.requires.clear();
     fw.conflicts.clear();
 
-    let mut repo = ArrayRepository::new();
-    repo.add_package(fw);
-
+    // ArrayRepository / PoolBuilder load by real name only (Composer). Once
+    // framework is in the pool (as Packagist would load it when requiring
+    // laravel/framework), replace satisfies illuminate/support.
+    let mut pool = Pool::new(vec![fw]);
     let mut request = Request::new();
     request
         .require_name(
@@ -514,9 +514,8 @@ fn solver_illuminate_support_via_framework_replace_from_p2() {
         )
         .unwrap();
 
-    let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
     let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
+        .solve(&request, &empty_present())
         .unwrap();
 
     assert_eq!(tx.operations().len(), 1);
@@ -736,13 +735,12 @@ fn solver_install_one_of_two_alternatives() {
     );
 }
 
-/// Composer SolverTest expects failure: a provide-only package must not be
-/// auto-selected for a transitive require. With a hand-built [`Pool`] that
-/// already contains the provider, we currently install it. Tracked under
-/// PoolBuilder / policy fidelity (createPool path).
+/// Composer `ArrayRepository` / createPool never loads a provide-only package
+/// for a transitive require; solve then fails (must require the provider).
 #[test]
-#[ignore = "Composer createPool rejects provide-only auto-install; Pool::new still accepts"]
 fn solver_install_provider_alone_fails() {
+    use crate::pool_builder::{ArrayRepository, PoolBuilder};
+
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
@@ -764,20 +762,24 @@ fn solver_install_provider_alone_fails() {
         ),
     );
 
-    let mut pool = Pool::new(vec![package_a, package_q]);
+    let mut repo = ArrayRepository::new();
+    repo.add_package(package_a);
+    repo.add_package(package_q);
+
     let mut request = Request::new();
     request.require_name("a/a", None).unwrap();
+    let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
 
     let _ = Solver::new(&mut pool)
-        .solve(&request, &empty_present())
+        .solve(&request, &present)
         .unwrap_err();
 }
 
-/// Same as provide-only: Composer rejects auto-install of a replacer when the
-/// replaced package is absent and the replacer is not explicitly required.
+/// Same as provide-only for replace when the replaced package is absent.
 #[test]
-#[ignore = "Composer createPool rejects replace-only auto-install; Pool::new still accepts"]
 fn solver_no_install_replacer_of_missing_package() {
+    use crate::pool_builder::{ArrayRepository, PoolBuilder};
+
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
@@ -799,12 +801,16 @@ fn solver_no_install_replacer_of_missing_package() {
         ),
     );
 
-    let mut pool = Pool::new(vec![package_a, package_q]);
+    let mut repo = ArrayRepository::new();
+    repo.add_package(package_a);
+    repo.add_package(package_q);
+
     let mut request = Request::new();
     request.require_name("a/a", None).unwrap();
+    let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
 
     let _ = Solver::new(&mut pool)
-        .solve(&request, &empty_present())
+        .solve(&request, &present)
         .unwrap_err();
 }
 
