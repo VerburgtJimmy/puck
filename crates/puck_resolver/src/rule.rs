@@ -1,7 +1,9 @@
 //! Rules (`Composer\DependencyResolver\Rule`, `GenericRule`, `Rule2Literals`).
 
 use crate::Literal;
+use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 /// Reason constants (`Rule::RULE_*`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,7 +13,7 @@ pub enum RuleReason {
     PackageConflict,
     PackageRequires { target: String },
     PackageSameName { package_name: String },
-    Learned { rule_id: i32 },
+    Learned { why: i32 },
     PackageAlias,
     PackageInverseAlias,
     LockedFilterListRemoved { package_id: u32 },
@@ -26,79 +28,128 @@ pub enum RuleType {
     Learned = 4,
 }
 
-/// Enabled SAT clause (Composer `GenericRule` / `Rule2Literals` unified).
+/// Shared rule handle (Composer rules are objects by identity).
+#[derive(Debug, Clone)]
+pub struct Rule(Rc<RefCell<RuleData>>);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Rule {
+pub struct RuleData {
     literals: Vec<Literal>,
     reason: RuleReason,
     rule_type: RuleType,
     disabled: bool,
+    /// `MultiConflictRule` - watch every literal.
+    multi_conflict: bool,
 }
 
 impl Rule {
     pub fn generic(mut literals: Vec<Literal>, reason: RuleReason) -> Self {
         literals.sort_unstable();
-        Self {
+        Self(Rc::new(RefCell::new(RuleData {
             literals,
             reason,
             rule_type: RuleType::Package,
             disabled: false,
-        }
+            multi_conflict: false,
+        })))
+    }
+
+    pub fn multi_conflict(mut literals: Vec<Literal>, reason: RuleReason) -> Self {
+        literals.sort_unstable();
+        Self(Rc::new(RefCell::new(RuleData {
+            literals,
+            reason,
+            rule_type: RuleType::Package,
+            disabled: false,
+            multi_conflict: true,
+        })))
     }
 
     pub fn two_literals(a: Literal, b: Literal, reason: RuleReason) -> Self {
         let (literal1, literal2) = if a < b { (a, b) } else { (b, a) };
-        Self {
+        Self(Rc::new(RefCell::new(RuleData {
             literals: vec![literal1, literal2],
             reason,
             rule_type: RuleType::Package,
             disabled: false,
-        }
+            multi_conflict: false,
+        })))
     }
 
-    pub fn literals(&self) -> &[Literal] {
-        &self.literals
+    pub fn ptr_eq(&self, other: &Rule) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
     }
 
-    pub fn reason(&self) -> &RuleReason {
-        &self.reason
+    pub fn object_id(&self) -> usize {
+        Rc::as_ptr(&self.0) as usize
+    }
+
+    pub fn literals(&self) -> Vec<Literal> {
+        self.0.borrow().literals.clone()
+    }
+
+    pub fn reason(&self) -> RuleReason {
+        self.0.borrow().reason.clone()
     }
 
     pub fn rule_type(&self) -> RuleType {
-        self.rule_type
+        self.0.borrow().rule_type
     }
 
-    pub fn set_type(&mut self, rule_type: RuleType) {
-        self.rule_type = rule_type;
+    pub fn set_type(&self, rule_type: RuleType) {
+        self.0.borrow_mut().rule_type = rule_type;
     }
 
     pub fn is_assertion(&self) -> bool {
-        self.literals.len() == 1
+        self.0.borrow().literals.len() == 1
     }
 
     pub fn is_disabled(&self) -> bool {
-        self.disabled
+        self.0.borrow().disabled
     }
 
-    pub fn disable(&mut self) {
-        self.disabled = true;
+    pub fn is_enabled(&self) -> bool {
+        !self.is_disabled()
     }
 
-    pub fn enable(&mut self) {
-        self.disabled = false;
+    pub fn is_multi_conflict(&self) -> bool {
+        self.0.borrow().multi_conflict
     }
 
-    /// Hash for duplicate detection (`GenericRule::getHash` / `Rule2Literals::getHash`).
-    ///
-    /// Composer uses xxh3; we use a stable Fx-style hash of the literal list.
+    pub fn disable(&self) {
+        self.0.borrow_mut().disabled = true;
+    }
+
+    pub fn enable(&self) {
+        self.0.borrow_mut().disabled = false;
+    }
+
     pub fn hash_key(&self) -> u64 {
+        let data = self.0.borrow();
         let mut hasher = rustc_hash::FxHasher::default();
-        self.literals.hash(&mut hasher);
+        data.literals.hash(&mut hasher);
         hasher.finish()
     }
 
-    /// Ignores disabled bit (`Rule::equals`).
     pub fn equals(&self, other: &Rule) -> bool {
-        self.literals == other.literals
+        self.0.borrow().literals == other.0.borrow().literals
+    }
+
+    /// `Rule::getRequiredPackage`.
+    pub fn required_package(&self) -> Option<String> {
+        match &self.0.borrow().reason {
+            RuleReason::RootRequire { package_name } => Some(package_name.clone()),
+            RuleReason::Fixed { .. } | RuleReason::LockedFilterListRemoved { .. } => None,
+            RuleReason::PackageRequires { target } => Some(target.clone()),
+            _ => None,
+        }
     }
 }
+
+impl PartialEq for Rule {
+    fn eq(&self, other: &Self) -> bool {
+        self.equals(other)
+    }
+}
+
+impl Eq for Rule {}

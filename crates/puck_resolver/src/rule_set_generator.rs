@@ -75,7 +75,7 @@ impl<'a> RuleSetGenerator<'a> {
         if literals.len() == 2 {
             return Rule::two_literals(literals[0], literals[1], reason);
         }
-        Rule::generic(literals, reason)
+        Rule::multi_conflict(literals, reason)
     }
 
     fn add_rule(&mut self, rule_type: RuleType, rule: Option<Rule>) {

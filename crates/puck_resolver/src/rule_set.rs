@@ -26,13 +26,13 @@ impl RuleSet {
         }
     }
 
-    /// `RuleSet::add` - skips exact duplicates (any type).
-    pub fn add(&mut self, mut rule: Rule, rule_type: RuleType) {
+    /// `RuleSet::add` - skips exact duplicates (any type). Returns id if newly added.
+    pub fn add(&mut self, rule: Rule, rule_type: RuleType) -> Option<usize> {
         let hash = rule.hash_key();
         if let Some(ids) = self.rules_by_hash.get(&hash) {
             for &id in ids {
                 if rule.equals(&self.rule_by_id[id]) {
-                    return;
+                    return None;
                 }
             }
         }
@@ -42,6 +42,7 @@ impl RuleSet {
         self.rule_by_id.push(rule);
         self.rules.entry(rule_type).or_default().push(id);
         self.rules_by_hash.entry(hash).or_default().push(id);
+        Some(id)
     }
 
     pub fn len(&self) -> usize {
@@ -56,11 +57,14 @@ impl RuleSet {
         &self.rule_by_id[id]
     }
 
+    pub fn rule_ids_of_type(&self, rule_type: RuleType) -> &[usize] {
+        self.rules.get(&rule_type).map(|v| v.as_slice()).unwrap_or(&[])
+    }
+
     pub fn rules_of_type(&self, rule_type: RuleType) -> impl Iterator<Item = &Rule> {
-        self.rules
-            .get(&rule_type)
-            .into_iter()
-            .flat_map(|ids| ids.iter().map(|&id| &self.rule_by_id[id]))
+        self.rule_ids_of_type(rule_type)
+            .iter()
+            .map(|&id| &self.rule_by_id[id])
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Rule> {
@@ -81,15 +85,21 @@ mod tests {
     fn add_and_count() {
         let mut set = RuleSet::new();
         set.add(
-            Rule::generic(vec![1], RuleReason::RootRequire {
-                package_name: "a/a".into(),
-            }),
+            Rule::generic(
+                vec![1],
+                RuleReason::RootRequire {
+                    package_name: "a/a".into(),
+                },
+            ),
             RuleType::Request,
         );
         set.add(
-            Rule::generic(vec![2], RuleReason::RootRequire {
-                package_name: "b/b".into(),
-            }),
+            Rule::generic(
+                vec![2],
+                RuleReason::RootRequire {
+                    package_name: "b/b".into(),
+                },
+            ),
             RuleType::Request,
         );
         assert_eq!(set.len(), 2);
@@ -102,10 +112,12 @@ mod tests {
         let reason = RuleReason::RootRequire {
             package_name: String::new(),
         };
-        set.add(Rule::generic(vec![], reason.clone()), RuleType::Request);
-        set.add(Rule::generic(vec![], reason.clone()), RuleType::Request);
-        set.add(Rule::generic(vec![], reason), RuleType::Request);
-        assert_eq!(set.count_type(RuleType::Request), 1);
+        assert!(set
+            .add(Rule::generic(vec![], reason.clone()), RuleType::Request)
+            .is_some());
+        assert!(set
+            .add(Rule::generic(vec![], reason.clone()), RuleType::Request)
+            .is_none());
         assert_eq!(set.len(), 1);
     }
 }

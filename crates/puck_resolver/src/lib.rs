@@ -9,20 +9,29 @@
 mod decisions;
 mod link;
 mod package;
+mod policy;
 mod pool;
+mod problem;
 mod request;
 mod rule;
 mod rule_set;
 mod rule_set_generator;
+mod solver;
+mod transaction;
+mod watch;
 
 pub use decisions::Decisions;
 pub use link::Link;
 pub use package::Package;
+pub use policy::DefaultPolicy;
 pub use pool::Pool;
+pub use problem::Problem;
 pub use request::{Request, UpdateAllowTransitive};
 pub use rule::{Rule, RuleReason, RuleType};
 pub use rule_set::RuleSet;
 pub use rule_set_generator::RuleSetGenerator;
+pub use solver::{Solver, SolverProblems};
+pub use transaction::{Operation, Transaction};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -44,3 +53,5 @@ pub type Literal = i32;
 
 #[cfg(test)]
 mod litmus;
+#[cfg(test)]
+mod solver_tests;

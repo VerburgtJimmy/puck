@@ -11,8 +11,14 @@ pub struct Decisions {
     decision_queue: Vec<(Literal, Rule)>,
 }
 
+impl Default for Decisions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Decisions {
-    pub fn new(_pool: &Pool) -> Self {
+    pub fn new() -> Self {
         Self {
             decision_map: FxHashMap::default(),
             decision_queue: Vec::new(),
@@ -69,8 +75,24 @@ impl Decisions {
             .abs()
     }
 
+    pub fn decision_rule(&self, literal_or_package_id: Literal) -> Result<Rule> {
+        let package_id = literal_or_package_id.unsigned_abs();
+        for (literal, reason) in &self.decision_queue {
+            if package_id == literal.unsigned_abs() {
+                return Ok(reason.clone());
+            }
+        }
+        Err(Error::SolverBug(format!(
+            "Did not find a decision rule using {literal_or_package_id}"
+        )))
+    }
+
     pub fn at_offset(&self, queue_offset: usize) -> Option<&(Literal, Rule)> {
         self.decision_queue.get(queue_offset)
+    }
+
+    pub fn valid_offset(&self, queue_offset: i32) -> bool {
+        queue_offset >= 0 && (queue_offset as usize) < self.decision_queue.len()
     }
 
     pub fn len(&self) -> usize {
@@ -85,9 +107,22 @@ impl Decisions {
         self.decision_queue.last().map(|(l, _)| *l)
     }
 
+    pub fn last_reason(&self) -> Option<Rule> {
+        self.decision_queue.last().map(|(_, r)| r.clone())
+    }
+
     pub fn reset(&mut self) {
         while let Some((literal, _)) = self.decision_queue.pop() {
             self.decision_map.insert(literal.unsigned_abs(), 0);
+        }
+    }
+
+    /// `Decisions::resetToOffset`.
+    pub fn reset_to_offset(&mut self, offset: i32) {
+        while (self.decision_queue.len() as i32) > offset + 1 {
+            if let Some((literal, _)) = self.decision_queue.pop() {
+                self.decision_map.insert(literal.unsigned_abs(), 0);
+            }
         }
     }
 
@@ -95,6 +130,11 @@ impl Decisions {
         if let Some((literal, _)) = self.decision_queue.pop() {
             self.decision_map.insert(literal.unsigned_abs(), 0);
         }
+    }
+
+    /// Iterate decisions oldest-first (Composer iterates reverse for analyzeUnsolvable).
+    pub fn iter_rev(&self) -> impl Iterator<Item = &(Literal, Rule)> {
+        self.decision_queue.iter().rev()
     }
 
     fn add_decision(&mut self, pool: &Pool, literal: Literal, level: i32) -> Result<()> {
@@ -127,8 +167,8 @@ mod tests {
     #[test]
     fn decide_install_and_satisfy() {
         let pool = pool_one();
-        let mut decisions = Decisions::new(&pool);
-        let why = Rule::generic(vec![1], RuleReason::Learned { rule_id: 0 });
+        let mut decisions = Decisions::new();
+        let why = Rule::generic(vec![1], RuleReason::Learned { why: 0 });
         decisions.decide(&pool, 1, 1, why).unwrap();
         assert!(decisions.satisfy(1));
         assert!(decisions.conflict(-1));
