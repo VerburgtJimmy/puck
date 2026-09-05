@@ -8,9 +8,11 @@
 
 mod content_hash;
 mod lock;
+mod write;
 
 pub use content_hash::content_hash;
 pub use lock::{Dist, LockFile, LockedPackage, Source};
+pub use write::{format_lock_package, sort_lock_packages};
 
 /// Errors from lock parsing and content-hash computation.
 #[derive(Debug, thiserror::Error)]

@@ -11,5 +11,6 @@ description = "puck: Composer DependencyResolver port (CDCL)"
 [dependencies]
 thiserror.workspace = true
 puck_version.workspace = true
+puck_lock.workspace = true
 indexmap.workspace = true
 serde_json.workspace = true

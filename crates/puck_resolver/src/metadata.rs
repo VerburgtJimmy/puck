@@ -167,8 +167,8 @@ fn parse_link_map(
     Ok(out)
 }
 
-/// Find a single version in a p2 document by pretty or normalized version.
-pub fn find_p2_version(bytes: &[u8], pretty_or_normalized: &str) -> Result<Option<Package>> {
+/// Find a single expanded p2 version object by pretty or normalized version.
+pub fn find_p2_version_value(bytes: &[u8], pretty_or_normalized: &str) -> Result<Option<Value>> {
     let data: Value = serde_json::from_slice(bytes)
         .map_err(|e| Error::Message(format!("invalid p2 json: {e}")))?;
     let minified = data.get("minified").and_then(|v| v.as_str()) == Some(MINIFIED_MARKER);
@@ -186,18 +186,26 @@ pub fn find_p2_version(bytes: &[u8], pretty_or_normalized: &str) -> Result<Optio
         } else {
             versions.clone()
         };
-        for version in &versions {
+        for version in versions {
             let pretty = version.get("version").and_then(|v| v.as_str()).unwrap_or("");
             let normalized = version
                 .get("version_normalized")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             if pretty == pretty_or_normalized || normalized == pretty_or_normalized {
-                return package_from_composer_package(version);
+                return Ok(Some(version));
             }
         }
     }
     Ok(None)
+}
+
+/// Find a single version in a p2 document by pretty or normalized version.
+pub fn find_p2_version(bytes: &[u8], pretty_or_normalized: &str) -> Result<Option<Package>> {
+    match find_p2_version_value(bytes, pretty_or_normalized)? {
+        Some(version) => package_from_composer_package(&version),
+        None => Ok(None),
+    }
 }
 
 /// Load packages from recorded p2 files for each lock pin (name + pretty version).

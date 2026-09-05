@@ -4,7 +4,9 @@
 //! solver’s install set for root requires matches `composer.lock` packages
 //! (name + pretty version) for lock-dump, VCR pin, and constraint-filtered pools.
 
-use crate::metadata::{packages_from_lock_json, packages_from_p2_lock_pins};
+use crate::metadata::{
+    find_p2_version_value, packages_from_lock_json, packages_from_p2_lock_pins,
+};
 use crate::package::Package;
 use crate::platform::is_platform_package;
 use crate::pool_builder::{ArrayRepository, PoolBuilder};
@@ -12,6 +14,7 @@ use crate::request::Request;
 use crate::solver::Solver;
 use crate::transaction::Operation;
 use crate::vcr_pool::array_repository_from_p2_constraints;
+use puck_lock::{format_lock_package, sort_lock_packages};
 use puck_version::{parse_constraints, Stability};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -148,6 +151,66 @@ fn laravel_app_with_dev_solve_matches_constraint_filtered_vcr() {
     let repo = array_repository_from_p2_constraints(&p2_dir(), &requires, Stability::Stable)
         .expect("constraint-filtered vcr pool");
     assert_solve_matches_lock(&dir, repo.packages().to_vec(), true, "constraint-filtered vcr");
+}
+
+#[test]
+fn laravel_skeleton_no_dev_lock_packages_match_install_critical_fields() {
+    let dir = skeleton_dir();
+    let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
+    let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
+    let requires = load_root_requires(&json_bytes, false);
+    let repo = array_repository_from_p2_constraints(&p2_dir(), &requires, Stability::Stable)
+        .expect("constraint-filtered vcr pool");
+
+    let mut request = Request::new();
+    for (name, constraint) in &requires {
+        request
+            .require_name(name.clone(), Some(parse_constraints(constraint).unwrap()))
+            .unwrap();
+    }
+    let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .expect("solve");
+
+    let mut written: Vec<Value> = Vec::new();
+    for op in tx.operations() {
+        let package_id = match op {
+            Operation::Install { package_id } | Operation::Update { to: package_id, .. } => {
+                *package_id
+            }
+            Operation::Remove { .. } => continue,
+        };
+        let p = pool.package_by_id(package_id);
+        let path = p2_dir().join(format!("{}.json", p.name.replace('/', "$")));
+        let bytes = fs::read(&path).expect("p2");
+        let raw = find_p2_version_value(&bytes, &p.pretty_version)
+            .unwrap()
+            .unwrap_or_else(|| panic!("missing p2 body for {} {}", p.name, p.pretty_version));
+        written.push(format_lock_package(raw));
+    }
+    sort_lock_packages(&mut written);
+
+    let lock: Value = serde_json::from_slice(&lock_bytes).unwrap();
+    let expected = lock.get("packages").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(written.len(), expected.len());
+    for (got, want) in written.iter().zip(expected.iter()) {
+        assert_eq!(got.get("name"), want.get("name"));
+        assert_eq!(got.get("version"), want.get("version"));
+        assert_eq!(
+            got.pointer("/dist/reference"),
+            want.pointer("/dist/reference"),
+            "dist.reference mismatch for {:?}",
+            want.get("name")
+        );
+        assert_eq!(
+            got.pointer("/source/reference"),
+            want.pointer("/source/reference"),
+            "source.reference mismatch for {:?}",
+            want.get("name")
+        );
+        assert_eq!(got.get("time"), want.get("time"));
+    }
 }
 
 fn assert_solve_matches_lock(

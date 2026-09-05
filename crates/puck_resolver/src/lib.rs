@@ -28,7 +28,7 @@ mod watch;
 pub use decisions::Decisions;
 pub use link::Link;
 pub use metadata::{
-    expand_minified_versions, find_p2_version, package_from_composer_package,
+    expand_minified_versions, find_p2_version, find_p2_version_value, package_from_composer_package,
     package_from_p2_version, packages_from_lock_json, packages_from_p2_json,
     packages_from_p2_lock_pins,
 };
