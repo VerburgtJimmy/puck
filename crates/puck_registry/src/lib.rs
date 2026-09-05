@@ -3,8 +3,10 @@
 #![deny(unsafe_code)]
 #![warn(clippy::unwrap_used)]
 
+mod packagist;
 mod replay;
 
+pub use packagist::{load_p2_metadata, p2_filename, p2_path, p2_replay_store, p2_url_key};
 pub use replay::{ReplayError, ReplayMode, ReplayStore};
 
 #[derive(Debug, thiserror::Error)]

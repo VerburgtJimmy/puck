@@ -67,8 +67,11 @@ pub async fn execute_install(
         fetch_into_store(&to_fetch, store, options.offline).await?;
     let fetch_ms = fetch_started.elapsed().as_millis();
 
-    // Link into vendor/ sequentially (filesystem-friendly).
+    // Link into vendor/ in parallel (same concurrency as fetch). Hardlinks are
+    // mostly metadata; serial linking was ~70% of warm-wipe wall time.
     let link_started = Instant::now();
+    let link_sema = Arc::new(Semaphore::new(DEFAULT_FETCH_CONCURRENCY));
+    let mut link_set = JoinSet::new();
     for pkg in &to_fetch {
         let Some(sha) = fetched.get(&pkg.name) else {
             return Err(Error::Message(format!(
@@ -76,26 +79,25 @@ pub async fn execute_install(
                 pkg.name
             )));
         };
+        let name = pkg.name.clone();
+        let action = pkg.action;
         let store_dir = store.package_dir(sha);
-        let target = vendor_package_path(&vendor, &pkg.name);
-        if target.exists() {
-            fs::remove_dir_all(&target).map_err(|source| Error::Io {
-                path: target.display().to_string(),
-                source,
-            })?;
-        }
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent).map_err(|source| Error::Io {
-                path: parent.display().to_string(),
-                source,
-            })?;
-        }
-        fs::create_dir_all(&target).map_err(|source| Error::Io {
-            path: target.display().to_string(),
-            source,
-        })?;
-        link_tree(&store_dir, &target).map_err(|e| Error::Message(e.to_string()))?;
-        eprintln!("puck: {} {}", action_word(pkg.action), pkg.name);
+        let target = vendor_package_path(&vendor, &name);
+        let permit = link_sema
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|e| Error::Message(format!("link concurrency: {e}")))?;
+        link_set.spawn_blocking(move || {
+            let _permit = permit;
+            link_one_package(&store_dir, &target)?;
+            Ok::<_, Error>((name, action))
+        });
+    }
+    while let Some(joined) = link_set.join_next().await {
+        let (name, action) =
+            joined.map_err(|e| Error::Message(format!("link task: {e}")))??;
+        eprintln!("puck: {} {name}", action_word(action));
     }
     let link_ms = link_started.elapsed().as_millis();
 
@@ -128,6 +130,27 @@ fn vendor_package_path(vendor: &Path, name: &str) -> PathBuf {
         path.push(part);
     }
     path
+}
+
+fn link_one_package(store_dir: &Path, target: &Path) -> Result<()> {
+    if target.exists() {
+        fs::remove_dir_all(target).map_err(|source| Error::Io {
+            path: target.display().to_string(),
+            source,
+        })?;
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|source| Error::Io {
+            path: parent.display().to_string(),
+            source,
+        })?;
+    }
+    fs::create_dir_all(target).map_err(|source| Error::Io {
+        path: target.display().to_string(),
+        source,
+    })?;
+    link_tree(store_dir, target).map_err(|e| Error::Message(e.to_string()))?;
+    Ok(())
 }
 
 fn remove_package(vendor: &Path, name: &str) -> Result<()> {
