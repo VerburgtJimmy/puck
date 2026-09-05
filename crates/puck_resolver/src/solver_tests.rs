@@ -484,3 +484,45 @@ fn solver_update_via_pool_builder() {
         &[Operation::Update { from: 1, to: 2 }]
     );
 }
+
+#[test]
+fn solver_illuminate_support_via_framework_replace_from_p2() {
+    use crate::metadata::packages_from_p2_json;
+    use crate::pool_builder::{ArrayRepository, PoolBuilder};
+    use std::fs;
+    use std::path::PathBuf;
+
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/registry/packagist/p2/laravel$framework.json");
+    let packages = packages_from_p2_json(&fs::read(path).unwrap()).unwrap();
+    // Keep the fixture pin only - full history makes SAME_NAME huge.
+    let mut fw = packages
+        .into_iter()
+        .find(|p| p.pretty_version == "v13.30.1")
+        .expect("v13.30.1");
+    // Focus on replace semantics; full transitive closure needs the VCR set.
+    fw.requires.clear();
+    fw.conflicts.clear();
+
+    let mut repo = ArrayRepository::new();
+    repo.add_package(fw);
+
+    let mut request = Request::new();
+    request
+        .require_name(
+            "illuminate/support",
+            Some(parse_constraints("^13.30").unwrap()),
+        )
+        .unwrap();
+
+    let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &present)
+        .unwrap();
+
+    assert_eq!(tx.operations().len(), 1);
+    let Operation::Install { package_id } = tx.operations()[0] else {
+        panic!("expected install");
+    };
+    assert_eq!(pool.package_by_id(package_id).name, "laravel/framework");
+}

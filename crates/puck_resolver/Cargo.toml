@@ -13,6 +13,4 @@ thiserror.workspace = true
 puck_version.workspace = true
 indexmap.workspace = true
 rustc-hash.workspace = true
-
-[dev-dependencies]
 serde_json.workspace = true

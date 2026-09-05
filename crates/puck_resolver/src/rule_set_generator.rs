@@ -1,5 +1,6 @@
 //! Rule generation (`Composer\DependencyResolver\RuleSetGenerator`).
 
+use crate::platform::is_platform_package;
 use crate::pool::Pool;
 use crate::request::Request;
 use crate::rule::{Rule, RuleReason, RuleType};
@@ -114,6 +115,9 @@ impl<'a> RuleSetGenerator<'a> {
             }
 
             for (target, constraint) in requires {
+                if is_platform_package(&target) {
+                    continue;
+                }
                 let providers = self.pool.what_provides(&target, Some(&constraint))?;
                 self.add_rule(
                     RuleType::Package,
@@ -145,6 +149,9 @@ impl<'a> RuleSetGenerator<'a> {
                 .collect();
 
             for (target, constraint) in conflicts {
+                if is_platform_package(&target) {
+                    continue;
+                }
                 if !self.added_packages_by_names.contains_key(&target) {
                     continue;
                 }
@@ -200,6 +207,9 @@ impl<'a> RuleSetGenerator<'a> {
             .collect();
 
         for (package_name, constraint) in requires {
+            if is_platform_package(&package_name) {
+                continue;
+            }
             let packages = self.pool.what_provides(&package_name, Some(&constraint))?;
             if packages.is_empty() {
                 continue;

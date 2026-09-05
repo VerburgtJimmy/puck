@@ -8,7 +8,9 @@
 
 mod decisions;
 mod link;
+mod metadata;
 mod package;
+mod platform;
 mod policy;
 mod pool;
 mod pool_builder;
@@ -23,7 +25,9 @@ mod watch;
 
 pub use decisions::Decisions;
 pub use link::Link;
+pub use metadata::{package_from_p2_version, packages_from_p2_json};
 pub use package::Package;
+pub use platform::is_platform_package;
 pub use policy::DefaultPolicy;
 pub use pool::Pool;
 pub use pool_builder::{ArrayRepository, PoolBuilder};
