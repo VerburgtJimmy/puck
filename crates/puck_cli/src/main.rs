@@ -8,10 +8,13 @@ use puck_install::{
 };
 use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::LockFile;
-use puck_manifest::{PackageRequirement, Manifest, add_requirement, remove_requirement};
+use puck_manifest::{
+    PackageRequirement, Manifest, add_requirement_preserving, remove_requirement_preserving,
+    sort_packages_enabled,
+};
 use puck_plugins::{
-    PestPluginDumpStatus, PhpstanExtensionInstallStatus, run_pest_plugin_dump,
-    run_phpstan_extension_installer,
+    PestPluginDumpStatus, PhpstanExtensionInstallStatus, refuse_message, run_pest_plugin_dump,
+    run_phpstan_extension_installer, unsupported_allowed_plugins,
 };
 use puck_registry::p2_path;
 use puck_resolver::{
@@ -161,7 +164,7 @@ fn main() -> ExitCode {
             optimize,
             offline,
             no_scripts,
-            strict_native: _,
+            strict_native,
             working_dir,
         } => {
             let runtime = match tokio::runtime::Runtime::new() {
@@ -177,6 +180,7 @@ fn main() -> ExitCode {
                 offline,
                 optimize,
                 no_scripts,
+                strict_native,
             )) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
@@ -346,10 +350,7 @@ async fn run_require(
     let p2_dir = registry_root.join("packagist/p2");
 
     let mut unlock = Vec::new();
-    let mut root_json: Value = serde_json::from_str(
-        &std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
+    let mut composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
 
     for spec in &packages {
         let req = PackageRequirement::parse(spec).map_err(|e| e.to_string())?;
@@ -362,7 +363,17 @@ async fn run_require(
                 meta_path.display()
             ));
         }
-        add_requirement(&mut root_json, &req, dev).map_err(|e| e.to_string())?;
+        let root_json: Value =
+            serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
+        let sort = sort_packages_enabled(&root_json);
+        composer_text = add_requirement_preserving(
+            &composer_text,
+            &req.name,
+            &req.constraint,
+            dev,
+            sort,
+        )
+        .map_err(|e| e.to_string())?;
         unlock.push(req.name.clone());
         eprintln!(
             "puck: require {} {} ({})",
@@ -372,8 +383,9 @@ async fn run_require(
         );
     }
 
-    let composer_text = format_composer_json(&root_json)?;
     std::fs::write(&manifest_path, &composer_text).map_err(|e| e.to_string())?;
+    let root_json: Value =
+        serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
 
     let lock_bytes = if lock_path.is_file() {
         Some(std::fs::read(&lock_path).map_err(|e| e.to_string())?)
@@ -441,7 +453,7 @@ async fn run_require(
         return Ok(());
     }
 
-    run_install(Some(root), false, false, false, false).await
+    run_install(Some(root), false, false, false, false, false).await
 }
 
 async fn run_remove(
@@ -468,10 +480,7 @@ async fn run_remove(
     let p2_dir = registry_root.join("packagist/p2");
 
     let mut unlock = Vec::new();
-    let mut root_json: Value = serde_json::from_str(
-        &std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
+    let mut composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
 
     for spec in &packages {
         let name = PackageRequirement::parse(spec)
@@ -486,17 +495,18 @@ async fn run_remove(
                     ))
                 }
             })?;
-        let found = remove_requirement(&mut root_json, &name).map_err(|e| e.to_string())?;
+        let (next, found) =
+            remove_requirement_preserving(&composer_text, &name).map_err(|e| e.to_string())?;
         if !found {
             return Err(format!(
                 "{name} is not required in composer.json require or require-dev"
             ));
         }
+        composer_text = next;
         unlock.push(name.clone());
         eprintln!("puck: remove {name}");
     }
 
-    let composer_text = format_composer_json(&root_json)?;
     std::fs::write(&manifest_path, &composer_text).map_err(|e| e.to_string())?;
 
     let lock_bytes = std::fs::read(&lock_path).map_err(|e| e.to_string())?;
@@ -526,7 +536,7 @@ async fn run_remove(
         return Ok(());
     }
 
-    run_install(Some(root), false, false, false, false).await
+    run_install(Some(root), false, false, false, false, false).await
 }
 
 async fn run_lock(
@@ -566,7 +576,7 @@ async fn run_lock(
         eprintln!("puck: --no-install; skip vendor/");
         return Ok(());
     }
-    run_install(Some(root), false, false, false, false).await
+    run_install(Some(root), false, false, false, false, false).await
 }
 
 async fn run_update(
@@ -705,7 +715,7 @@ async fn run_update(
         eprintln!("puck: --no-install; skip vendor/");
         return Ok(());
     }
-    run_install(Some(root), false, false, false, false).await
+    run_install(Some(root), false, false, false, false, false).await
 }
 
 fn write_lock_file(path: &std::path::Path, lock_doc: &Value) -> Result<(), String> {
@@ -732,12 +742,6 @@ fn resolve_registry_root(registry: Option<PathBuf>) -> Result<PathBuf, String> {
     Ok(registry_root)
 }
 
-fn format_composer_json(root: &Value) -> Result<String, String> {
-    let pretty =
-        serde_json::to_string_pretty(root).map_err(|e| format!("encode composer.json: {e}"))?;
-    Ok(reindent_json_pretty_4(&format!("{pretty}\n")))
-}
-
 fn reindent_json_pretty_4(pretty_2: &str) -> String {
     let mut out = String::with_capacity(pretty_2.len());
     for line in pretty_2.lines() {
@@ -759,6 +763,7 @@ async fn run_install(
     offline: bool,
     optimize: bool,
     no_scripts: bool,
+    strict_native: bool,
 ) -> Result<(), String> {
     let total_started = Instant::now();
     let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
@@ -782,6 +787,26 @@ async fn run_install(
     };
 
     let lock = LockFile::from_path(&lock_path).map_err(|e| e.to_string())?;
+
+    // Tier 3 (M3 gate 4b): never silently skip an allowed lock plugin without a
+    // native adapter. Refusal is unconditional; --strict-native is reserved for
+    // a future Tier 2 PHP plugin host.
+    let _ = strict_native;
+    let lock_plugin_pkgs = lock
+        .packages
+        .iter()
+        .chain(lock.packages_dev.iter())
+        .map(|p| (p.name.clone(), p.package_type().to_string()));
+    let allows = |name: &str| {
+        manifest
+            .as_ref()
+            .is_some_and(|m| m.allows_plugin(name))
+    };
+    let unsupported = unsupported_allowed_plugins(lock_plugin_pkgs, allows);
+    if !unsupported.is_empty() {
+        return Err(refuse_message(&unsupported));
+    }
+
     let installed = read_installed(root.join("vendor/composer")).map_err(|e| e.to_string())?;
     let options = InstallOptions { no_dev, offline };
     let mut plan = plan_install(&lock, &installed, options).map_err(|e| e.to_string())?;

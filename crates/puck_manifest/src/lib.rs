@@ -8,10 +8,15 @@
 
 mod manifest;
 mod edit;
+mod json_manipulator;
 
 pub use edit::{
     add_requirement, add_requirement_to_file, remove_requirement, sort_packages_enabled,
     PackageRequirement,
+};
+pub use json_manipulator::{
+    add_requirement_preserving, is_platform_package, remove_requirement_preserving,
+    sort_packages_map, JsonManipulator,
 };
 pub use manifest::{Autoload, Manifest, PackageLinks};
 

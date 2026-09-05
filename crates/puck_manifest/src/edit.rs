@@ -53,8 +53,8 @@ pub fn sort_packages_enabled(root: &Value) -> bool {
 
 /// Insert or replace a requirement in `require` or `require-dev`.
 ///
-/// When `sort-packages` is true, sorts that object's keys alphabetically
-/// (Composer `JsonManipulator` behaviour for Laravel projects).
+/// When `sort-packages` is true, sorts keys with Composer platform-first order
+/// (`JsonManipulator::sortPackages`).
 pub fn add_requirement(root: &mut Value, req: &PackageRequirement, dev: bool) -> Result<()> {
     let sort = sort_packages_enabled(root);
     let obj = root
@@ -96,12 +96,7 @@ pub fn remove_requirement(root: &mut Value, name: &str) -> Result<bool> {
 }
 
 fn sort_string_object_keys(map: &mut Map<String, Value>) {
-    let old = std::mem::take(map);
-    let mut entries: Vec<(String, Value)> = old.into_iter().collect();
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
-    for (k, v) in entries {
-        map.insert(k, v);
-    }
+    crate::json_manipulator::sort_packages_map(map);
 }
 
 /// Read, mutate require, write `composer.json` with 4-space indent (Composer default).
@@ -185,7 +180,7 @@ mod tests {
             .collect();
         assert_eq!(
             keys,
-            vec!["laravel/framework", "php", "webmozart/assert"]
+            vec!["php", "laravel/framework", "webmozart/assert"]
         );
     }
 
