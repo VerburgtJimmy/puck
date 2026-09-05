@@ -8,8 +8,10 @@
 
 mod content_hash;
 mod lock;
+mod array_dumper;
 mod write;
 
+pub use array_dumper::dump_lock_package_from_p2;
 pub use content_hash::content_hash;
 pub use lock::{Dist, LockFile, LockedPackage, Source};
 pub use write::{
