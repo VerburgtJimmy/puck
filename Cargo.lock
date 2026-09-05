@@ -961,6 +961,7 @@ name = "puck_resolver"
 version = "0.1.0"
 dependencies = [
  "indexmap",
+ "puck_lock",
  "puck_version",
  "serde_json",
  "thiserror",
