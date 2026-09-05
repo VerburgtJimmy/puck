@@ -22,6 +22,7 @@ mod rule_set;
 mod rule_set_generator;
 mod solver;
 mod transaction;
+mod vcr_pool;
 mod watch;
 
 pub use decisions::Decisions;
@@ -44,6 +45,7 @@ pub use rule_set::RuleSet;
 pub use rule_set_generator::RuleSetGenerator;
 pub use solver::{Solver, SolverProblems};
 pub use transaction::{Operation, Transaction};
+pub use vcr_pool::array_repository_from_p2_constraints;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

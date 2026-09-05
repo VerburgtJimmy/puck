@@ -12,7 +12,8 @@ use crate::pool_builder::{ArrayRepository, PoolBuilder};
 use crate::request::Request;
 use crate::solver::Solver;
 use crate::transaction::Operation;
-use puck_version::parse_constraints;
+use crate::vcr_pool::array_repository_from_p2_constraints;
+use puck_version::{parse_constraints, Stability};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fs;
@@ -73,6 +74,26 @@ fn laravel_app_no_dev_solve_matches_vcr_p2_pins() {
     let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
     let locked = packages_from_p2_lock_pins(&p2_dir(), &lock_bytes).expect("vcr p2 pins");
     assert_no_dev_solve_matches_lock(&dir, locked, "vcr p2 pins");
+}
+
+#[test]
+fn laravel_skeleton_no_dev_solve_matches_constraint_filtered_vcr() {
+    let dir = skeleton_dir();
+    let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
+    let requires = load_root_requires(&json_bytes, false);
+    let repo = array_repository_from_p2_constraints(&p2_dir(), &requires, Stability::Stable)
+        .expect("constraint-filtered vcr pool");
+    assert_no_dev_solve_matches_lock(&dir, repo.packages().to_vec(), "constraint-filtered vcr");
+}
+
+#[test]
+fn laravel_app_no_dev_solve_matches_constraint_filtered_vcr() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/laravel-app");
+    let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
+    let requires = load_root_requires(&json_bytes, false);
+    let repo = array_repository_from_p2_constraints(&p2_dir(), &requires, Stability::Stable)
+        .expect("constraint-filtered vcr pool");
+    assert_no_dev_solve_matches_lock(&dir, repo.packages().to_vec(), "constraint-filtered vcr");
 }
 
 fn assert_no_dev_solve_matches_lock(dir: &PathBuf, pool_packages: Vec<Package>, source: &str) {
