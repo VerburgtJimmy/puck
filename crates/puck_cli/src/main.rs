@@ -8,7 +8,7 @@ use puck_install::{
 };
 use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::LockFile;
-use puck_manifest::{add_requirement, PackageRequirement, Manifest};
+use puck_manifest::{add_requirement, remove_requirement, PackageRequirement, Manifest};
 use puck_registry::p2_path;
 use puck_resolver::resolve_lock_document;
 use puck_scripts::{RunScriptsOptions, run_install_scripts};
@@ -74,8 +74,18 @@ enum Commands {
         #[arg(long, value_name = "DIR")]
         working_dir: Option<PathBuf>,
     },
-    /// Remove a package (M2)
-    Remove { packages: Vec<String> },
+    /// Remove a package from composer.json and update the lock (M3)
+    Remove {
+        packages: Vec<String>,
+        /// Edit composer.json and lock only; do not change vendor/
+        #[arg(long)]
+        no_install: bool,
+        /// Packagist p2 metadata root (contains `packagist/p2/`). Defaults to `$PUCK_REGISTRY`.
+        #[arg(long, value_name = "DIR")]
+        registry: Option<PathBuf>,
+        #[arg(long, value_name = "DIR")]
+        working_dir: Option<PathBuf>,
+    },
     /// Regenerate autoload files
     #[command(name = "dump-autoload", visible_alias = "dumpautoload")]
     DumpAutoload {
@@ -195,7 +205,28 @@ fn main() -> ExitCode {
                 }
             }
         }
-        Commands::Update { .. } | Commands::Remove { .. } | Commands::Php { .. } => {
+        Commands::Remove {
+            packages,
+            no_install,
+            registry,
+            working_dir,
+        } => {
+            let runtime = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(err) => {
+                    eprintln!("puck: failed to start async runtime: {err}");
+                    return ExitCode::from(1);
+                }
+            };
+            match runtime.block_on(run_remove(working_dir, packages, no_install, registry)) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    eprintln!("puck: {err}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        Commands::Update { .. } | Commands::Php { .. } => {
             eprintln!("puck: this command is not implemented yet");
             ExitCode::from(2)
         }
@@ -220,19 +251,8 @@ async fn run_require(
         return Err(format!("no composer.json in {}", root.display()));
     }
 
-    let registry_root = registry
-        .or_else(|| std::env::var_os("PUCK_REGISTRY").map(PathBuf::from))
-        .ok_or_else(|| {
-            "need --registry DIR or $PUCK_REGISTRY pointing at a registry root with packagist/p2/"
-                .to_string()
-        })?;
+    let registry_root = resolve_registry_root(registry)?;
     let p2_dir = registry_root.join("packagist/p2");
-    if !p2_dir.is_dir() {
-        return Err(format!(
-            "registry p2 dir missing: {} (expected packagist/p2 under registry root)",
-            p2_dir.display()
-        ));
-    }
 
     let mut unlock = Vec::new();
     let mut root_json: Value = serde_json::from_str(
@@ -296,6 +316,108 @@ async fn run_require(
     }
 
     run_install(Some(root), false, false, false, false).await
+}
+
+async fn run_remove(
+    working_dir: Option<PathBuf>,
+    packages: Vec<String>,
+    no_install: bool,
+    registry: Option<PathBuf>,
+) -> Result<(), String> {
+    if packages.is_empty() {
+        return Err("missing package argument (e.g. vendor/package)".into());
+    }
+
+    let root = working_dir.unwrap_or_else(|| PathBuf::from("."));
+    let manifest_path = root.join("composer.json");
+    let lock_path = root.join("composer.lock");
+    if !manifest_path.is_file() {
+        return Err(format!("no composer.json in {}", root.display()));
+    }
+    if !lock_path.is_file() {
+        return Err(format!("no composer.lock in {}", root.display()));
+    }
+
+    let registry_root = resolve_registry_root(registry)?;
+    let p2_dir = registry_root.join("packagist/p2");
+
+    let mut unlock = Vec::new();
+    let mut root_json: Value = serde_json::from_str(
+        &std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+
+    for spec in &packages {
+        let name = PackageRequirement::parse(spec)
+            .map(|r| r.name)
+            .or_else(|_| {
+                let name = spec.trim().to_ascii_lowercase();
+                if name.contains('/') {
+                    Ok(name)
+                } else {
+                    Err(format!(
+                        "invalid package name {spec:?}; expected vendor/package"
+                    ))
+                }
+            })?;
+        let found = remove_requirement(&mut root_json, &name).map_err(|e| e.to_string())?;
+        if !found {
+            return Err(format!(
+                "{name} is not required in composer.json require or require-dev"
+            ));
+        }
+        unlock.push(name.clone());
+        eprintln!("puck: remove {name}");
+    }
+
+    let composer_text = format_composer_json(&root_json)?;
+    std::fs::write(&manifest_path, &composer_text).map_err(|e| e.to_string())?;
+
+    let lock_bytes = std::fs::read(&lock_path).map_err(|e| e.to_string())?;
+    let lock_doc = resolve_lock_document(
+        &composer_text,
+        Some(&lock_bytes),
+        &p2_dir,
+        &unlock,
+        true,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let lock_text =
+        format!("{}\n", serde_json::to_string_pretty(&lock_doc).map_err(|e| e.to_string())?);
+    let lock_text = reindent_json_pretty_4(&lock_text);
+    std::fs::write(&lock_path, &lock_text).map_err(|e| e.to_string())?;
+    eprintln!(
+        "puck: wrote composer.lock (content-hash {})",
+        lock_doc
+            .get("content-hash")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?")
+    );
+
+    if no_install {
+        eprintln!("puck: --no-install; skip vendor/");
+        return Ok(());
+    }
+
+    run_install(Some(root), false, false, false, false).await
+}
+
+fn resolve_registry_root(registry: Option<PathBuf>) -> Result<PathBuf, String> {
+    let registry_root = registry
+        .or_else(|| std::env::var_os("PUCK_REGISTRY").map(PathBuf::from))
+        .ok_or_else(|| {
+            "need --registry DIR or $PUCK_REGISTRY pointing at a registry root with packagist/p2/"
+                .to_string()
+        })?;
+    let p2_dir = registry_root.join("packagist/p2");
+    if !p2_dir.is_dir() {
+        return Err(format!(
+            "registry p2 dir missing: {} (expected packagist/p2 under registry root)",
+            p2_dir.display()
+        ));
+    }
+    Ok(registry_root)
 }
 
 fn format_composer_json(root: &Value) -> Result<String, String> {

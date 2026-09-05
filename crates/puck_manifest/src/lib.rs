@@ -10,7 +10,8 @@ mod manifest;
 mod edit;
 
 pub use edit::{
-    add_requirement, add_requirement_to_file, sort_packages_enabled, PackageRequirement,
+    add_requirement, add_requirement_to_file, remove_requirement, sort_packages_enabled,
+    PackageRequirement,
 };
 pub use manifest::{Autoload, Manifest, PackageLinks};
 

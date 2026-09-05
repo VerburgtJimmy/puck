@@ -75,6 +75,26 @@ pub fn add_requirement(root: &mut Value, req: &PackageRequirement, dev: bool) ->
     Ok(())
 }
 
+/// Remove a package from `require` and/or `require-dev`.
+///
+/// Returns `true` if the name was present in at least one map.
+pub fn remove_requirement(root: &mut Value, name: &str) -> Result<bool> {
+    let name = name.to_ascii_lowercase();
+    let obj = root
+        .as_object_mut()
+        .ok_or_else(|| Error::Parse("composer.json root must be an object".into()))?;
+    let mut removed = false;
+    for key in ["require", "require-dev"] {
+        let Some(Value::Object(map)) = obj.get_mut(key) else {
+            continue;
+        };
+        if map.shift_remove(&name).is_some() {
+            removed = true;
+        }
+    }
+    Ok(removed)
+}
+
 fn sort_string_object_keys(map: &mut Map<String, Value>) {
     let old = std::mem::take(map);
     let mut entries: Vec<(String, Value)> = old.into_iter().collect();
@@ -167,5 +187,19 @@ mod tests {
             keys,
             vec!["laravel/framework", "php", "webmozart/assert"]
         );
+    }
+
+    #[test]
+    fn removes_from_require_and_dev() {
+        let mut root = json!({
+            "name": "app/app",
+            "require": { "a/a": "^1.0", "php": "^8.3" },
+            "require-dev": { "a/a": "^1.0", "b/b": "*" }
+        });
+        assert!(remove_requirement(&mut root, "A/A").unwrap());
+        assert!(!root["require"].as_object().unwrap().contains_key("a/a"));
+        assert!(!root["require-dev"].as_object().unwrap().contains_key("a/a"));
+        assert!(root["require-dev"].as_object().unwrap().contains_key("b/b"));
+        assert!(!remove_requirement(&mut root, "missing/pkg").unwrap());
     }
 }

@@ -290,4 +290,42 @@ mod tests {
             want.pointer("/dist/reference")
         );
     }
+
+    #[test]
+    fn remove_laravel_pail_drops_dev_package_keeps_prod() {
+        let dir = skeleton();
+        let mut root: Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.join("composer.json")).unwrap(),
+        )
+        .unwrap();
+        assert!(root["require-dev"]
+            .as_object_mut()
+            .unwrap()
+            .shift_remove("laravel/pail")
+            .is_some());
+
+        let composer = serde_json::to_string_pretty(&root).unwrap();
+        let lock_bytes = std::fs::read(dir.join("composer.lock")).unwrap();
+        let expected: Value = serde_json::from_slice(&lock_bytes).unwrap();
+        let before_dev = expected["packages-dev"].as_array().unwrap().len();
+
+        let doc = resolve_lock_document(
+            &composer,
+            Some(&lock_bytes),
+            &p2_dir(),
+            &["laravel/pail".into()],
+            true,
+        )
+        .expect("resolve");
+
+        let packages = doc["packages"].as_array().unwrap();
+        let packages_dev = doc["packages-dev"].as_array().unwrap();
+        assert_eq!(
+            packages.len(),
+            expected["packages"].as_array().unwrap().len()
+        );
+        assert_eq!(packages_dev.len(), before_dev - 1);
+        assert!(!packages_dev.iter().any(|p| p["name"] == "laravel/pail"));
+        assert!(packages.iter().any(|p| p["name"] == "laravel/framework"));
+    }
 }
