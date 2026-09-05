@@ -13,8 +13,16 @@ pub enum RuleReason {
         constraint: puck_version::ConstraintExpr,
     },
     Fixed { package_id: u32 },
-    PackageConflict,
-    PackageRequires { target: String },
+    PackageConflict {
+        /// Conflicting package name (link source).
+        source: String,
+        target: String,
+        pretty_constraint: String,
+    },
+    PackageRequires {
+        target: String,
+        pretty_constraint: String,
+    },
     PackageSameName { package_name: String },
     Learned { why: i32 },
     PackageAlias,
@@ -145,7 +153,7 @@ impl Rule {
         match &self.0.borrow().reason {
             RuleReason::RootRequire { package_name, .. } => Some(package_name.clone()),
             RuleReason::Fixed { .. } | RuleReason::LockedFilterListRemoved { .. } => None,
-            RuleReason::PackageRequires { target } => Some(target.clone()),
+            RuleReason::PackageRequires { target, .. } => Some(target.clone()),
             _ => None,
         }
     }

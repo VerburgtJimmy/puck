@@ -822,7 +822,7 @@ fn solver_unsatisfiable_requires() {
         Link::new(
             "a/a",
             "b/b",
-            ">=2.0",
+            ">= 2.0",
             parse_constraints(">=2.0").unwrap(),
         ),
     );
@@ -835,14 +835,13 @@ fn solver_unsatisfiable_requires() {
     let err = Solver::new(&mut pool)
         .solve(&request, &empty_present())
         .unwrap_err();
-    let msg = err.to_string();
-    assert!(
-        msg.contains("b/b")
-            || msg.contains("conflict")
-            || msg.contains("Problem")
-            || msg.contains("could not"),
-        "unexpected error: {msg:?}"
-    );
+    let crate::Error::Unsolvable(problems) = err else {
+        panic!("expected Unsolvable, got {err}");
+    };
+    assert_eq!(problems.problems.len(), 1);
+    let msg = problems.pretty_string(&mut pool, &request);
+    let expected = "\n  Problem 1\n    - Root composer.json requires a/a * -> satisfiable by a/a[1.0].\n    - a/a 1.0 requires b/b >= 2.0 -> found b/b[1.0] but it does not match the constraint.\n";
+    assert_eq!(msg, expected);
 }
 
 #[test]
@@ -853,7 +852,7 @@ fn solver_conflict_result_fails() {
         Link::new(
             "a/a",
             "b/b",
-            ">=1.0",
+            ">= 1.0",
             parse_constraints(">=1.0").unwrap(),
         ),
     );
@@ -867,7 +866,13 @@ fn solver_conflict_result_fails() {
     let err = Solver::new(&mut pool)
         .solve(&request, &empty_present())
         .unwrap_err();
-    assert!(!err.to_string().is_empty());
+    let crate::Error::Unsolvable(problems) = err else {
+        panic!("expected Unsolvable, got {err}");
+    };
+    assert_eq!(problems.problems.len(), 1);
+    let msg = problems.pretty_string(&mut pool, &request);
+    let expected = "\n  Problem 1\n    - Root composer.json requires a/a * -> satisfiable by a/a[1.0].\n    - Root composer.json requires b/b * -> satisfiable by b/b[1.0].\n    - a/a 1.0 conflicts with b/b 1.0.\n";
+    assert_eq!(msg, expected);
 }
 
 #[test]
@@ -1535,4 +1540,111 @@ fn solver_issue_265_unsatisfiable() {
     let _ = Solver::new(&mut pool)
         .solve(&request, &present)
         .unwrap_err();
+}
+
+#[test]
+fn solver_require_mismatch_exception() {
+    let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    package_a.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            ">= 1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let mut package_b = Package::new("b/b", "1.0.0.0", "1.0");
+    package_b.requires.insert(
+        "c/c".into(),
+        Link::new(
+            "b/b",
+            "c/c",
+            ">= 1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let package_b2 = Package::new("b/b", "0.9.0.0", "0.9");
+    let mut package_c = Package::new("c/c", "1.0.0.0", "1.0");
+    package_c.requires.insert(
+        "d/d".into(),
+        Link::new(
+            "c/c",
+            "d/d",
+            ">= 1.0",
+            parse_constraints(">=1.0").unwrap(),
+        ),
+    );
+    let mut package_d = Package::new("d/d", "1.0.0.0", "1.0");
+    package_d.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "d/d",
+            "b/b",
+            "< 1.0",
+            parse_constraints("<1.0").unwrap(),
+        ),
+    );
+
+    let mut pool = Pool::new(vec![
+        package_a, package_b, package_b2, package_c, package_d,
+    ]);
+    let mut request = Request::new();
+    request.require_name("a/a", None).unwrap();
+
+    let err = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap_err();
+    let crate::Error::Unsolvable(problems) = err else {
+        panic!("expected Unsolvable, got {err}");
+    };
+    assert_eq!(problems.problems.len(), 1);
+    let msg = problems.pretty_string(&mut pool, &request);
+    let expected = "\n  Problem 1\n    - Root composer.json requires a/a * -> satisfiable by a/a[1.0].\n    - a/a 1.0 requires b/b >= 1.0 -> satisfiable by b/b[1.0].\n    - b/b 1.0 requires c/c >= 1.0 -> satisfiable by c/c[1.0].\n    - c/c 1.0 requires d/d >= 1.0 -> satisfiable by d/d[1.0].\n    - d/d 1.0 requires b/b < 1.0 -> satisfiable by b/b[0.9].\n    - You can only install one version of a package, so only one of these can be installed: b/b[0.9, 1.0].\n";
+    assert_eq!(msg, expected);
+}
+
+/// Composer `testLearnLiteralsWithSortedRuleLiterals` - success path exercising
+/// replace + version pick under learn/backtrack.
+#[test]
+fn solver_learn_literals_with_sorted_rule_literals() {
+    let twig2 = Package::new("twig/twig", "2.0.0.0", "2.0");
+    let twig16 = Package::new("twig/twig", "1.6.0.0", "1.6");
+    let twig15 = Package::new("twig/twig", "1.5.0.0", "1.5");
+    let mut symfony = Package::new("symfony/symfony", "2.0.0.0", "2.0");
+    let mut twig_bridge = Package::new("symfony/twig-bridge", "2.0.0.0", "2.0");
+    twig_bridge.requires.insert(
+        "twig/twig".into(),
+        Link::new(
+            "symfony/twig-bridge",
+            "twig/twig",
+            "<2.0",
+            parse_constraints("<2.0").unwrap(),
+        ),
+    );
+    symfony.replaces.insert(
+        "symfony/twig-bridge".into(),
+        Link::new(
+            "symfony/symfony",
+            "symfony/twig-bridge",
+            "=2.0",
+            parse_constraints("=2.0").unwrap(),
+        ),
+    );
+
+    let mut pool = Pool::new(vec![twig2, twig16, twig15, symfony, twig_bridge]);
+    let mut request = Request::new();
+    request.require_name("symfony/twig-bridge", None).unwrap();
+    request.require_name("twig/twig", None).unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[
+            Operation::Install { package_id: 2 }, // twig 1.6
+            Operation::Install { package_id: 5 }, // twig-bridge
+        ]
+    );
 }

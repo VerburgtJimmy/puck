@@ -20,6 +20,13 @@ pub struct SolverProblems {
     pub problems: Vec<Problem>,
 }
 
+impl SolverProblems {
+    /// `SolverProblemsException::getPrettyString` subset (no RepositorySet hints).
+    pub fn pretty_string(&self, pool: &mut Pool, request: &Request) -> String {
+        crate::problem::format_problems(&self.problems, pool, request)
+    }
+}
+
 impl std::fmt::Display for SolverProblems {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for problem in &self.problems {

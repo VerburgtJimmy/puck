@@ -132,15 +132,21 @@ impl<'a> RuleSetGenerator<'a> {
                 }
             }
 
-            let requires: Vec<(String, puck_version::ConstraintExpr)> = self
+            let requires: Vec<(String, String, puck_version::ConstraintExpr)> = self
                 .pool
                 .package_by_id(package_id)
                 .requires
                 .iter()
-                .map(|(t, link)| (t.clone(), link.constraint.clone()))
+                .map(|(t, link)| {
+                    (
+                        t.clone(),
+                        link.pretty_constraint.clone(),
+                        link.constraint.clone(),
+                    )
+                })
                 .collect();
 
-            for (target, constraint) in requires {
+            for (target, pretty_constraint, constraint) in requires {
                 if is_platform_package(&target) {
                     continue;
                 }
@@ -152,6 +158,7 @@ impl<'a> RuleSetGenerator<'a> {
                         &providers,
                         RuleReason::PackageRequires {
                             target: target.clone(),
+                            pretty_constraint,
                         },
                     ),
                 );
@@ -189,15 +196,22 @@ impl<'a> RuleSetGenerator<'a> {
     fn add_conflict_rules(&mut self) -> Result<()> {
         let added: Vec<PackageId> = self.added_map.keys().copied().collect();
         for package_id in added {
-            let conflicts: Vec<(String, puck_version::ConstraintExpr)> = self
-                .pool
-                .package_by_id(package_id)
-                .conflicts
-                .iter()
-                .map(|(t, link)| (t.clone(), link.constraint.clone()))
-                .collect();
+            let conflicts: Vec<(String, String, puck_version::ConstraintExpr)> = {
+                let package = self.pool.package_by_id(package_id);
+                package
+                    .conflicts
+                    .iter()
+                    .map(|(t, link)| {
+                        (
+                            t.clone(),
+                            link.pretty_constraint.clone(),
+                            link.constraint.clone(),
+                        )
+                    })
+                    .collect()
+            };
 
-            for (target, constraint) in conflicts {
+            for (target, pretty_constraint, constraint) in conflicts {
                 if is_platform_package(&target) {
                     continue;
                 }
@@ -205,6 +219,7 @@ impl<'a> RuleSetGenerator<'a> {
                     continue;
                 }
                 let conflict_ids = self.pool.what_provides(&target, Some(&constraint))?;
+                let source_name = self.pool.package_by_id(package_id).name.clone();
                 for conflict_id in conflict_ids {
                     // Composer: skip AliasPackage conflicts unless name == link target.
                     let conflict = self.pool.package_by_id(conflict_id);
@@ -216,7 +231,11 @@ impl<'a> RuleSetGenerator<'a> {
                         Self::create_rule_2_literals(
                             package_id,
                             conflict_id,
-                            RuleReason::PackageConflict,
+                            RuleReason::PackageConflict {
+                                source: source_name.clone(),
+                                target: target.clone(),
+                                pretty_constraint: pretty_constraint.clone(),
+                            },
                         ),
                     );
                 }
@@ -343,7 +362,7 @@ mod tests {
                 .rules_of_type(RuleType::Package)
                 .any(|r| matches!(
                     r.reason(),
-                    RuleReason::PackageRequires { target } if target == "a/a"
+                    RuleReason::PackageRequires { target, .. } if target == "a/a"
                 )),
             "expected PACKAGE_REQUIRES for a/a"
         );
