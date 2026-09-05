@@ -9,7 +9,10 @@ use puck_install::{
 use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::LockFile;
 use puck_manifest::{PackageRequirement, Manifest, add_requirement, remove_requirement};
-use puck_plugins::{PhpstanExtensionInstallStatus, run_phpstan_extension_installer};
+use puck_plugins::{
+    PestPluginDumpStatus, PhpstanExtensionInstallStatus, run_pest_plugin_dump,
+    run_phpstan_extension_installer,
+};
 use puck_registry::p2_path;
 use puck_resolver::resolve_lock_document;
 use puck_scripts::{RunScriptsOptions, run_install_scripts};
@@ -765,6 +768,17 @@ async fn run_install(
     }
     let mut discover_ms = discover_started.elapsed().as_millis();
 
+    // Tier 1: pestphp/pest-plugin (post-autoload-dump equivalent).
+    let allow_pest_plugin = manifest
+        .as_ref()
+        .is_none_or(|m| m.allows_plugin("pestphp/pest-plugin"));
+    match run_pest_plugin_dump(&root, allow_pest_plugin).map_err(|e| e.to_string())? {
+        PestPluginDumpStatus::Written { plugin_count, .. } => {
+            eprintln!("puck: pest plugins dumped ({plugin_count})");
+        }
+        PestPluginDumpStatus::Skipped => {}
+    }
+
     // Tier 1: phpstan/extension-installer (POST_INSTALL_CMD equivalent).
     let allow_phpstan_plugin = manifest
         .as_ref()
@@ -897,6 +911,17 @@ fn run_dump_autoload(
         "puck: dumped autoload{}",
         if optimize { " (-o)" } else { "" }
     );
+
+    let allow_pest_plugin = manifest
+        .as_ref()
+        .is_none_or(|m| m.allows_plugin("pestphp/pest-plugin"));
+    match run_pest_plugin_dump(&root, allow_pest_plugin).map_err(|e| e.to_string())? {
+        PestPluginDumpStatus::Written { plugin_count, .. } => {
+            eprintln!("puck: pest plugins dumped ({plugin_count})");
+        }
+        PestPluginDumpStatus::Skipped => {}
+    }
+
     Ok(())
 }
 

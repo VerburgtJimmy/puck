@@ -8,6 +8,7 @@
 
 mod native;
 
+pub use native::pest_plugin::{PestPluginDumpStatus, run_pest_plugin_dump};
 pub use native::phpstan_extension_installer::{
     PhpstanExtensionInstallStatus, run_phpstan_extension_installer,
 };
