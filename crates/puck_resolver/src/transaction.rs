@@ -12,6 +12,10 @@ use std::collections::HashSet;
 pub enum Operation {
     Install { package_id: PackageId },
     Remove { package_id: PackageId },
+    Update {
+        from: PackageId,
+        to: PackageId,
+    },
 }
 
 /// Result of a successful solve (`LockTransaction` / `Transaction` subset).
@@ -49,7 +53,6 @@ impl Transaction {
             remove_by_name.insert(name, id);
         }
 
-        // Root packages: in result but not required by another result package.
         let mut is_required: HashSet<PackageId> = HashSet::new();
         for &id in &result {
             let package = pool.package_by_id(id);
@@ -72,7 +75,6 @@ impl Transaction {
         if roots.is_empty() {
             roots = result.clone();
         }
-        // Composer picks lowest name on cycles; sort roots by name desc for stack pop order.
         roots.sort_by(|a, b| {
             pool.package_by_id(*b)
                 .name
@@ -82,7 +84,7 @@ impl Transaction {
         let mut stack = roots;
         let mut visited: HashSet<PackageId> = HashSet::new();
         let mut processed: HashSet<PackageId> = HashSet::new();
-        let mut install_ops = Vec::new();
+        let mut result_ops = Vec::new();
 
         while let Some(package_id) = stack.pop() {
             if processed.contains(&package_id) {
@@ -106,11 +108,17 @@ impl Transaction {
             } else {
                 processed.insert(package_id);
                 let package = pool.package_by_id(package_id);
-                if present_by_name.contains_key(&package.name) {
-                    // keep / update - for now treat same name as keep (no update yet)
+                if let Some(&from_id) = present_by_name.get(&package.name) {
+                    let from = pool.package_by_id(from_id);
+                    if from.version != package.version {
+                        result_ops.push(Operation::Update {
+                            from: from_id,
+                            to: package_id,
+                        });
+                    }
                     remove_by_name.remove(&package.name);
                 } else {
-                    install_ops.push(Operation::Install { package_id });
+                    result_ops.push(Operation::Install { package_id });
                     remove_by_name.remove(&package.name);
                 }
             }
@@ -122,7 +130,7 @@ impl Transaction {
         for package_id in removals {
             operations.push(Operation::Remove { package_id });
         }
-        operations.extend(install_ops);
+        operations.extend(result_ops);
 
         Self { operations }
     }
