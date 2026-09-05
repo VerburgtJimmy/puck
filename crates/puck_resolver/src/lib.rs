@@ -41,7 +41,7 @@ pub use pool::Pool;
 pub use pool_builder::{ArrayRepository, PoolBuilder};
 pub use problem::Problem;
 pub use request::{Request, UpdateAllowTransitive};
-pub use require_op::resolve_lock_document;
+pub use require_op::{expand_update_unlock, resolve_lock_document};
 pub use rule::{Rule, RuleReason, RuleType};
 pub use rule_set::RuleSet;
 pub use rule_set_generator::RuleSetGenerator;

@@ -14,7 +14,9 @@ use puck_plugins::{
     run_phpstan_extension_installer,
 };
 use puck_registry::p2_path;
-use puck_resolver::resolve_lock_document;
+use puck_resolver::{
+    UpdateAllowTransitive, expand_update_unlock, resolve_lock_document,
+};
 use puck_scripts::{RunScriptsOptions, run_install_scripts};
 use puck_store::Store;
 use serde_json::Value;
@@ -100,6 +102,12 @@ enum Commands {
     /// Update packages within constraints (M3)
     Update {
         packages: Vec<String>,
+        /// Also update dependencies of listed packages, except root requirements (`-w`)
+        #[arg(long, short = 'w')]
+        with_dependencies: bool,
+        /// Also update dependencies of listed packages, including root requirements (`-W`)
+        #[arg(long, short = 'W')]
+        with_all_dependencies: bool,
         #[arg(long)]
         no_install: bool,
         #[arg(long, value_name = "DIR")]
@@ -269,6 +277,8 @@ fn main() -> ExitCode {
         }
         Commands::Update {
             packages,
+            with_dependencies,
+            with_all_dependencies,
             no_install,
             registry,
             working_dir,
@@ -280,7 +290,14 @@ fn main() -> ExitCode {
                     return ExitCode::from(1);
                 }
             };
-            match runtime.block_on(run_update(working_dir, packages, no_install, registry)) {
+            match runtime.block_on(run_update(
+                working_dir,
+                packages,
+                with_dependencies,
+                with_all_dependencies,
+                no_install,
+                registry,
+            )) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(err) => {
                     eprintln!("puck: {err}");
@@ -508,6 +525,8 @@ async fn run_lock(
 async fn run_update(
     working_dir: Option<PathBuf>,
     packages: Vec<String>,
+    with_dependencies: bool,
+    with_all_dependencies: bool,
     no_install: bool,
     registry: Option<PathBuf>,
 ) -> Result<(), String> {
@@ -527,25 +546,8 @@ async fn run_update(
         None
     };
 
-    let unlock: Vec<String> = if packages.is_empty() {
-        // Full update: unlock everything by not fixing (pass all names from lock).
-        match &lock_bytes {
-            Some(bytes) => {
-                let data: Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
-                let mut names = Vec::new();
-                for key in ["packages", "packages-dev"] {
-                    if let Some(arr) = data.get(key).and_then(|v| v.as_array()) {
-                        for pkg in arr {
-                            if let Some(name) = pkg.get("name").and_then(|v| v.as_str()) {
-                                names.push(name.to_ascii_lowercase());
-                            }
-                        }
-                    }
-                }
-                names
-            }
-            None => Vec::new(),
-        }
+    let listed: Vec<String> = if packages.is_empty() {
+        Vec::new()
     } else {
         packages
             .iter()
@@ -566,11 +568,71 @@ async fn run_update(
             .collect::<Result<Vec<_>, _>>()?
     };
 
-    if packages.is_empty() {
+    let mode = if with_all_dependencies {
+        UpdateAllowTransitive::ListedWithTransitiveDeps
+    } else if with_dependencies {
+        UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire
+    } else {
+        UpdateAllowTransitive::OnlyListed
+    };
+
+    let unlock: Vec<String> = if listed.is_empty() {
+        // Full update: unlock everything by not fixing (pass all names from lock).
+        match &lock_bytes {
+            Some(bytes) => {
+                let data: Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+                let mut names = Vec::new();
+                for key in ["packages", "packages-dev"] {
+                    if let Some(arr) = data.get(key).and_then(|v| v.as_array()) {
+                        for pkg in arr {
+                            if let Some(name) = pkg.get("name").and_then(|v| v.as_str()) {
+                                names.push(name.to_ascii_lowercase());
+                            }
+                        }
+                    }
+                }
+                names
+            }
+            None => Vec::new(),
+        }
+    } else if matches!(mode, UpdateAllowTransitive::OnlyListed) {
+        listed.clone()
+    } else {
+        let Some(bytes) = lock_bytes.as_deref() else {
+            return Err("--with-dependencies requires an existing composer.lock".into());
+        };
+        let root_json: Value =
+            serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
+        let mut root_names = Vec::new();
+        for key in ["require", "require-dev"] {
+            if let Some(map) = root_json.get(key).and_then(|v| v.as_object()) {
+                for name in map.keys() {
+                    if !name.contains('/') {
+                        continue; // skip platform
+                    }
+                    root_names.push(name.to_ascii_lowercase());
+                }
+            }
+        }
+        expand_update_unlock(bytes, &root_names, &listed, mode).map_err(|e| e.to_string())?
+    };
+
+    if listed.is_empty() {
         eprintln!("puck: update (all)");
     } else {
+        let mode_label = match mode {
+            UpdateAllowTransitive::OnlyListed => "",
+            UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire => " -w",
+            UpdateAllowTransitive::ListedWithTransitiveDeps => " -W",
+        };
+        eprintln!(
+            "puck: update{} ({} package{})",
+            mode_label,
+            unlock.len(),
+            if unlock.len() == 1 { "" } else { "s" }
+        );
         for name in &unlock {
-            eprintln!("puck: update {name}");
+            eprintln!("puck:   {name}");
         }
     }
 

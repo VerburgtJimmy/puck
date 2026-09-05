@@ -5,6 +5,7 @@
 //! constraint-filtered VCR/p2 pool. Enough for requiring a package whose deps
 //! are already satisfied (or platform-only).
 
+use crate::request::UpdateAllowTransitive;
 use crate::metadata::{find_p2_version_value, packages_from_lock_json};
 use crate::package::Package;
 use crate::platform::is_platform_package;
@@ -18,8 +19,86 @@ use indexmap::{IndexMap, IndexSet};
 use puck_lock::{build_lock_document, LockWriteInput, PLUGIN_API_VERSION};
 use puck_version::{parse_constraints, Stability};
 use serde_json::{Map, Value};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
+
+/// Expand a partial-update package list using lock `require` edges.
+///
+/// Mirrors Composer `-w` / `-W`:
+/// - [`UpdateAllowTransitive::OnlyListed`]: return `listed` unchanged
+/// - [`UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire`]: unlock
+///   transitive requires of listed packages, but stop at (and do not unlock)
+///   root requirements
+/// - [`UpdateAllowTransitive::ListedWithTransitiveDeps`]: unlock the full
+///   transitive require closure, including root requirements
+pub fn expand_update_unlock(
+    lock_bytes: &[u8],
+    root_require_names: &[String],
+    listed: &[String],
+    mode: UpdateAllowTransitive,
+) -> Result<Vec<String>> {
+    if matches!(mode, UpdateAllowTransitive::OnlyListed) || listed.is_empty() {
+        return Ok(listed
+            .iter()
+            .map(|n| n.to_ascii_lowercase())
+            .collect());
+    }
+
+    let lock: Value = serde_json::from_slice(lock_bytes)
+        .map_err(|e| Error::Message(format!("invalid composer.lock: {e}")))?;
+
+    let mut requires: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for key in ["packages", "packages-dev"] {
+        let Some(arr) = lock.get(key).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for pkg in arr {
+            let Some(name) = pkg.get("name").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let name = name.to_ascii_lowercase();
+            let mut deps = Vec::new();
+            if let Some(map) = pkg.get("require").and_then(|v| v.as_object()) {
+                for dep in map.keys() {
+                    if is_platform_package(dep) {
+                        continue;
+                    }
+                    deps.push(dep.to_ascii_lowercase());
+                }
+            }
+            requires.insert(name, deps);
+        }
+    }
+
+    let root: IndexSet<String> = root_require_names
+        .iter()
+        .map(|n| n.to_ascii_lowercase())
+        .collect();
+    let exclude_root =
+        matches!(mode, UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire);
+
+    let mut unlock: IndexSet<String> = listed.iter().map(|n| n.to_ascii_lowercase()).collect();
+    let mut queue: VecDeque<String> = unlock.iter().cloned().collect();
+
+    while let Some(name) = queue.pop_front() {
+        let Some(deps) = requires.get(&name) else {
+            continue;
+        };
+        for dep in deps {
+            if !requires.contains_key(dep) {
+                continue;
+            }
+            if exclude_root && root.contains(dep) {
+                continue;
+            }
+            if unlock.insert(dep.clone()) {
+                queue.push_back(dep.clone());
+            }
+        }
+    }
+
+    Ok(unlock.into_iter().collect())
+}
 
 /// Resolve root requires against `p2_dir` and build a lock document.
 ///
@@ -327,5 +406,51 @@ mod tests {
         assert_eq!(packages_dev.len(), before_dev - 1);
         assert!(!packages_dev.iter().any(|p| p["name"] == "laravel/pail"));
         assert!(packages.iter().any(|p| p["name"] == "laravel/framework"));
+    }
+
+    #[test]
+    fn expand_with_dependencies_skips_root_requires() {
+        let lock = br#"{
+            "packages": [
+                {
+                    "name": "a/a",
+                    "version": "1.0.0",
+                    "require": { "b/b": "^1", "root/dep": "^1", "php": ">=8" }
+                },
+                {
+                    "name": "b/b",
+                    "version": "1.0.0",
+                    "require": { "c/c": "^1" }
+                },
+                { "name": "c/c", "version": "1.0.0" },
+                { "name": "root/dep", "version": "1.0.0" }
+            ],
+            "packages-dev": []
+        }"#;
+        let roots = vec!["root/dep".into()];
+        let listed = vec!["a/a".into()];
+        let w = expand_update_unlock(
+            lock,
+            &roots,
+            &listed,
+            UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire,
+        )
+        .unwrap();
+        let set: BTreeSet<_> = w.into_iter().collect();
+        assert!(set.contains("a/a"));
+        assert!(set.contains("b/b"));
+        assert!(set.contains("c/c"));
+        assert!(!set.contains("root/dep"));
+
+        let all = expand_update_unlock(
+            lock,
+            &roots,
+            &listed,
+            UpdateAllowTransitive::ListedWithTransitiveDeps,
+        )
+        .unwrap();
+        let set: BTreeSet<_> = all.into_iter().collect();
+        assert!(set.contains("root/dep"));
+        assert!(set.contains("c/c"));
     }
 }
