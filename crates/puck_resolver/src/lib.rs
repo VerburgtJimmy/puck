@@ -26,7 +26,10 @@ mod watch;
 
 pub use decisions::Decisions;
 pub use link::Link;
-pub use metadata::{package_from_p2_version, packages_from_p2_json};
+pub use metadata::{
+    find_p2_version, package_from_composer_package, package_from_p2_version, packages_from_lock_json,
+    packages_from_p2_json,
+};
 pub use order::{PackageIdSet, PresentMap};
 pub use package::Package;
 pub use platform::is_platform_package;
@@ -63,5 +66,7 @@ pub type Literal = i32;
 
 #[cfg(test)]
 mod litmus;
+#[cfg(test)]
+mod lock_identity;
 #[cfg(test)]
 mod solver_tests;

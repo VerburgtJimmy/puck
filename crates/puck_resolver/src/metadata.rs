@@ -1,11 +1,11 @@
-//! Load packages from Packagist Composer 2 (`/p2`) metadata JSON.
+//! Load packages from Packagist Composer 2 (`/p2`) metadata JSON and lock files.
 
 use crate::link::Link;
 use crate::package::Package;
 use crate::Error;
 use crate::Result;
 use indexmap::IndexMap;
-use puck_version::parse_constraints;
+use puck_version::{normalize, parse_constraints};
 use serde_json::Value;
 
 /// Parse all versions of a package from a Packagist p2 response body.
@@ -23,7 +23,7 @@ pub fn packages_from_p2_json(bytes: &[u8]) -> Result<Vec<Package>> {
             continue;
         };
         for version in versions {
-            if let Some(package) = package_from_p2_version(version)? {
+            if let Some(package) = package_from_composer_package(version)? {
                 out.push(package);
             }
         }
@@ -31,8 +31,32 @@ pub fn packages_from_p2_json(bytes: &[u8]) -> Result<Vec<Package>> {
     Ok(out)
 }
 
-/// Parse a single p2 version object into a [`Package`].
-pub fn package_from_p2_version(version: &Value) -> Result<Option<Package>> {
+/// Parse `packages` (and optionally `packages-dev`) from a `composer.lock` body.
+///
+/// Lock entries use pretty `version` without `version_normalized`; we normalize
+/// via [`normalize`] like Composer’s ArrayLoader.
+pub fn packages_from_lock_json(bytes: &[u8], include_dev: bool) -> Result<Vec<Package>> {
+    let data: Value = serde_json::from_slice(bytes)
+        .map_err(|e| Error::Message(format!("invalid lock json: {e}")))?;
+    let mut out = Vec::new();
+    for key in ["packages", "packages-dev"] {
+        if key == "packages-dev" && !include_dev {
+            continue;
+        }
+        let Some(versions) = data.get(key).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for version in versions {
+            if let Some(package) = package_from_composer_package(version)? {
+                out.push(package);
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Parse a single Composer package object (p2 version row or lock entry).
+pub fn package_from_composer_package(version: &Value) -> Result<Option<Package>> {
     let name = match version.get("name").and_then(|v| v.as_str()) {
         Some(n) => n.to_ascii_lowercase(),
         None => return Ok(None),
@@ -42,14 +66,13 @@ pub fn package_from_p2_version(version: &Value) -> Result<Option<Package>> {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    let normalized = version
-        .get("version_normalized")
-        .and_then(|v| v.as_str())
-        .unwrap_or(&pretty)
-        .to_string();
-    if pretty.is_empty() || normalized.is_empty() {
+    if pretty.is_empty() {
         return Ok(None);
     }
+    let normalized = match version.get("version_normalized").and_then(|v| v.as_str()) {
+        Some(n) if !n.is_empty() => n.to_string(),
+        _ => normalize(&pretty)?,
+    };
 
     let mut package = Package::new(name, normalized.clone(), pretty);
 
@@ -67,6 +90,11 @@ pub fn package_from_p2_version(version: &Value) -> Result<Option<Package>> {
     }
 
     Ok(Some(package))
+}
+
+/// Backward-compatible alias for p2 rows.
+pub fn package_from_p2_version(version: &Value) -> Result<Option<Package>> {
+    package_from_composer_package(version)
 }
 
 fn parse_link_map(
@@ -95,6 +123,14 @@ fn parse_link_map(
     Ok(out)
 }
 
+/// Find a single version in a p2 document by pretty or normalized version.
+pub fn find_p2_version<'a>(bytes: &'a [u8], pretty_or_normalized: &str) -> Result<Option<Package>> {
+    let packages = packages_from_p2_json(bytes)?;
+    Ok(packages.into_iter().find(|p| {
+        p.pretty_version == pretty_or_normalized || p.version == pretty_or_normalized
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,6 +143,12 @@ mod tests {
         fs::read(path).expect("framework p2")
     }
 
+    fn skeleton_lock() -> Vec<u8> {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/laravel-skeleton/composer.lock");
+        fs::read(path).expect("skeleton lock")
+    }
+
     #[test]
     fn loads_framework_replace_self_version() {
         let packages = packages_from_p2_json(&framework_p2()).unwrap();
@@ -117,5 +159,18 @@ mod tests {
         assert_eq!(fw.replaces.len(), 38);
         let support = fw.replaces.get("illuminate/support").unwrap();
         assert_eq!(support.pretty_constraint, "13.30.1.0");
+    }
+
+    #[test]
+    fn loads_skeleton_lock_framework_replaces() {
+        let packages = packages_from_lock_json(&skeleton_lock(), false).unwrap();
+        assert_eq!(packages.len(), 76);
+        let fw = packages
+            .iter()
+            .find(|p| p.name == "laravel/framework")
+            .expect("framework");
+        assert_eq!(fw.pretty_version, "v13.30.1");
+        assert_eq!(fw.version, "13.30.1.0");
+        assert_eq!(fw.replaces.len(), 38);
     }
 }
