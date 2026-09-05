@@ -29,9 +29,10 @@ impl<'a> RuleSetGenerator<'a> {
         }
     }
 
-    /// `RuleSetGenerator::getRulesFor` (platform filter / aliases deferred).
+    /// `RuleSetGenerator::getRulesFor`.
     pub fn get_rules_for(mut self, request: &Request) -> Result<RuleSet> {
         self.add_rules_for_request(request)?;
+        self.add_rules_for_root_aliases()?;
         self.add_conflict_rules()?;
         self.added_map.clear();
         self.added_packages_by_names.clear();
@@ -97,24 +98,47 @@ impl<'a> RuleSetGenerator<'a> {
             }
             self.added_map.insert(package_id, ());
 
-            // Collect names + requires without holding a borrow across what_provides.
-            let (names, requires): (Vec<String>, Vec<(String, puck_version::ConstraintExpr)>) = {
-                let package = self.pool.package_by_id(package_id);
-                let names = package.names(false);
-                let requires = package
-                    .requires
-                    .iter()
-                    .map(|(t, link)| (t.clone(), link.constraint.clone()))
-                    .collect();
-                (names, requires)
-            };
-
-            for name in names {
-                self.added_packages_by_names
-                    .entry(name)
-                    .or_default()
-                    .push(package_id);
+            let alias_of = self.pool.package_by_id(package_id).alias_of;
+            if let Some(alias_of_id) = alias_of {
+                // Composer: enqueue aliasOf, add alias <-> aliasOf require rules.
+                work.push_back(alias_of_id);
+                self.add_rule(
+                    RuleType::Package,
+                    Self::create_require_rule(
+                        package_id,
+                        &[alias_of_id],
+                        RuleReason::PackageAlias,
+                    ),
+                );
+                self.add_rule(
+                    RuleType::Package,
+                    Self::create_require_rule(
+                        alias_of_id,
+                        &[package_id],
+                        RuleReason::PackageInverseAlias,
+                    ),
+                );
+                if !self.pool.package_by_id(package_id).has_self_version_requires {
+                    continue;
+                }
+            } else {
+                // Non-aliases only: SAME_NAME / conflict indexing (Composer skips AliasPackage).
+                let names = self.pool.package_by_id(package_id).names(false);
+                for name in names {
+                    self.added_packages_by_names
+                        .entry(name)
+                        .or_default()
+                        .push(package_id);
+                }
             }
+
+            let requires: Vec<(String, puck_version::ConstraintExpr)> = self
+                .pool
+                .package_by_id(package_id)
+                .requires
+                .iter()
+                .map(|(t, link)| (t.clone(), link.constraint.clone()))
+                .collect();
 
             for (target, constraint) in requires {
                 if is_platform_package(&target) {
@@ -134,6 +158,29 @@ impl<'a> RuleSetGenerator<'a> {
                 for provider in providers {
                     work.push_back(provider);
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// `RuleSetGenerator::addRulesForRootAliases`.
+    fn add_rules_for_root_aliases(&mut self) -> Result<()> {
+        let package_ids: Vec<PackageId> = self
+            .pool
+            .packages()
+            .iter()
+            .map(|p| p.id)
+            .collect();
+        for package_id in package_ids {
+            if self.added_map.contains_key(&package_id) {
+                continue;
+            }
+            let package = self.pool.package_by_id(package_id);
+            let Some(alias_of) = package.alias_of else {
+                continue;
+            };
+            if package.root_package_alias || self.added_map.contains_key(&alias_of) {
+                self.add_rules_for_package(package_id)?;
             }
         }
         Ok(())
@@ -159,6 +206,11 @@ impl<'a> RuleSetGenerator<'a> {
                 }
                 let conflict_ids = self.pool.what_provides(&target, Some(&constraint))?;
                 for conflict_id in conflict_ids {
+                    // Composer: skip AliasPackage conflicts unless name == link target.
+                    let conflict = self.pool.package_by_id(conflict_id);
+                    if conflict.is_alias() && conflict.name != target {
+                        continue;
+                    }
                     self.add_rule(
                         RuleType::Package,
                         Self::create_rule_2_literals(

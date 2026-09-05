@@ -299,7 +299,9 @@ fn solve_install_packages(
             Operation::Install { package_id } | Operation::Update { to: package_id, .. } => {
                 *package_id
             }
-            Operation::Remove { .. } => continue,
+            Operation::Remove { .. }
+            | Operation::MarkAliasInstalled { .. }
+            | Operation::MarkAliasUninstalled { .. } => continue,
         };
         let p = pool.package_by_id(package_id);
         out.push((p.name.clone(), p.pretty_version.clone()));
@@ -368,7 +370,9 @@ fn assert_solve_matches_lock(
                 let p = pool.package_by_id(*package_id);
                 got.insert((p.name.clone(), p.pretty_version.clone()));
             }
-            Operation::Remove { .. } => {}
+            Operation::Remove { .. }
+            | Operation::MarkAliasInstalled { .. }
+            | Operation::MarkAliasUninstalled { .. } => {}
         }
     }
 

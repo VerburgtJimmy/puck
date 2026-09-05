@@ -1137,3 +1137,142 @@ fn solver_install_alternative_with_circular_require() {
     assert_eq!(names, ["a/a", "b/b", "c/c"]);
     assert!(!pool.packages().iter().any(|p| p.name == "d/d"));
 }
+
+#[test]
+fn solver_install_dev_alias() {
+    let package_a = Package::new("a/a", "2.0.0.0", "2.0");
+    let mut package_b = Package::new("b/b", "1.0.0.0", "1.0");
+    package_b.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "b/b",
+            "a/a",
+            "<2.0",
+            parse_constraints("<2.0").unwrap(),
+        ),
+    );
+    // Pool ids: a=1, b=2, alias=3
+    let package_a_alias = Package::alias(&package_a, 1, "1.1.0.0", "1.1");
+
+    let mut pool = Pool::new(vec![package_a, package_b, package_a_alias]);
+    let mut request = Request::new();
+    request
+        .require_name("a/a", Some(parse_constraints("=2.0").unwrap()))
+        .unwrap();
+    request.require_name("b/b", None).unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[
+            Operation::Install { package_id: 1 },
+            Operation::MarkAliasInstalled { package_id: 3 },
+            Operation::Install { package_id: 2 },
+        ]
+    );
+}
+
+#[test]
+fn solver_install_recursive_alias_dependencies() {
+    let package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    let mut package_b = Package::new("b/b", "2.0.0.0", "2.0");
+    let mut package_a2 = Package::new("a/a", "2.0.0.0", "2.0");
+    package_a2.requires.insert(
+        "b/b".into(),
+        Link::new(
+            "a/a",
+            "b/b",
+            "=2.0",
+            parse_constraints("=2.0").unwrap(),
+        ),
+    );
+    package_b.requires.insert(
+        "a/a".into(),
+        Link::new(
+            "b/b",
+            "a/a",
+            ">=2.0",
+            parse_constraints(">=2.0").unwrap(),
+        ),
+    );
+    // Pool ids: a=1, b=2, a2=3, alias=4
+    let package_a2_alias = Package::alias(&package_a2, 3, "1.1.0.0", "1.1");
+
+    let mut pool = Pool::new(vec![package_a, package_b, package_a2, package_a2_alias]);
+    let mut request = Request::new();
+    request
+        .require_name("a/a", Some(parse_constraints("=1.1.0.0").unwrap()))
+        .unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    // Install set matches Composer; topo order of a2 vs b may differ.
+    assert_eq!(
+        tx.operations()
+            .iter()
+            .filter(|op| matches!(op, Operation::MarkAliasInstalled { package_id: 4 }))
+            .count(),
+        1
+    );
+    let mut installed: Vec<_> = tx
+        .operations()
+        .iter()
+        .filter_map(|op| match op {
+            Operation::Install { package_id } => Some(*package_id),
+            _ => None,
+        })
+        .collect();
+    installed.sort();
+    assert_eq!(installed, [2, 3]);
+}
+
+#[test]
+fn solver_install_root_aliases_if_alias_of_is_installed() {
+    let package_a = Package::new("a/a", "1.0.0.0", "1.0");
+    let mut package_a_alias = Package::alias(&package_a, 1, "1.1.0.0", "1.1");
+    package_a_alias.root_package_alias = true;
+
+    let package_b = Package::new("b/b", "1.0.0.0", "1.0");
+    let mut package_b_alias = Package::alias(&package_b, 3, "1.1.0.0", "1.1");
+    package_b_alias.root_package_alias = true;
+
+    let package_c = Package::new("c/c", "1.0.0.0", "1.0");
+    let package_c_alias = Package::alias(&package_c, 5, "1.1.0.0", "1.1");
+
+    let mut pool = Pool::new(vec![
+        package_a,
+        package_a_alias,
+        package_b,
+        package_b_alias,
+        package_c,
+        package_c_alias,
+    ]);
+    let mut request = Request::new();
+    request
+        .require_name("a/a", Some(parse_constraints("=1.1").unwrap()))
+        .unwrap();
+    request
+        .require_name("b/b", Some(parse_constraints("=1.0").unwrap()))
+        .unwrap();
+    request
+        .require_name("c/c", Some(parse_constraints("=1.0").unwrap()))
+        .unwrap();
+
+    let tx = Solver::new(&mut pool)
+        .solve(&request, &empty_present())
+        .unwrap();
+    assert_eq!(
+        tx.operations(),
+        &[
+            Operation::Install { package_id: 1 },
+            Operation::MarkAliasInstalled { package_id: 2 },
+            Operation::Install { package_id: 3 },
+            Operation::MarkAliasInstalled { package_id: 4 },
+            Operation::Install { package_id: 5 },
+            Operation::MarkAliasInstalled { package_id: 6 },
+        ]
+    );
+}

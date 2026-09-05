@@ -277,6 +277,7 @@ fn solve_packages(
             Operation::Remove { package_id } => {
                 removed.insert(pool.package_by_id(*package_id).name.clone());
             }
+            Operation::MarkAliasInstalled { .. } | Operation::MarkAliasUninstalled { .. } => {}
         }
     }
 

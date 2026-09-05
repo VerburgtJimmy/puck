@@ -7,12 +7,14 @@ use crate::pool::Pool;
 use crate::PackageId;
 use indexmap::IndexMap;
 
-/// One install / remove / update step.
+/// One install / remove / update / alias step.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
     Install { package_id: PackageId },
     Remove { package_id: PackageId },
     Update { from: PackageId, to: PackageId },
+    MarkAliasInstalled { package_id: PackageId },
+    MarkAliasUninstalled { package_id: PackageId },
 }
 
 /// Result of a successful solve (`LockTransaction` / `Transaction` subset).
@@ -24,8 +26,9 @@ pub struct Transaction {
 impl Transaction {
     /// Build operations from present packages vs positive decisions.
     ///
-    /// Install order follows Composer `Transaction::calculateOperations` topo walk
-    /// (dependencies before dependents). Removals are prepended.
+    /// Mirrors Composer `Transaction::calculateOperations` (alias handling,
+    /// dependency-before-dependent install order). Removals are prepended;
+    /// alias uninstalls are appended.
     pub fn from_decisions(pool: &Pool, present: &PresentMap, decisions: &Decisions) -> Self {
         let mut result: Vec<PackageId> = Vec::new();
         for i in 0..decisions.len() {
@@ -38,12 +41,21 @@ impl Transaction {
         }
 
         let result_set: PackageIdSet = result.iter().copied().collect();
+
         let mut present_by_name: IndexMap<String, PackageId> = IndexMap::new();
         let mut remove_by_name: IndexMap<String, PackageId> = IndexMap::new();
+        let mut present_alias: IndexMap<String, PackageId> = IndexMap::new();
+        let mut remove_alias: IndexMap<String, PackageId> = IndexMap::new();
         for &id in present.keys() {
-            let name = pool.package_by_id(id).name.clone();
-            present_by_name.insert(name.clone(), id);
-            remove_by_name.insert(name, id);
+            let package = pool.package_by_id(id);
+            if package.is_alias() {
+                let key = alias_key(package);
+                present_alias.insert(key.clone(), id);
+                remove_alias.insert(key, id);
+            } else {
+                present_by_name.insert(package.name.clone(), id);
+                remove_by_name.insert(package.name.clone(), id);
+            }
         }
 
         let mut is_required: PackageIdSet = PackageIdSet::new();
@@ -88,21 +100,34 @@ impl Transaction {
                 visited.insert(package_id);
                 stack.push(package_id);
                 let package = pool.package_by_id(package_id);
-                for link in package.requires.values() {
-                    for &other in &result {
-                        if result_set.contains(&other)
-                            && pool
-                                .match_package(other, &link.target, Some(&link.constraint))
-                                .unwrap_or(false)
-                        {
-                            stack.push(other);
+                if let Some(alias_of) = package.alias_of {
+                    if result_set.contains(&alias_of) {
+                        stack.push(alias_of);
+                    }
+                } else {
+                    for link in package.requires.values() {
+                        for &other in &result {
+                            if result_set.contains(&other)
+                                && pool
+                                    .match_package(other, &link.target, Some(&link.constraint))
+                                    .unwrap_or(false)
+                            {
+                                stack.push(other);
+                            }
                         }
                     }
                 }
             } else {
                 processed.insert(package_id);
                 let package = pool.package_by_id(package_id);
-                if let Some(&from_id) = present_by_name.get(&package.name) {
+                if package.is_alias() {
+                    let key = alias_key(package);
+                    if present_alias.contains_key(&key) {
+                        remove_alias.shift_remove(&key);
+                    } else {
+                        result_ops.push(Operation::MarkAliasInstalled { package_id });
+                    }
+                } else if let Some(&from_id) = present_by_name.get(&package.name) {
                     let from = pool.package_by_id(from_id);
                     if from.version != package.version {
                         result_ops.push(Operation::Update {
@@ -127,6 +152,12 @@ impl Transaction {
         }
         operations.extend(result_ops);
 
+        let mut alias_uninstalls: Vec<PackageId> = remove_alias.values().copied().collect();
+        alias_uninstalls.sort();
+        for package_id in alias_uninstalls {
+            operations.push(Operation::MarkAliasUninstalled { package_id });
+        }
+
         Self { operations }
     }
 
@@ -137,4 +168,8 @@ impl Transaction {
     pub fn package<'a>(&self, pool: &'a Pool, package_id: PackageId) -> &'a Package {
         pool.package_by_id(package_id)
     }
+}
+
+fn alias_key(package: &Package) -> String {
+    format!("{}::{}", package.name, package.version)
 }
