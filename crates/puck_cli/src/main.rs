@@ -7,7 +7,7 @@ use puck_install::{
     read_installed, reconcile_vendor_presence,
 };
 use puck_laravel::{DiscoverStatus, discover};
-use puck_lock::LockFile;
+use puck_lock::{LockFile, abandoned_warnings};
 use puck_manifest::{
     PackageRequirement, Manifest, add_requirement_preserving, remove_requirement_preserving,
     sort_packages_enabled,
@@ -852,6 +852,11 @@ async fn run_install(
         exec_timings = execute_install(&root, &lock, &plan, options, &store, manifest.as_ref())
             .await
             .map_err(|e| e.to_string())?;
+    }
+
+    // Composer Installer::run: warn on abandoned locked packages (stderr).
+    for line in abandoned_warnings(&lock.packages, &lock.packages_dev, !no_dev) {
+        eprintln!("puck: {line}");
     }
 
     // Warm keep: skip dump when packages and dump meta (hash + optimize) match.

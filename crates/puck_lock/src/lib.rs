@@ -13,7 +13,7 @@ mod write;
 
 pub use array_dumper::dump_lock_package_from_p2;
 pub use content_hash::content_hash;
-pub use lock::{Dist, LockFile, LockedPackage, Source};
+pub use lock::{abandoned_warnings, Abandoned, Dist, LockFile, LockedPackage, Source};
 pub use write::{
     build_lock_document, format_lock_package, sort_lock_packages, LockWriteInput, PLUGIN_API_VERSION,
 };

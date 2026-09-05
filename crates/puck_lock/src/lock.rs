@@ -77,6 +77,68 @@ impl LockedPackage {
             .and_then(Value::as_str)
             .unwrap_or("library")
     }
+
+    /// Abandoned status from the lock (`extra["abandoned"]`).
+    ///
+    /// Composer stores `true` or a replacement package name string
+    /// (`CompletePackage::setAbandoned` / ArrayDumper).
+    pub fn abandoned(&self) -> Option<Abandoned> {
+        match self.extra.get("abandoned") {
+            Some(Value::Bool(true)) => Some(Abandoned::NoReplacement),
+            Some(Value::String(name)) if !name.is_empty() => {
+                Some(Abandoned::Replacement(name.clone()))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Lock / p2 `abandoned` field (Composer CompletePackage).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Abandoned {
+    /// `abandoned: true` - no suggested replacement.
+    NoReplacement,
+    /// `abandoned: "vendor/package"` - suggested replacement.
+    Replacement(String),
+}
+
+impl Abandoned {
+    /// Composer Installer stderr line (without IO colour tags).
+    pub fn warning_line(&self, package_name: &str) -> String {
+        match self {
+            Self::NoReplacement => format!(
+                "Package {package_name} is abandoned, you should avoid using it. No replacement was suggested."
+            ),
+            Self::Replacement(replacement) => format!(
+                "Package {package_name} is abandoned, you should avoid using it. Use {replacement} instead."
+            ),
+        }
+    }
+}
+
+/// Emit Composer-shaped abandoned warnings for locked packages.
+///
+/// Mirrors `Composer\Installer::run` after suggestions: locked repo with
+/// dev packages when `include_dev` is true.
+pub fn abandoned_warnings<'a>(
+    packages: impl IntoIterator<Item = &'a LockedPackage>,
+    packages_dev: impl IntoIterator<Item = &'a LockedPackage>,
+    include_dev: bool,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    for pkg in packages {
+        if let Some(abandoned) = pkg.abandoned() {
+            out.push(abandoned.warning_line(&pkg.name));
+        }
+    }
+    if include_dev {
+        for pkg in packages_dev {
+            if let Some(abandoned) = pkg.abandoned() {
+                out.push(abandoned.warning_line(&pkg.name));
+            }
+        }
+    }
+    out
 }
 
 /// Dist reference on a locked package.
@@ -124,5 +186,54 @@ impl FromStr for LockFile {
 
     fn from_str(s: &str) -> Result<Self> {
         serde_json::from_str(s).map_err(|e| Error::Parse(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod abandoned_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn pkg(name: &str, abandoned: Option<Value>) -> LockedPackage {
+        let mut extra = Map::new();
+        if let Some(v) = abandoned {
+            extra.insert("abandoned".into(), v);
+        }
+        LockedPackage {
+            name: name.into(),
+            version: "1.0.0".into(),
+            dist: None,
+            source: None,
+            bin: Vec::new(),
+            extra,
+        }
+    }
+
+    #[test]
+    fn warns_true_and_replacement() {
+        let pkgs = vec![
+            pkg("old/lib", Some(Value::Bool(true))),
+            pkg("old/foo", Some(json!("new/foo"))),
+            pkg("ok/lib", None),
+        ];
+        let lines = abandoned_warnings(&pkgs, &[], true);
+        assert_eq!(
+            lines,
+            vec![
+                "Package old/lib is abandoned, you should avoid using it. No replacement was suggested."
+                    .to_string(),
+                "Package old/foo is abandoned, you should avoid using it. Use new/foo instead."
+                    .to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn skips_dev_when_no_dev() {
+        let prod = vec![pkg("a/a", Some(Value::Bool(true)))];
+        let dev = vec![pkg("b/b", Some(Value::Bool(true)))];
+        let lines = abandoned_warnings(&prod, &dev, false);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("a/a"));
     }
 }
