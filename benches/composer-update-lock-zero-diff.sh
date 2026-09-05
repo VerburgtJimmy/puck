@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# M3 gate: puck-written lock must survive `composer update --lock` on VCR metadata.
+# M3 gate: puck-written lock must survive Composer on VCR metadata.
 #
 # 1. Build Composer file:// mirror from fixtures/registry/packagist/p2
 # 2. Copy fixture into a temp project; point composer.json at the mirror only
 # 3. Rewrite lock with puck (fixed pins from existing lock, ArrayDumper from VCR)
-# 4. Run `composer update --lock --no-install`
-# 5. Assert zero diff on composer.lock
+# 4. Run `composer update --lock --no-install` → assert zero diff
+# 5. Run `composer update --dry-run --no-install` → assert nothing to modify
 #
 # Usage: ./benches/composer-update-lock-zero-diff.sh [laravel-skeleton|laravel-app]
 set -euo pipefail
@@ -62,3 +62,19 @@ if ! diff -u composer.lock.puck composer.lock; then
   exit 1
 fi
 echo "PASS: composer update --lock zero diff ($FIXTURE)"
+
+# Restore puck lock (update --lock should be identical, but be explicit).
+cp composer.lock.puck composer.lock
+DRY_OUT="$TMP/composer-dry-run.out"
+# Composer prints status on stderr.
+if ! composer update --dry-run --no-install --no-audit --no-scripts --no-ansi >"$DRY_OUT" 2>&1; then
+  echo "composer update --dry-run failed:" >&2
+  cat "$DRY_OUT" >&2
+  exit 1
+fi
+if ! grep -q "Nothing to modify in lock file" "$DRY_OUT"; then
+  echo "FAIL: composer update --dry-run modified or planned lock changes ($FIXTURE):" >&2
+  cat "$DRY_OUT" >&2
+  exit 1
+fi
+echo "PASS: composer update --dry-run nothing to modify ($FIXTURE)"
