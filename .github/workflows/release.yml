@@ -1,0 +1,178 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            cross: true
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            cross: true
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            cross: false
+          - os: macos-13
+            target: x86_64-apple-darwin
+            cross: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install musl tooling (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          cargo install cross --locked
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.96.0
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        env:
+          PUCK_GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          export PUCK_VERSION="${TAG#v}"
+          export PUCK_GIT_SHA="$(echo "$PUCK_GIT_SHA" | cut -c1-7)"
+          export PUCK_BUILD_DATE="$(date -u +%Y-%m-%d)"
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release -p puck_cli --target "${{ matrix.target }}"
+          else
+            cargo build --release -p puck_cli --target "${{ matrix.target }}"
+          fi
+
+      - name: Package tarball (ad-hoc codesign on macOS)
+        run: |
+          set -euo pipefail
+          mkdir -p dist-out
+          BIN="target/${{ matrix.target }}/release/puck"
+          test -x "$BIN"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            # 0.1: ad-hoc sign. Notarization is a fast follow, not a ship gate.
+            codesign -s - --force --timestamp=none "$BIN"
+            codesign -dv --verbose=2 "$BIN" || true
+          fi
+          STAGE="dist-out/stage"
+          mkdir -p "$STAGE"
+          cp "$BIN" "$STAGE/puck"
+          tar -C "$STAGE" -czf "dist-out/puck-${{ matrix.target }}.tar.gz" puck
+          ls -la dist-out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: puck-${{ matrix.target }}
+          path: dist-out/puck-${{ matrix.target }}.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Assemble SHA256SUMS, signature, manifest
+        id: assemble
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts -type f -name 'puck-*.tar.gz' -exec cp {} release/ \;
+          cd release
+          ls -la
+
+          sha256sum puck-*.tar.gz | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+
+          if [ -n "${MINISIGN_SECRET_KEY:-}" ]; then
+            sudo apt-get update
+            sudo apt-get install -y minisign
+            KEY="$(mktemp)"
+            printf '%s\n' "$MINISIGN_SECRET_KEY" > "$KEY"
+            minisign -Sm SHA256SUMS -s "$KEY"
+            rm -f "$KEY"
+            echo "signed=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "MINISIGN_SECRET_KEY not set; publishing without SHA256SUMS.minisig"
+            echo "signed=no" >> "$GITHUB_OUTPUT"
+          fi
+
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          RELEASED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          BASE="https://github.com/VerburgtJimmy/puck/releases/download/${TAG}"
+          export VERSION RELEASED_AT BASE
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          release = pathlib.Path(".")
+          artifacts = {}
+          for tar in sorted(release.glob("puck-*.tar.gz")):
+              name = tar.name
+              triple = name[len("puck-") : -len(".tar.gz")]
+              data = tar.read_bytes()
+              artifacts[triple] = {
+                  "url": f"{os.environ['BASE']}/{name}",
+                  "sha256": hashlib.sha256(data).hexdigest(),
+                  "size": len(data),
+              }
+          manifest = {
+              "version": os.environ["VERSION"],
+              "released_at": os.environ["RELEASED_AT"],
+              "channel": "stable",
+              "artifacts": artifacts,
+          }
+          pathlib.Path("manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/puck-*.tar.gz
+            release/SHA256SUMS
+            release/manifest.json
+
+      - name: Upload GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            release/puck-*.tar.gz
+            release/SHA256SUMS
+            release/SHA256SUMS.minisig
+            release/manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
