@@ -57,7 +57,9 @@ Warnings (abandoned packages, etc.) do not block. Run `puck doctor` or `puck doc
 curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/master/install.sh | bash
 ```
 
-Installs a release binary into `~/.local/bin` (or `/usr/local/bin` if writable). See [`docs/install.md`](docs/install.md).
+Installs into `~/.puck/bin`. Mirror (when ready): `https://puck.jimmyverburgt.com/install`. Upgrade/manifest source of truth remains GitHub Releases — see [`docs/distribution.md`](docs/distribution.md) and [`docs/install.md`](docs/install.md).
+
+minisign public key: [`dist/minisign/minisign.pub`](dist/minisign/minisign.pub).
 
 ### Homebrew
 
@@ -66,7 +68,7 @@ brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck
 brew install puck
 ```
 
-Formula: [`dist/homebrew/puck.rb`](dist/homebrew/puck.rb). Release assets must be attached to the GitHub release (see [`dist/README.md`](dist/README.md)).
+Formula stub (template): [`dist/homebrew/puck.rb`](dist/homebrew/puck.rb).
 
 ### From source
 
