@@ -2,7 +2,9 @@
 
 **Keep Composer installed; puck reads and writes the same files and you can switch back at any time.**
 
-puck targets macOS and Linux (amd64 / arm64). Windows is not supported in 0.1.
+puck targets macOS and Linux (amd64 / arm64). Linux releases are **musl** static binaries. Windows is not supported in 0.1.
+
+See [`distribution.md`](distribution.md) for release artifacts, signing, and upgrade policy.
 
 ## curl
 
@@ -10,17 +12,29 @@ puck targets macOS and Linux (amd64 / arm64). Windows is not supported in 0.1.
 curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/master/install.sh | bash
 ```
 
-Options (env):
+Site mirror (same script, when deployed): `https://puck.jimmyverburgt.com/install` — never the source of truth for upgrades; the GitHub Releases `manifest.json` is.
 
-| Variable | Default | Meaning |
+Installs into `~/.puck/bin` and appends a PATH block to your shell rc unless `--no-modify-path`.
+
+```bash
+# pin a version
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/master/install.sh | bash -s -- v0.1.0
+
+# uninstall binary + PATH block (store left behind)
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/master/install.sh | bash -s -- --uninstall
+```
+
+| Variable / flag | Default | Meaning |
 |---|---|---|
-| `PUCK_INSTALL_DIR` | `~/.local/bin` (or `/usr/local/bin` if writable) | Install location |
-| `PUCK_VERSION` | `v0.1.0` | GitHub release tag |
+| `PUCK_INSTALL` | `~/.puck` | Install root (`bin/puck` underneath) |
+| `PUCK_VERSION` / first arg | latest via manifest | GitHub release tag |
 | `PUCK_REPO` | `VerburgtJimmy/puck` | GitHub repo |
+| `--no-modify-path` | off | Do not edit shell rc |
+| `-v` | off | Verbose |
 
-Ensure the install directory is on your `PATH`.
+Always verifies SHA256. Verifies minisign when the `minisign` tool is installed. Public key: [`../dist/minisign/minisign.pub`](../dist/minisign/minisign.pub).
 
-The script downloads a prebuilt binary from the matching GitHub release. Release assets must be uploaded for the tag you select — see [`../dist/README.md`](../dist/README.md).
+If Homebrew’s `puck` is already on `PATH`, the script refuses and tells you to `brew upgrade puck`.
 
 ## Homebrew
 
@@ -29,7 +43,7 @@ brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck
 brew install puck
 ```
 
-The formula lives at [`../dist/homebrew/puck.rb`](../dist/homebrew/puck.rb). Homebrew expects release tarballs/binaries attached to the GitHub release.
+The formula under [`../dist/homebrew/puck.rb`](../dist/homebrew/puck.rb) / [`../Formula/puck.rb`](../Formula/puck.rb) is a **template** until the release workflow fills sha256s from `manifest.json`.
 
 ## From source
 
@@ -37,7 +51,8 @@ The formula lives at [`../dist/homebrew/puck.rb`](../dist/homebrew/puck.rb). Hom
 git clone https://github.com/VerburgtJimmy/puck.git
 cd puck
 cargo build --release -p puck_cli
-install -m 755 target/release/puck ~/.local/bin/puck
+mkdir -p ~/.puck/bin
+install -m 755 target/release/puck ~/.puck/bin/puck
 ```
 
 Requires Rust 1.96+.

@@ -1,49 +1,30 @@
 # Distribution
 
-Prebuilt binaries are expected on the GitHub release for tag `v0.1.0` (and later). Until assets are attached, `install.sh` and Homebrew will fail to download — that is expected.
+Source of truth: [`../docs/distribution.md`](../docs/distribution.md).
 
-## Build release binaries
+Prebuilt binaries are produced by [`.github/workflows/release.yml`](../.github/workflows/release.yml) on `v*` tags — never from a laptop. Re-tag from the workflow; do not attach hand-built binaries.
 
-On each platform (or via CI cross-build):
+## Artifacts (per tag)
 
-```bash
-cargo build --release -p puck_cli
-cp target/release/puck puck-<target-triple>
-```
-
-Target triple names used by `install.sh` and `dist/homebrew/puck.rb`:
-
-| Asset name | Platform |
+| Asset | Platform |
 |---|---|
-| `puck-aarch64-apple-darwin` | macOS Apple Silicon |
-| `puck-x86_64-apple-darwin` | macOS Intel |
-| `puck-x86_64-unknown-linux-gnu` | Linux x86_64 |
-| `puck-aarch64-unknown-linux-gnu` | Linux arm64 |
+| `puck-aarch64-apple-darwin.tar.gz` | macOS Apple Silicon (ad-hoc codesign in 0.1) |
+| `puck-x86_64-apple-darwin.tar.gz` | macOS Intel (ad-hoc codesign in 0.1) |
+| `puck-x86_64-unknown-linux-musl.tar.gz` | Linux x86_64 static |
+| `puck-aarch64-unknown-linux-musl.tar.gz` | Linux arm64 static |
+| `SHA256SUMS` / `SHA256SUMS.minisig` | checksums + minisign |
+| `manifest.json` | what `install.sh` / `puck upgrade` read |
 
-## Attach to the GitHub release
+Do **not** ship glibc Linux builds. Manifest URL:
 
-```bash
-gh release upload v0.1.0 \
-  puck-aarch64-apple-darwin \
-  puck-x86_64-apple-darwin \
-  puck-x86_64-unknown-linux-gnu \
-  puck-aarch64-unknown-linux-gnu \
-  --clobber
-```
+`https://github.com/VerburgtJimmy/puck/releases/latest/download/manifest.json`
 
-Do **not** force-push or retag `v0.1.0` for doc/install commits after the tag; upload assets to the existing release, or cut `v0.1.1` later.
+## minisign
 
-## Homebrew sha256
-
-After uploading assets:
-
-```bash
-shasum -a 256 puck-aarch64-apple-darwin
-# …update sha256 in dist/homebrew/puck.rb
-```
+Public key: [`minisign/minisign.pub`](minisign/minisign.pub). See [`minisign/README.md`](minisign/README.md).
 
 ## Install paths
 
-- curl: [`../install.sh`](../install.sh) → `~/.local/bin` or `/usr/local/bin`
+- curl: [`../install.sh`](../install.sh) → `~/.puck/bin`
 - docs: [`../docs/install.md`](../docs/install.md)
-- formula: [`../Formula/puck.rb`](../Formula/puck.rb) (Homebrew tap) and copy under [`homebrew/puck.rb`](homebrew/puck.rb)
+- Homebrew formula: **template only** — [`homebrew/puck.rb`](homebrew/puck.rb) and [`../Formula/puck.rb`](../Formula/puck.rb)
