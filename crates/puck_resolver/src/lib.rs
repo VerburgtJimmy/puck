@@ -11,6 +11,7 @@ mod link;
 mod metadata;
 mod order;
 mod package;
+mod path_repo;
 mod platform;
 mod policy;
 mod pool;
@@ -36,6 +37,7 @@ pub use metadata::{
 };
 pub use order::{PackageIdSet, PresentMap};
 pub use package::Package;
+pub use path_repo::{load_path_packages, path_package_names, PathPackage, PathTransportOptions};
 pub use platform::is_platform_package;
 pub use policy::DefaultPolicy;
 pub use pool::Pool;

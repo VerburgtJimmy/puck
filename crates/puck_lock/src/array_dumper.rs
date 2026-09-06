@@ -165,6 +165,93 @@ pub fn dump_lock_package_from_p2(version: &Value) -> Value {
     Value::Object(data)
 }
 
+
+/// Dump a path-repository package into a lock package object.
+///
+/// Unlike [`dump_lock_package_from_p2`], keeps `transport-options` and does **not**
+/// inject Packagist `notification-url`.
+pub fn dump_lock_package_from_path(version: &Value) -> Value {
+    let Some(src) = version.as_object() else {
+        return version.clone();
+    };
+
+    let mut data = Map::new();
+
+    insert_string(&mut data, "name", src.get("name"));
+    insert_string(&mut data, "version", src.get("version"));
+
+    if let Some(v) = src.get("target-dir") {
+        if !is_empty_value(v) {
+            data.insert("target-dir".into(), v.clone());
+        }
+    }
+
+    if let Some(dist) = src.get("dist").and_then(|v| v.as_object()) {
+        let mut out = Map::new();
+        for key in ["type", "url", "reference", "shasum", "mirrors"] {
+            if let Some(v) = dist.get(key) {
+                if key == "shasum" || !is_empty_value(v) {
+                    out.insert(key.into(), v.clone());
+                }
+            }
+        }
+        if !out.is_empty() {
+            data.insert("dist".into(), Value::Object(out));
+        }
+    }
+
+    for link_type in LINK_TYPES {
+        if let Some(Value::Object(map)) = src.get(*link_type) {
+            if map.is_empty() {
+                continue;
+            }
+            let mut sorted = map.clone();
+            sort_json_object(&mut sorted);
+            data.insert((*link_type).into(), Value::Object(sorted));
+        }
+    }
+
+    if let Some(Value::Object(suggest)) = src.get("suggest") {
+        if !suggest.is_empty() {
+            let mut sorted = suggest.clone();
+            sort_json_object(&mut sorted);
+            data.insert("suggest".into(), Value::Object(sorted));
+        }
+    }
+
+    for key in PACKAGE_KEYS {
+        if *key == "notification-url" {
+            continue;
+        }
+        copy_if_present(&mut data, src, key);
+    }
+
+    for key in COMPLETE_KEYS {
+        if *key == "keywords" {
+            if let Some(Value::Array(keywords)) = src.get("keywords") {
+                if !keywords.is_empty() {
+                    let mut sorted = keywords.clone();
+                    sorted.sort_by(|a, b| match (a.as_str(), b.as_str()) {
+                        (Some(a), Some(b)) => a.cmp(b),
+                        _ => std::cmp::Ordering::Equal,
+                    });
+                    data.insert("keywords".into(), Value::Array(sorted));
+                }
+            }
+            continue;
+        }
+        copy_if_present(&mut data, src, key);
+    }
+
+    if let Some(to) = src.get("transport-options") {
+        if !is_empty_value(to) {
+            data.insert("transport-options".into(), to.clone());
+        }
+    }
+
+    Value::Object(data)
+}
+
 fn insert_string(data: &mut Map<String, Value>, key: &str, value: Option<&Value>) {
     if let Some(Value::String(s)) = value {
         if !s.is_empty() {
@@ -240,5 +327,24 @@ mod tests {
         let type_i = keys.iter().position(|k| k == "type").unwrap();
         let notif_i = keys.iter().position(|k| k == "notification-url").unwrap();
         assert!(name_i < type_i && type_i < notif_i);
+    }
+
+    #[test]
+    fn dumps_path_package_keeps_transport_options() {
+        let dumped = dump_lock_package_from_path(&json!({
+            "name": "acme/hello",
+            "version": "dev-main",
+            "version_normalized": "dev-main",
+            "dist": { "type": "path", "url": "packages/acme-hello", "reference": "abc" },
+            "type": "library",
+            "autoload": { "psr-4": { "Acme\\Hello\\": "src/" } },
+            "transport-options": { "symlink": true, "relative": true },
+        }));
+        let obj = dumped.as_object().unwrap();
+        assert_eq!(obj["dist"]["type"], "path");
+        assert_eq!(obj["dist"]["url"], "packages/acme-hello");
+        assert_eq!(obj["transport-options"]["symlink"], true);
+        assert!(!obj.contains_key("notification-url"));
+        assert!(!obj.contains_key("version_normalized"));
     }
 }

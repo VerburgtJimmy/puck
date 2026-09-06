@@ -18,7 +18,7 @@ use puck_plugins::{
 };
 use puck_registry::p2_path;
 use puck_resolver::{
-    UpdateAllowTransitive, expand_update_unlock, resolve_lock_document,
+    UpdateAllowTransitive, expand_update_unlock, load_path_packages, resolve_lock_document,
 };
 use puck_scripts::{RunScriptsOptions, run_install_scripts};
 use puck_store::Store;
@@ -375,11 +375,20 @@ async fn run_require(
     let mut unlock = Vec::new();
     let mut composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
 
+    let root_for_path: Value =
+        serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
+    let path_provided: std::collections::BTreeSet<String> =
+        load_path_packages(&root, &root_for_path)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|p| p.package.name)
+            .collect();
+
     for spec in &packages {
         let req = PackageRequirement::parse(spec).map_err(|e| e.to_string())?;
-        // Ensure VCR has metadata before mutating the project.
+        // Ensure VCR has metadata before mutating the project (path repos exempt).
         let meta_path = p2_path(&registry_root, &req.name);
-        if !meta_path.is_file() {
+        if !meta_path.is_file() && !path_provided.contains(&req.name) {
             return Err(format!(
                 "no recorded p2 metadata for {} at {} (record with benches/record-packagist-p2.sh or widen the VCR)",
                 req.name,
@@ -457,6 +466,7 @@ async fn run_require(
         &p2_dir,
         &unlock,
         true,
+        &root,
     )
     .map_err(|e| e.to_string())?;
 
@@ -539,6 +549,7 @@ async fn run_remove(
         &p2_dir,
         &unlock,
         true,
+        &root,
     )
     .map_err(|e| e.to_string())?;
 
@@ -582,9 +593,10 @@ async fn run_lock(
     let composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
     let lock_bytes = std::fs::read(&lock_path).map_err(|e| e.to_string())?;
 
-    // Empty unlock: keep every locked package fixed; rewrite dump from VCR p2.
-    let lock_doc = resolve_lock_document(&composer_text, Some(&lock_bytes), &p2_dir, &[], true)
-        .map_err(|e| e.to_string())?;
+    // Empty unlock: keep every locked package fixed; rewrite dump from VCR p2 / path repos.
+    let lock_doc =
+        resolve_lock_document(&composer_text, Some(&lock_bytes), &p2_dir, &[], true, &root)
+            .map_err(|e| e.to_string())?;
 
     write_lock_file(&lock_path, &lock_doc)?;
     eprintln!(
@@ -722,6 +734,7 @@ async fn run_update(
         &p2_dir,
         &unlock,
         true,
+        &root,
     )
     .map_err(|e| e.to_string())?;
 

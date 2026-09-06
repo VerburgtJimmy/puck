@@ -1,6 +1,6 @@
 //! Write helpers for `composer.lock` (`Composer\Package\Locker::setLockData` / `lockPackages`).
 
-use crate::array_dumper::dump_lock_package_from_p2;
+use crate::array_dumper::{dump_lock_package_from_p2, dump_lock_package_from_path};
 use crate::content_hash::content_hash;
 use crate::Result;
 use serde_json::{Map, Value, json};
@@ -87,7 +87,16 @@ fn empty_object_or_map(map: Map<String, Value>) -> Value {
 ///
 /// Delegates to [`dump_lock_package_from_p2`] (ArrayDumper + Locker::lockPackages).
 pub fn format_lock_package(version: Value) -> Value {
-    dump_lock_package_from_p2(&version)
+    if version
+        .get("dist")
+        .and_then(|d| d.get("type"))
+        .and_then(|t| t.as_str())
+        == Some("path")
+    {
+        dump_lock_package_from_path(&version)
+    } else {
+        dump_lock_package_from_p2(&version)
+    }
 }
 
 /// Sort lock package entries by name then version (`Locker::lockPackages` usort).

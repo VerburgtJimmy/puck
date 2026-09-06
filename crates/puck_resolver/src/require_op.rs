@@ -8,6 +8,7 @@
 use crate::request::UpdateAllowTransitive;
 use crate::metadata::{find_p2_version_value, packages_from_lock_json};
 use crate::package::Package;
+use crate::path_repo::{load_path_packages, PathPackage};
 use crate::platform::is_platform_package;
 use crate::pool_builder::{ArrayRepository, PoolBuilder};
 use crate::request::Request;
@@ -100,19 +101,28 @@ pub fn expand_update_unlock(
     Ok(unlock.into_iter().collect())
 }
 
-/// Resolve root requires against `p2_dir` and build a lock document.
+/// Resolve root requires against `p2_dir` (+ path repositories) and build a lock document.
 ///
 /// `unlock` names are not fixed from the existing lock (they may change version
 /// or be newly installed). All other locked packages are fixed.
+///
+/// `project_root` resolves path repository `url` values (relative to the project).
 pub fn resolve_lock_document(
     composer_json: &str,
     lock_bytes: Option<&[u8]>,
     p2_dir: &Path,
     unlock: &[String],
     include_dev: bool,
+    project_root: &Path,
 ) -> Result<Value> {
     let root: Value = serde_json::from_str(composer_json)
         .map_err(|e| Error::Message(format!("invalid composer.json: {e}")))?;
+
+    let path_packages = load_path_packages(project_root, &root)?;
+    let path_by_name: IndexMap<String, PathPackage> = path_packages
+        .iter()
+        .map(|p| (p.package.name.clone(), p.clone()))
+        .collect();
 
     let unlock_set: IndexSet<String> = unlock.iter().map(|n| n.to_ascii_lowercase()).collect();
 
@@ -150,25 +160,50 @@ pub fn resolve_lock_document(
         _ => Stability::Stable,
     };
 
+    // Path packages default to `dev-main` (VersionGuesser fallback); allow them
+    // under stable minimum-stability like Composer root requires of path pkgs.
+    let mut stability_flags: IndexMap<String, Stability> = IndexMap::new();
+    for name in path_by_name.keys() {
+        stability_flags.insert(name.clone(), Stability::Dev);
+    }
+
     let prod_requires = root_requires_from_json(&root, false);
     let all_requires = root_requires_from_json(&root, include_dev);
 
-    let prod_repo = array_repository_from_p2_constraints(p2_dir, &prod_requires, stability)?;
-    let prod_names = solve_names(&prod_repo, &prod_requires, &fixed_prod)?;
+    let mut prod_repo = array_repository_from_p2_constraints(p2_dir, &prod_requires, stability)?;
+    merge_path_packages(&mut prod_repo, &path_packages);
+    let prod_names = solve_names(
+        &prod_repo,
+        &prod_requires,
+        &fixed_prod,
+        stability,
+        &stability_flags,
+    )?;
 
-    let all_repo = array_repository_from_p2_constraints(p2_dir, &all_requires, stability)?;
-    let installed = solve_packages(&all_repo, &all_requires, &fixed_all)?;
+    let mut all_repo = array_repository_from_p2_constraints(p2_dir, &all_requires, stability)?;
+    merge_path_packages(&mut all_repo, &path_packages);
+    let installed = solve_packages(
+        &all_repo,
+        &all_requires,
+        &fixed_all,
+        stability,
+        &stability_flags,
+    )?;
 
     let mut packages = Vec::new();
     let mut packages_dev = Vec::new();
     for (name, pretty) in &installed {
-        let path = p2_dir.join(format!("{}.json", name.replace('/', "$")));
-        let bytes = std::fs::read(&path).map_err(|e| {
-            Error::Message(format!("missing p2 for {name} at {}: {e}", path.display()))
-        })?;
-        let raw = find_p2_version_value(&bytes, pretty)?.ok_or_else(|| {
-            Error::Message(format!("p2 for {name} has no version {pretty}"))
-        })?;
+        let raw = if let Some(path_pkg) = path_by_name.get(name) {
+            path_pkg.to_lock_value()
+        } else {
+            let path = p2_dir.join(format!("{}.json", name.replace('/', "$")));
+            let bytes = std::fs::read(&path).map_err(|e| {
+                Error::Message(format!("missing p2 for {name} at {}: {e}", path.display()))
+            })?;
+            find_p2_version_value(&bytes, pretty)?.ok_or_else(|| {
+                Error::Message(format!("p2 for {name} has no version {pretty}"))
+            })?
+        };
         if prod_names.contains(name) {
             packages.push(raw);
         } else {
@@ -202,6 +237,12 @@ pub fn resolve_lock_document(
         },
     )
     .map_err(|e| Error::Message(e.to_string()))
+}
+
+fn merge_path_packages(repo: &mut ArrayRepository, path_packages: &[PathPackage]) {
+    for path_pkg in path_packages {
+        repo.add_package(path_pkg.package.clone());
+    }
 }
 
 fn root_requires_from_json(root: &Value, include_dev: bool) -> Vec<(String, String)> {
@@ -245,8 +286,10 @@ fn solve_names(
     repo: &ArrayRepository,
     requires: &[(String, String)],
     fixed: &[Package],
+    minimum_stability: Stability,
+    stability_flags: &IndexMap<String, Stability>,
 ) -> Result<BTreeSet<String>> {
-    Ok(solve_packages(repo, requires, fixed)?
+    Ok(solve_packages(repo, requires, fixed, minimum_stability, stability_flags)?
         .into_iter()
         .map(|(n, _)| n)
         .collect())
@@ -256,6 +299,8 @@ fn solve_packages(
     repo: &ArrayRepository,
     requires: &[(String, String)],
     fixed: &[Package],
+    minimum_stability: Stability,
+    stability_flags: &IndexMap<String, Stability>,
 ) -> Result<Vec<(String, String)>> {
     let mut request = Request::new();
     for (name, constraint) in requires {
@@ -263,7 +308,14 @@ fn solve_packages(
             .require_name(name.clone(), Some(parse_constraints(constraint)?))
             .map_err(Error::Message)?;
     }
-    let (mut pool, present) = PoolBuilder::build(&[repo], &[], fixed, &mut request)?;
+    let (mut pool, present) = PoolBuilder::build_with_stability(
+        &[repo],
+        &[],
+        fixed,
+        &mut request,
+        minimum_stability,
+        stability_flags,
+    )?;
     let tx = Solver::new(&mut pool).solve(&request, &present)?;
 
     let mut removed = BTreeSet::new();
@@ -338,6 +390,7 @@ mod tests {
             &p2_dir(),
             &["webmozart/assert".into()],
             true,
+            &dir,
         )
         .expect("resolve");
 
@@ -395,6 +448,7 @@ mod tests {
             &p2_dir(),
             &["laravel/pail".into()],
             true,
+            &dir,
         )
         .expect("resolve");
 
@@ -453,5 +507,42 @@ mod tests {
         let set: BTreeSet<_> = all.into_iter().collect();
         assert!(set.contains("root/dep"));
         assert!(set.contains("c/c"));
+    }
+
+    #[test]
+    fn resolve_path_local_selects_path_dist() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/path-local");
+        let composer = std::fs::read_to_string(root.join("composer.json")).unwrap();
+        // Empty unlock + no prior lock: full resolve from path repo only.
+        let doc = resolve_lock_document(&composer, None, &p2_dir(), &[], true, &root)
+            .expect("resolve path-local");
+        let packages = doc["packages"].as_array().unwrap();
+        assert_eq!(packages.len(), 1);
+        let pkg = &packages[0];
+        assert_eq!(pkg["name"], "acme/hello");
+        assert_eq!(pkg["version"], "dev-main");
+        assert_eq!(pkg["dist"]["type"], "path");
+        assert_eq!(pkg["dist"]["url"], "packages/acme-hello");
+        assert_eq!(pkg["transport-options"]["symlink"], true);
+        assert!(pkg.get("notification-url").is_none());
+    }
+
+    #[test]
+    fn resolve_path_local_rewrites_from_existing_lock() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/path-local");
+        let composer = std::fs::read_to_string(root.join("composer.json")).unwrap();
+        let lock_bytes = std::fs::read(root.join("composer.lock")).unwrap();
+        let doc = resolve_lock_document(
+            &composer,
+            Some(&lock_bytes),
+            &p2_dir(),
+            &["acme/hello".into()],
+            true,
+            &root,
+        )
+        .expect("resolve path-local with unlock");
+        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/hello").unwrap();
+        assert_eq!(pkg["dist"]["type"], "path");
+        assert_eq!(pkg["dist"]["url"], "packages/acme-hello");
     }
 }
