@@ -107,6 +107,10 @@ run_composer_install() {
 }
 
 resolve_puck() {
+  if [[ -n "${PUCK_BIN:-}" && -x "${PUCK_BIN}" ]]; then
+    echo "${PUCK_BIN}"
+    return
+  fi
   if [[ -n "${CARGO_BIN:-}" && -x "${CARGO_BIN}" ]]; then
     echo "${CARGO_BIN}"
     return
@@ -144,13 +148,22 @@ run_puck_lock() {
     exit 2
   fi
   echo "parity: puck lock --no-install in $dir"
-  (
-    cd "$ROOT"
-    rustup run 1.96.0 cargo run -q -p puck_cli -- lock \
-      --no-install \
-      --working-dir "$dir" \
-      --registry "$REGISTRY"
-  )
+  local bin
+  bin="$(resolve_puck)"
+  if [[ -n "$bin" ]]; then
+    (
+      cd "$dir"
+      "$bin" lock --no-install --registry "$REGISTRY"
+    )
+  else
+    (
+      cd "$ROOT"
+      rustup run 1.96.0 cargo run -q -p puck_cli -- lock \
+        --no-install \
+        --working-dir "$dir" \
+        --registry "$REGISTRY"
+    )
+  fi
 }
 
 if [[ "$PUCK_LOCK" -eq 1 ]]; then

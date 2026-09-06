@@ -31,8 +31,27 @@ jobs:
     name: parity
     runs-on: ubuntu-latest
     needs: check
-    if: false
     steps:
       - uses: actions/checkout@v4
-      - name: parity harness
-        run: ./parity/run.sh
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.96.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          tools: composer
+          coverage: none
+      - name: Build puck (release)
+        run: cargo build --release -p puck_cli
+      - name: Parity laravel-skeleton --no-dev --puck-lock
+        env:
+          PUCK_BIN: ${{ github.workspace }}/target/release/puck
+          PUCK_REGISTRY: ${{ github.workspace }}/fixtures/registry
+        run: ./parity/run.sh laravel-skeleton --no-dev --puck-lock
+      - name: Parity laravel-app --no-dev --puck-lock
+        env:
+          PUCK_BIN: ${{ github.workspace }}/target/release/puck
+          PUCK_REGISTRY: ${{ github.workspace }}/fixtures/registry
+        run: ./parity/run.sh laravel-app --no-dev --puck-lock
