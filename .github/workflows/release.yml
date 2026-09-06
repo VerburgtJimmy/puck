@@ -114,11 +114,21 @@ jobs:
           cat SHA256SUMS
 
           if [ -n "${MINISIGN_SECRET_KEY:-}" ]; then
-            sudo apt-get update
-            sudo apt-get install -y minisign
+            # apt ships 0.11; use 0.12 to match key tooling used locally.
+            curl -fsSL -o /tmp/minisign.tgz               "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz"
+            tar -xzf /tmp/minisign.tgz -C /tmp
+            sudo install -m 755 /tmp/minisign-linux/x86_64/minisign /usr/local/bin/minisign
+            minisign -v
             KEY="$(mktemp)"
-            printf '%s\n' "$MINISIGN_SECRET_KEY" > "$KEY"
-            minisign -Sm SHA256SUMS -s "$KEY"
+            # Preserve exact secret bytes; strip CRs from UI pastes; one trailing newline.
+            printenv MINISIGN_SECRET_KEY | tr -d '\r' > "$KEY"
+            python3 -c "from pathlib import Path; p=Path('$KEY'); p.write_bytes(p.read_bytes().rstrip(b'\r\n')+b'\n')"
+            # Sanity: comment line only (never dump key material).
+            head -n1 "$KEY" | grep -q '^untrusted comment:' || {
+              echo "MINISIGN_SECRET_KEY missing minisign comment header" >&2
+              exit 1
+            }
+            minisign -Sm SHA256SUMS -s "$KEY" -t ""
             rm -f "$KEY"
             echo "signed=yes" >> "$GITHUB_OUTPUT"
           else
