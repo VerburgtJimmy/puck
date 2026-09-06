@@ -26,8 +26,8 @@ pub type P2Getter<'a> = dyn Fn(&str) -> std::result::Result<Option<Vec<u8>>, Str
 /// Build an [`ArrayRepository`] from p2 metadata using root requires as the
 /// seed, filtering versions by accumulated constraints.
 ///
-/// Names in `skip_names` (e.g. path repository packages) are never loaded from
-/// p2, so a path `dev-main` cannot lose to a higher Packagist semver.
+/// Names in `skip_names` (claimed by an earlier canonical repository) are never
+/// loaded from p2.
 pub fn array_repository_from_p2_constraints(
     load_p2: &P2Getter<'_>,
     root_requires: &[(String, String)],

@@ -8,7 +8,7 @@
 use crate::request::UpdateAllowTransitive;
 use crate::metadata::{find_p2_version_value, packages_from_lock_json};
 use crate::package::Package;
-use crate::path_repo::{load_path_packages, path_package_names, PathPackage};
+use crate::path_repo::{PathPackage, PathRepository};
 use crate::platform::is_platform_package;
 use crate::pool_builder::{ArrayRepository, PoolBuilder};
 use crate::request::Request;
@@ -119,12 +119,6 @@ pub fn resolve_lock_document(
     let root: Value = serde_json::from_str(composer_json)
         .map_err(|e| Error::Message(format!("invalid composer.json: {e}")))?;
 
-    let path_packages = load_path_packages(project_root, &root)?;
-    let path_by_name: IndexMap<String, PathPackage> = path_packages
-        .iter()
-        .map(|p| (p.package.name.clone(), p.clone()))
-        .collect();
-
     let unlock_set: IndexSet<String> = unlock.iter().map(|n| n.to_ascii_lowercase()).collect();
 
     let (locked_prod, locked_dev) = match lock_bytes {
@@ -161,6 +155,24 @@ pub fn resolve_lock_document(
         _ => Stability::Stable,
     };
 
+    let prod_requires = root_requires_from_json(&root, false);
+    let all_requires = root_requires_from_json(&root, include_dev);
+
+    let (prod_repos, _) = build_ordered_repositories(
+        project_root,
+        &root,
+        load_p2,
+        &prod_requires,
+        stability,
+    )?;
+    let (all_repos, path_by_name) = build_ordered_repositories(
+        project_root,
+        &root,
+        load_p2,
+        &all_requires,
+        stability,
+    )?;
+
     // Path packages default to `dev-main` (VersionGuesser fallback); allow them
     // under stable minimum-stability like Composer root requires of path pkgs.
     let mut stability_flags: IndexMap<String, Stability> = IndexMap::new();
@@ -168,34 +180,18 @@ pub fn resolve_lock_document(
         stability_flags.insert(name.clone(), Stability::Dev);
     }
 
-    let prod_requires = root_requires_from_json(&root, false);
-    let all_requires = root_requires_from_json(&root, include_dev);
-
-    let path_names = path_package_names(&path_packages);
-    let path_repo = path_array_repository(&path_packages);
-
-    let prod_repo = array_repository_from_p2_constraints(
-        load_p2,
-        &prod_requires,
-        stability,
-        &path_names,
-    )?;
+    let prod_refs: Vec<&ArrayRepository> = prod_repos.iter().collect();
     let prod_names = solve_names(
-        &pool_repos(&path_repo, &prod_repo),
+        &prod_refs,
         &prod_requires,
         &fixed_prod,
         stability,
         &stability_flags,
     )?;
 
-    let all_repo = array_repository_from_p2_constraints(
-        load_p2,
-        &all_requires,
-        stability,
-        &path_names,
-    )?;
+    let all_refs: Vec<&ArrayRepository> = all_repos.iter().collect();
     let installed = solve_packages(
-        &pool_repos(&path_repo, &all_repo),
+        &all_refs,
         &all_requires,
         &fixed_all,
         stability,
@@ -206,7 +202,18 @@ pub fn resolve_lock_document(
     let mut packages_dev = Vec::new();
     for (name, pretty) in &installed {
         let raw = if let Some(path_pkg) = path_by_name.get(name) {
-            path_pkg.to_lock_value()
+            // Path lock only when the selected version is the path package's version.
+            // Otherwise Packagist (or another remote) won the pool.
+            if path_pkg.package.pretty_version == *pretty {
+                path_pkg.to_lock_value()
+            } else {
+                let bytes = load_p2(name)
+                    .map_err(|e| Error::Message(format!("p2 for {name}: {e}")))?
+                    .ok_or_else(|| Error::Message(format!("missing p2 metadata for {name}")))?;
+                find_p2_version_value(&bytes, pretty)?.ok_or_else(|| {
+                    Error::Message(format!("p2 for {name} has no version {pretty}"))
+                })?
+            }
         } else {
             let bytes = load_p2(name)
                 .map_err(|e| Error::Message(format!("p2 for {name}: {e}")))?
@@ -221,6 +228,7 @@ pub fn resolve_lock_document(
             packages_dev.push(raw);
         }
     }
+
 
     build_lock_document(
         composer_json,
@@ -250,24 +258,212 @@ pub fn resolve_lock_document(
     .map_err(|e| Error::Message(e.to_string()))
 }
 
-fn path_array_repository(path_packages: &[PathPackage]) -> ArrayRepository {
-    let mut repo = ArrayRepository::new();
-    for path_pkg in path_packages {
-        repo.add_package(path_pkg.package.clone());
+/// Build ArrayRepositories in Composer `repositories` order, honouring `canonical`.
+///
+/// Names claimed by an earlier canonical repository are omitted from later ones.
+/// Packagist / `type: composer` loads via `load_p2` with `skip_names = claimed`.
+/// Returns path packages that actually entered a path repo (for lock dump).
+fn build_ordered_repositories(
+    project_root: &Path,
+    root: &Value,
+    load_p2: &P2Getter<'_>,
+    requires: &[(String, String)],
+    stability: Stability,
+) -> Result<(Vec<ArrayRepository>, IndexMap<String, PathPackage>)> {
+    let plan = repository_pool_plan(project_root, root)?;
+    let mut claimed: IndexSet<String> = IndexSet::new();
+    let mut repos: Vec<ArrayRepository> = Vec::new();
+    let mut path_by_name: IndexMap<String, PathPackage> = IndexMap::new();
+
+    for entry in plan {
+        match entry {
+            PoolPlanEntry::Path(PathRepository {
+                canonical,
+                packages,
+            }) => {
+                let mut repo = ArrayRepository::new();
+                let mut added = Vec::new();
+                for path_pkg in packages {
+                    if claimed.contains(&path_pkg.package.name) {
+                        continue;
+                    }
+                    added.push(path_pkg.package.name.clone());
+                    path_by_name.insert(path_pkg.package.name.clone(), path_pkg.clone());
+                    repo.add_package(path_pkg.package.clone());
+                }
+                if !repo.packages().is_empty() {
+                    repos.push(repo);
+                }
+                if canonical {
+                    for name in added {
+                        claimed.insert(name);
+                    }
+                }
+            }
+            PoolPlanEntry::Remote { canonical } => {
+                let repo = array_repository_from_p2_constraints(
+                    load_p2,
+                    requires,
+                    stability,
+                    &claimed,
+                )?;
+                if canonical {
+                    for package in repo.packages() {
+                        claimed.insert(package.name.clone());
+                    }
+                }
+                if !repo.packages().is_empty() {
+                    repos.push(repo);
+                }
+            }
+        }
     }
-    repo
+
+    Ok((repos, path_by_name))
 }
 
-/// Prefer path repository packages over Packagist (earlier repo / lower pool id).
-fn pool_repos<'a>(
-    path_repo: &'a ArrayRepository,
-    p2_repo: &'a ArrayRepository,
-) -> Vec<&'a ArrayRepository> {
-    if path_repo.packages().is_empty() {
-        vec![p2_repo]
-    } else {
-        vec![path_repo, p2_repo]
+#[derive(Debug)]
+enum PoolPlanEntry {
+    Path(PathRepository),
+    Remote { canonical: bool },
+}
+
+/// Walk root `repositories` in order, then implicit Packagist last when enabled.
+fn repository_pool_plan(project_root: &Path, root: &Value) -> Result<Vec<PoolPlanEntry>> {
+    let mut plan = Vec::new();
+    let mut packagist_enabled = true;
+    let mut remote_placed = false;
+
+    let Some(repos) = root.get("repositories") else {
+        plan.push(PoolPlanEntry::Remote { canonical: true });
+        return Ok(plan);
+    };
+
+    match repos {
+        Value::Array(arr) => {
+            for entry in arr {
+                apply_pool_plan_entry(
+                    project_root,
+                    entry,
+                    None,
+                    &mut plan,
+                    &mut packagist_enabled,
+                    &mut remote_placed,
+                )?;
+            }
+        }
+        Value::Object(map) => {
+            for (key, entry) in map {
+                apply_pool_plan_entry(
+                    project_root,
+                    entry,
+                    Some(key.as_str()),
+                    &mut plan,
+                    &mut packagist_enabled,
+                    &mut remote_placed,
+                )?;
+            }
+        }
+        _ => {}
     }
+
+    if packagist_enabled && !remote_placed {
+        plan.push(PoolPlanEntry::Remote { canonical: true });
+    }
+
+    Ok(plan)
+}
+
+fn apply_pool_plan_entry(
+    project_root: &Path,
+    entry: &Value,
+    object_key: Option<&str>,
+    plan: &mut Vec<PoolPlanEntry>,
+    packagist_enabled: &mut bool,
+    remote_placed: &mut bool,
+) -> Result<()> {
+    if let Some(key) = object_key {
+        if is_packagist_repo_name(key) && entry.as_bool() == Some(false) {
+            *packagist_enabled = false;
+            return Ok(());
+        }
+    }
+    if is_packagist_disable_entry(entry) {
+        *packagist_enabled = false;
+        return Ok(());
+    }
+    let Some(obj) = entry.as_object() else {
+        return Ok(());
+    };
+    let typ = obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    let canonical = obj
+        .get("canonical")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    match typ {
+        "path" => {
+            if let Some(repo) = load_one_path_repository_for_plan(project_root, entry)? {
+                plan.push(PoolPlanEntry::Path(repo));
+            }
+        }
+        "composer" => {
+            let url = obj.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            if is_packagist_org_url(url) {
+                // Redefining packagist.org disables the implicit default.
+                *packagist_enabled = false;
+            }
+            plan.push(PoolPlanEntry::Remote { canonical });
+            *remote_placed = true;
+        }
+        _ => {
+            // VCS / package / artifact / etc. — not modeled in the pool yet.
+        }
+    }
+    Ok(())
+}
+
+fn is_packagist_repo_name(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    n == "packagist.org" || n == "packagist"
+}
+
+fn load_one_path_repository_for_plan(
+    project_root: &Path,
+    entry: &Value,
+) -> Result<Option<PathRepository>> {
+    // Re-load via public path loader API surface (single entry wrapped).
+    let fake = serde_json::json!({ "repositories": [entry] });
+    let mut repos = crate::path_repo::load_path_repositories(project_root, &fake)?;
+    Ok(repos.pop())
+}
+
+fn is_packagist_disable_entry(entry: &Value) -> bool {
+    let Some(obj) = entry.as_object() else {
+        return false;
+    };
+    // Anonymous: { "packagist.org": false } or { "packagist": false }
+    for key in ["packagist.org", "packagist"] {
+        if let Some(v) = obj.get(key) {
+            if obj.len() == 1 && v.as_bool() == Some(false) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn is_packagist_org_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    let trimmed = lower
+        .trim_end_matches('/')
+        .strip_prefix("https://")
+        .or_else(|| lower.trim_end_matches('/').strip_prefix("http://"))
+        .unwrap_or(lower.trim_end_matches('/'));
+    let host = trimmed.split('/').next().unwrap_or("");
+    host == "packagist.org"
+        || host == "repo.packagist.org"
+        || host.ends_with(".packagist.org")
 }
 
 fn root_requires_from_json(root: &Value, include_dev: bool) -> Vec<(String, String)> {
@@ -582,21 +778,50 @@ mod tests {
         assert_eq!(pkg["dist"]["url"], "packages/acme-hello");
     }
 
-    /// Dual-source same name+version: path repo wins; lock uses dist.type=path.
-    #[test]
-    fn prefer_path_over_packagist_same_version() {
+    fn temp_dual_dir(label: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "puck-prefer-path-same-{}-{}",
+            "puck-repo-order-{}-{}-{}",
+            label,
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos()
         ));
-        let pkg_dir = dir.join("local-pkg");
-        std::fs::create_dir_all(&pkg_dir).unwrap();
+        std::fs::create_dir_all(dir.join("local-pkg")).unwrap();
+        dir
+    }
+
+    fn dual_p2_getter(version: &str, reference: &str) -> impl Fn(&str) -> std::result::Result<Option<Vec<u8>>, String> {
+        let p2 = serde_json::json!({
+            "packages": {
+                "acme/dual": [{
+                    "name": "acme/dual",
+                    "version": version,
+                    "version_normalized": format!("{}.0", version),
+                    "dist": {
+                        "type": "zip",
+                        "url": format!("https://example.test/acme-dual-{version}.zip"),
+                        "reference": reference
+                    }
+                }]
+            }
+        });
+        move |name: &str| -> std::result::Result<Option<Vec<u8>>, String> {
+            if name == "acme/dual" {
+                Ok(Some(serde_json::to_vec(&p2).unwrap()))
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    /// Path listed first (canonical default): same version → path lock (earlier repo / lower pool id).
+    #[test]
+    fn repo_order_canonical_path_first_same_version() {
+        let dir = temp_dual_dir("same");
         std::fs::write(
-            pkg_dir.join("composer.json"),
+            dir.join("local-pkg/composer.json"),
             r#"{"name":"acme/dual","version":"1.0.0","type":"library"}"#,
         )
         .unwrap();
@@ -605,28 +830,7 @@ mod tests {
             "repositories": [{ "type": "path", "url": "local-pkg" }]
         }"#;
         std::fs::write(dir.join("composer.json"), composer).unwrap();
-
-        let p2 = serde_json::json!({
-            "packages": {
-                "acme/dual": [{
-                    "name": "acme/dual",
-                    "version": "1.0.0",
-                    "version_normalized": "1.0.0.0",
-                    "dist": {
-                        "type": "zip",
-                        "url": "https://example.test/acme-dual-1.0.0.zip",
-                        "reference": "deadbeef"
-                    }
-                }]
-            }
-        });
-        let get = move |name: &str| -> std::result::Result<Option<Vec<u8>>, String> {
-            if name == "acme/dual" {
-                Ok(Some(serde_json::to_vec(&p2).unwrap()))
-            } else {
-                Ok(None)
-            }
-        };
+        let get = dual_p2_getter("1.0.0", "deadbeef");
 
         let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
             .expect("resolve dual-source same version");
@@ -637,22 +841,13 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Path owns the name even when Packagist offers a higher stable version.
+    /// Path first, canonical (default): Packagist has higher semver but path still wins.
     #[test]
-    fn prefer_path_over_packagist_higher_packagist_version() {
-        let dir = std::env::temp_dir().join(format!(
-            "puck-prefer-path-higher-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let pkg_dir = dir.join("local-pkg");
-        std::fs::create_dir_all(&pkg_dir).unwrap();
+    fn repo_order_canonical_path_first_keeps_path_despite_higher_packagist() {
+        let dir = temp_dual_dir("higher");
         // No version → VersionGuesser fallback `dev-main`.
         std::fs::write(
-            pkg_dir.join("composer.json"),
+            dir.join("local-pkg/composer.json"),
             r#"{"name":"acme/dual","type":"library"}"#,
         )
         .unwrap();
@@ -662,28 +857,7 @@ mod tests {
             "repositories": [{ "type": "path", "url": "local-pkg" }]
         }"#;
         std::fs::write(dir.join("composer.json"), composer).unwrap();
-
-        let p2 = serde_json::json!({
-            "packages": {
-                "acme/dual": [{
-                    "name": "acme/dual",
-                    "version": "2.0.0",
-                    "version_normalized": "2.0.0.0",
-                    "dist": {
-                        "type": "zip",
-                        "url": "https://example.test/acme-dual-2.0.0.zip",
-                        "reference": "cafebabe"
-                    }
-                }]
-            }
-        });
-        let get = move |name: &str| -> std::result::Result<Option<Vec<u8>>, String> {
-            if name == "acme/dual" {
-                Ok(Some(serde_json::to_vec(&p2).unwrap()))
-            } else {
-                Ok(None)
-            }
-        };
+        let get = dual_p2_getter("2.0.0", "cafebabe");
 
         let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
             .expect("resolve path wins over higher Packagist");
@@ -691,6 +865,67 @@ mod tests {
         assert_eq!(pkg["version"], "dev-main");
         assert_eq!(pkg["dist"]["type"], "path");
         assert_eq!(pkg["dist"]["url"], "local-pkg");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Packagist redefined before path: name claimed by Packagist → path ignored; lock is zip.
+    #[test]
+    fn repo_order_packagist_before_path_ignores_path() {
+        let dir = temp_dual_dir("packagist-first");
+        std::fs::write(
+            dir.join("local-pkg/composer.json"),
+            r#"{"name":"acme/dual","version":"1.0.0","type":"library"}"#,
+        )
+        .unwrap();
+        let composer = r#"{
+            "require": { "acme/dual": "*" },
+            "repositories": [
+                { "type": "composer", "url": "https://repo.packagist.org" },
+                { "type": "path", "url": "local-pkg" }
+            ]
+        }"#;
+        std::fs::write(dir.join("composer.json"), composer).unwrap();
+        let get = dual_p2_getter("1.0.0", "deadbeef");
+
+        let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
+            .expect("resolve packagist before path");
+        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/dual").unwrap();
+        assert_eq!(pkg["version"], "1.0.0");
+        assert_eq!(pkg["dist"]["type"], "zip");
+        assert_eq!(
+            pkg["dist"]["url"],
+            "https://example.test/acme-dual-1.0.0.zip"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Path with `"canonical": false`: both sources pool; highest version wins (Packagist 2.0.0).
+    #[test]
+    fn repo_order_path_non_canonical_highest_version_wins() {
+        let dir = temp_dual_dir("non-canonical");
+        std::fs::write(
+            dir.join("local-pkg/composer.json"),
+            r#"{"name":"acme/dual","version":"1.0.0","type":"library"}"#,
+        )
+        .unwrap();
+        let composer = r#"{
+            "require": { "acme/dual": "*" },
+            "repositories": [
+                { "type": "path", "url": "local-pkg", "canonical": false }
+            ]
+        }"#;
+        std::fs::write(dir.join("composer.json"), composer).unwrap();
+        let get = dual_p2_getter("2.0.0", "cafebabe");
+
+        let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
+            .expect("resolve non-canonical path");
+        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/dual").unwrap();
+        assert_eq!(pkg["version"], "2.0.0");
+        assert_eq!(pkg["dist"]["type"], "zip");
+        assert_eq!(
+            pkg["dist"]["url"],
+            "https://example.test/acme-dual-2.0.0.zip"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
