@@ -853,7 +853,15 @@ fn resolve_registry_root(registry: Option<PathBuf>) -> Result<Option<PathBuf>, S
 
 fn p2_loader_for(registry: Option<PathBuf>, project_dir: &std::path::Path) -> Result<P2Loader, String> {
     let registry_root = resolve_registry_root(registry)?;
-    P2Loader::from_env_and_registry(registry_root, Some(project_dir)).map_err(|e| e.to_string())
+    let mut loader =
+        P2Loader::from_env_and_registry(registry_root, Some(project_dir)).map_err(|e| e.to_string())?;
+    let manifest_path = project_dir.join("composer.json");
+    if manifest_path.is_file() {
+        let text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
+        let root: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        loader = loader.with_composer_json(&root);
+    }
+    Ok(loader)
 }
 
 fn p2_getter<'a>(

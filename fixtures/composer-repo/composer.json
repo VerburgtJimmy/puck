@@ -1,0 +1,17 @@
+{
+    "name": "acme/composer-repo-fixture",
+    "description": "Fixture: private composer repo + packagist.org disabled (metadata via mock HTTP in unit tests)",
+    "require": {
+        "acme/widget": "^1.0"
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://satis.example.com"
+        },
+        {
+            "packagist.org": false
+        }
+    ],
+    "minimum-stability": "stable"
+}

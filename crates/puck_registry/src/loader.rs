@@ -1,13 +1,23 @@
-//! Packagist Composer 2 (`/p2/…`) metadata loader with VCR-first modes.
+//! Packagist / composer-repo metadata loader with VCR-first modes for default Packagist.
 //!
-//! - **Replay**: filesystem only; miss is an error (CI / `--registry`).
-//! - **Live**: filesystem first when a VCR root is set, else HTTP; miss → HTTP.
-//! - **Record**: like Live, but successful HTTP responses are written under the VCR root.
+//! - **Replay**: filesystem only for default Packagist (`packagist/p2/`); miss is an error.
+//!   Custom `type: composer` repos are **not** VCR'd (skipped in Replay — see docs).
+//! - **Live**: Packagist filesystem first when a VCR root is set, else HTTP; miss → HTTP.
+//!   Custom composer repos always use HTTP (`packages.json` → `metadata-url`).
+//! - **Record**: like Live for Packagist, writing under the VCR root; custom repos live-only.
+//!
+//! Lookup order: listed composer repos (first wins), then default Packagist if enabled.
 
+use crate::composer_repo::{
+    canonicalize_metadata_url, default_packagist_url, metadata_url_for_package,
+    metadata_url_template, packages_json_url, parse_repositories, PackagesJsonCache,
+    RepositoryConfig,
+};
 use crate::packagist::{load_p2_metadata, p2_path};
 use crate::replay::{ReplayError, ReplayMode};
 use crate::{Error, Result};
 use puck_dist::{AuthHeader, AuthStore};
+use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -15,16 +25,21 @@ use std::time::Duration;
 
 const DEFAULT_BASE_URL: &str = "https://repo.packagist.org";
 
-/// Loads Packagist p2 metadata bytes for `vendor/package` names.
+/// Loads package metadata bytes for `vendor/package` names from composer repos + Packagist.
 pub struct P2Loader {
     mode: ReplayMode,
     /// Registry root containing `packagist/p2/` (optional in pure Live).
     vcr_root: Option<PathBuf>,
+    /// Default Packagist base URL (HTTP fallback when packagist enabled).
     base_url: String,
     auth: AuthStore,
     cache: RefCell<HashMap<String, Vec<u8>>>,
     /// Optional override for HTTP (unit tests); receives full URL.
     http_get: Option<Box<dyn Fn(&str) -> Result<Vec<u8>>>>,
+    /// User-listed composer repository base URLs (order = precedence).
+    composer_urls: Vec<String>,
+    packagist_enabled: bool,
+    packages_json_cache: RefCell<PackagesJsonCache>,
 }
 
 impl std::fmt::Debug for P2Loader {
@@ -36,6 +51,8 @@ impl std::fmt::Debug for P2Loader {
             .field("auth", &self.auth)
             .field("cache_len", &self.cache.borrow().len())
             .field("http_override", &self.http_get.is_some())
+            .field("composer_urls", &self.composer_urls)
+            .field("packagist_enabled", &self.packagist_enabled)
             .finish()
     }
 }
@@ -76,6 +93,9 @@ impl P2Loader {
             auth,
             cache: RefCell::new(HashMap::new()),
             http_get: None,
+            composer_urls: Vec::new(),
+            packagist_enabled: true,
+            packages_json_cache: RefCell::new(PackagesJsonCache::new()),
         })
     }
 
@@ -103,6 +123,9 @@ impl P2Loader {
             auth,
             cache: RefCell::new(HashMap::new()),
             http_get: None,
+            composer_urls: Vec::new(),
+            packagist_enabled: true,
+            packages_json_cache: RefCell::new(PackagesJsonCache::new()),
         })
     }
 
@@ -118,6 +141,18 @@ impl P2Loader {
         self
     }
 
+    /// Apply parsed `repositories` (composer URLs + packagist enable flag).
+    pub fn with_repository_config(mut self, config: RepositoryConfig) -> Self {
+        self.composer_urls = config.composer_urls;
+        self.packagist_enabled = config.packagist_enabled;
+        self
+    }
+
+    /// Parse `repositories` from a root composer.json value and apply.
+    pub fn with_composer_json(self, root: &Value) -> Self {
+        self.with_repository_config(parse_repositories(root))
+    }
+
     pub fn mode(&self) -> ReplayMode {
         self.mode
     }
@@ -126,7 +161,15 @@ impl P2Loader {
         self.vcr_root.as_deref()
     }
 
-    /// Fetch p2 metadata bytes for `vendor/package` (lowercased cache key).
+    pub fn packagist_enabled(&self) -> bool {
+        self.packagist_enabled
+    }
+
+    pub fn composer_urls(&self) -> &[String] {
+        &self.composer_urls
+    }
+
+    /// Fetch metadata bytes for `vendor/package` (lowercased cache key).
     pub fn get(&self, package: &str) -> Result<Vec<u8>> {
         let package = package.to_ascii_lowercase();
         if let Some(hit) = self.cache.borrow().get(&package).cloned() {
@@ -138,6 +181,58 @@ impl P2Loader {
     }
 
     fn load_uncached(&self, package: &str) -> Result<Vec<u8>> {
+        // 1) Custom composer repos (order = precedence). Not covered by Packagist VCR.
+        for repo_base in &self.composer_urls {
+            match self.load_from_composer_repo(repo_base, package) {
+                Ok(bytes) => return Ok(bytes),
+                Err(Error::Replay(ReplayError::Miss(_))) => continue,
+                Err(err) => return Err(err),
+            }
+        }
+
+        // 2) Default Packagist
+        if self.packagist_enabled {
+            return self.load_from_packagist(package);
+        }
+
+        Err(Error::Replay(ReplayError::Miss(package.to_owned())))
+    }
+
+    fn load_from_composer_repo(&self, repo_base: &str, package: &str) -> Result<Vec<u8>> {
+        if self.mode == ReplayMode::Replay {
+            // VCR fixtures only cover default Packagist `packagist/p2/`.
+            return Err(Error::Replay(ReplayError::Miss(package.to_owned())));
+        }
+
+        let template = self.ensure_metadata_template(repo_base)?;
+        let Some(template) = template else {
+            // No Composer 2 metadata-url (V1-only repo) — treat as miss for this source.
+            return Err(Error::Replay(ReplayError::Miss(package.to_owned())));
+        };
+        let url = metadata_url_for_package(
+            &canonicalize_metadata_url(repo_base, &template),
+            package,
+        );
+        self.http_get_bytes(&url, package)
+    }
+
+    fn ensure_metadata_template(&self, repo_base: &str) -> Result<Option<String>> {
+        if let Some(cached) = self.packages_json_cache.borrow().get(repo_base).cloned() {
+            return Ok(cached);
+        }
+        let index_url = packages_json_url(repo_base);
+        let bytes = self.http_get_bytes(&index_url, repo_base)?;
+        let doc: Value = serde_json::from_slice(&bytes).map_err(|e| {
+            Error::Message(format!("invalid packages.json from {repo_base}: {e}"))
+        })?;
+        let template = metadata_url_template(&doc);
+        self.packages_json_cache
+            .borrow_mut()
+            .insert(repo_base.to_owned(), template.clone());
+        Ok(template)
+    }
+
+    fn load_from_packagist(&self, package: &str) -> Result<Vec<u8>> {
         if let Some(root) = &self.vcr_root {
             match load_p2_metadata(root, package) {
                 Ok(bytes) => return Ok(bytes),
@@ -154,8 +249,7 @@ impl P2Loader {
             ));
         }
 
-        // Live or Record: HTTP
-        let bytes = self.fetch_http(package)?;
+        let bytes = self.fetch_packagist_http(package)?;
         if self.mode == ReplayMode::Record {
             if let Some(root) = &self.vcr_root {
                 self.write_recording(root, package, &bytes)?;
@@ -164,16 +258,27 @@ impl P2Loader {
         Ok(bytes)
     }
 
-    fn fetch_http(&self, package: &str) -> Result<Vec<u8>> {
-        let url = format!(
-            "{}/p2/{}.json",
-            self.base_url.trim_end_matches('/'),
-            package
-        );
+    fn fetch_packagist_http(&self, package: &str) -> Result<Vec<u8>> {
+        let base = if self.base_url.is_empty() {
+            default_packagist_url()
+        } else {
+            self.base_url.trim_end_matches('/')
+        };
+        let url = format!("{base}/p2/{package}.json");
+        self.http_get_bytes(&url, package)
+    }
+
+    fn http_get_bytes(&self, url: &str, miss_key: &str) -> Result<Vec<u8>> {
         if let Some(f) = &self.http_get {
-            return f(&url);
+            return match f(url) {
+                Ok(bytes) => Ok(bytes),
+                Err(Error::Replay(ReplayError::Miss(_))) => {
+                    Err(Error::Replay(ReplayError::Miss(miss_key.to_owned())))
+                }
+                Err(err) => Err(err),
+            };
         }
-        http_get_p2(&url, &self.auth)
+        http_get(&url, &self.auth, miss_key)
     }
 
     fn write_recording(&self, root: &Path, package: &str, bytes: &[u8]) -> Result<()> {
@@ -207,16 +312,17 @@ fn parse_registry_mode(raw: &str) -> Result<ReplayMode> {
     }
 }
 
-fn http_get_p2(url: &str, auth: &AuthStore) -> Result<Vec<u8>> {
+fn http_get(url: &str, auth: &AuthStore, miss_key: &str) -> Result<Vec<u8>> {
     // `reqwest::blocking` must not run on a Tokio worker (CLI uses `block_on`).
     let url = url.to_owned();
     let auth = auth.clone();
-    std::thread::spawn(move || http_get_p2_sync(&url, &auth))
+    let miss_key = miss_key.to_owned();
+    std::thread::spawn(move || http_get_sync(&url, &auth, &miss_key))
         .join()
-        .unwrap_or_else(|_| Err(Error::Message("p2 HTTP worker panicked".into())))
+        .unwrap_or_else(|_| Err(Error::Message("metadata HTTP worker panicked".into())))
 }
 
-fn http_get_p2_sync(url: &str, auth: &AuthStore) -> Result<Vec<u8>> {
+fn http_get_sync(url: &str, auth: &AuthStore, miss_key: &str) -> Result<Vec<u8>> {
     let client = reqwest::blocking::Client::builder()
         .user_agent(concat!("puck/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(60))
@@ -241,11 +347,7 @@ fn http_get_p2_sync(url: &str, auth: &AuthStore) -> Result<Vec<u8>> {
         .map_err(|e| Error::Message(format!("GET {url}: {e}")))?;
     let status = response.status();
     if status.as_u16() == 404 {
-        let pkg = url
-            .rsplit_once("/p2/")
-            .map(|(_, rest)| rest.trim_end_matches(".json").to_owned())
-            .unwrap_or_else(|| url.to_owned());
-        return Err(Error::Replay(ReplayError::Miss(pkg)));
+        return Err(Error::Replay(ReplayError::Miss(miss_key.to_owned())));
     }
     if !status.is_success() {
         return Err(Error::Message(format!("GET {url}: HTTP {status}")));
@@ -268,6 +370,7 @@ pub fn load_p2_optional(loader: &P2Loader, package: &str) -> Result<Option<Vec<u
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
@@ -326,6 +429,93 @@ mod tests {
             .with_http_get(|_| Err(Error::Message("should not hit network".into())));
         let bytes = loader.get("acme/fs").unwrap();
         assert!(String::from_utf8_lossy(&bytes).contains("acme/fs"));
+    }
+
+    #[test]
+    fn composer_repo_packages_json_then_metadata() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let hits2 = hits.clone();
+        let loader = P2Loader::new(ReplayMode::Live, None, None)
+            .unwrap()
+            .with_repository_config(RepositoryConfig {
+                composer_urls: vec!["https://satis.example.com".into()],
+                packagist_enabled: false,
+            })
+            .with_http_get(move |url| {
+                hits2.fetch_add(1, Ordering::SeqCst);
+                if url == "https://satis.example.com/packages.json" {
+                    return Ok(
+                        br#"{"packages":{},"metadata-url":"/p2/%package%.json"}"#.to_vec(),
+                    );
+                }
+                if url == "https://satis.example.com/p2/acme/widget.json" {
+                    return Ok(br#"{"packages":{"acme/widget":[{"name":"acme/widget","version":"1.0.0"}]}}"#.to_vec());
+                }
+                Err(Error::Replay(ReplayError::Miss(url.to_owned())))
+            });
+        let bytes = loader.get("Acme/Widget").unwrap();
+        assert!(String::from_utf8_lossy(&bytes).contains("acme/widget"));
+        // packages.json + metadata; second get is memory-cached
+        let _ = loader.get("acme/widget").unwrap();
+        assert_eq!(hits.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn composer_repo_miss_falls_through_to_packagist() {
+        let loader = P2Loader::new(ReplayMode::Live, None, None)
+            .unwrap()
+            .with_repository_config(RepositoryConfig {
+                composer_urls: vec!["https://private.example.com".into()],
+                packagist_enabled: true,
+            })
+            .with_base_url("https://packagist.test")
+            .with_http_get(|url| {
+                if url.contains("private.example.com/packages.json") {
+                    return Ok(br#"{"metadata-url":"https://private.example.com/p2/%package%.json"}"#.to_vec());
+                }
+                if url.contains("private.example.com/p2/") {
+                    return Err(Error::Replay(ReplayError::Miss("missing".into())));
+                }
+                if url == "https://packagist.test/p2/symfony/http-foundation.json" {
+                    return Ok(br#"{"packages":{"symfony/http-foundation":[]}}"#.to_vec());
+                }
+                Err(Error::Message(format!("unexpected url {url}")))
+            });
+        let bytes = loader.get("symfony/http-foundation").unwrap();
+        assert!(String::from_utf8_lossy(&bytes).contains("symfony/http-foundation"));
+    }
+
+    #[test]
+    fn packagist_disabled_misses_without_composer_hit() {
+        let loader = P2Loader::new(ReplayMode::Live, None, None)
+            .unwrap()
+            .with_composer_json(&json!({
+                "repositories": [ { "packagist.org": false } ]
+            }))
+            .with_http_get(|_| Err(Error::Message("no http".into())));
+        let err = loader.get("acme/alone").unwrap_err();
+        assert!(matches!(err, Error::Replay(ReplayError::Miss(_))));
+    }
+
+    #[test]
+    fn composer_repo_preferred_over_packagist() {
+        let loader = P2Loader::new(ReplayMode::Live, None, None)
+            .unwrap()
+            .with_repository_config(RepositoryConfig {
+                composer_urls: vec!["https://first.example.com".into()],
+                packagist_enabled: true,
+            })
+            .with_http_get(|url| {
+                if url.ends_with("/packages.json") {
+                    return Ok(br#"{"metadata-url":"https://first.example.com/p2/%package%.json"}"#.to_vec());
+                }
+                if url.contains("first.example.com/p2/acme/priv.json") {
+                    return Ok(br#"{"packages":{"acme/priv":[{"version":"1.0.0"}]}}"#.to_vec());
+                }
+                Err(Error::Message(format!("should not reach packagist: {url}")))
+            });
+        let bytes = loader.get("acme/priv").unwrap();
+        assert!(String::from_utf8_lossy(&bytes).contains("acme/priv"));
     }
 
     #[test]
