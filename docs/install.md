@@ -63,3 +63,24 @@ Requires Rust 1.96+.
 puck doctor          # check the current project
 puck install         # same lock/vendor files as Composer
 ```
+
+## GitHub Actions
+
+```yaml
+- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.0
+  with:
+    version: latest
+    cache: true
+```
+
+See [`distribution.md`](distribution.md) for Docker and upgrade policy.
+
+## Upgrade
+
+```bash
+puck upgrade              # latest stable from manifest.json
+puck upgrade --version 0.1.0
+puck upgrade --rollback   # restore ~/.puck/bin/puck.previous
+```
+
+Homebrew installs must use `brew upgrade puck` — `puck upgrade` refuses Cellar paths.

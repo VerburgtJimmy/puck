@@ -1,0 +1,38 @@
+name: setup-puck
+description: Install puck from GitHub Releases (checksum verified) and optionally cache ~/.puck/store
+inputs:
+  version:
+    description: Release version (`latest` or `v0.1.0` / `0.1.0`)
+    required: false
+    default: latest
+  cache:
+    description: Cache ~/.puck/store keyed on composer.lock hash when present
+    required: false
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: Cache puck store
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.puck/store
+        key: puck-store-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          puck-store-${{ runner.os }}-
+
+    - name: Install puck
+      shell: bash
+      env:
+        PUCK_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        if [ "${PUCK_VERSION}" = "latest" ]; then
+          unset PUCK_VERSION
+        else
+          # install.sh accepts v-prefixed or bare versions
+          export PUCK_VERSION
+        fi
+        curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/master/install.sh | bash -s -- --no-modify-path
+        echo "$HOME/.puck/bin" >> "$GITHUB_PATH"
+        "$HOME/.puck/bin/puck" --version

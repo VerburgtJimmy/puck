@@ -176,3 +176,7 @@ jobs:
             release/manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# When ready for the first public binaries: push tag v0.1.0 (workflow builds,
+# signs with secrets.MINISIGN_SECRET_KEY, uploads manifest.json). Optional GHCR
+# docker push is documented in dist/docker/README.md — not enabled here yet.
