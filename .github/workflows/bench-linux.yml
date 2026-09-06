@@ -1,0 +1,56 @@
+name: bench-linux
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Sunday 06:00 UTC — warm-wipe / size / RSS pack for Fable v0.1.0
+    - cron: "0 6 * * 0"
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+  PUCK_NOTES_BENCHMARKS: ${{ github.workspace }}/bench-out/benchmarks.md
+
+jobs:
+  linux-benches:
+    name: linux benches
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.96.0
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install PHP + Composer
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          tools: composer
+          coverage: none
+
+      - name: Build release puck
+        run: cargo build --release -p puck_cli
+
+      - name: Prepare bench-out
+        run: mkdir -p bench-out
+
+      - name: Binary size
+        run: ./benches/binary-size.sh | tee bench-out/binary-size.log
+
+      - name: Install timing (laravel-skeleton)
+        run: ./benches/install-timing.sh laravel-skeleton | tee bench-out/install-timing.log
+
+      - name: Resource usage (laravel-skeleton)
+        run: ./benches/resource-usage.sh laravel-skeleton | tee bench-out/resource-usage.log
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-benches
+          path: |
+            bench-out/benchmarks.md
+            bench-out/*.log
+          if-no-files-found: warn

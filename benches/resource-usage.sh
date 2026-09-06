@@ -17,10 +17,22 @@ if [[ ! -f "$FIXTURE/composer.lock" ]]; then
   exit 2
 fi
 
+# Prefer plain cargo (rust-toolchain.toml / CI default); rustup run as fallback.
+run_cargo() {
+  if command -v cargo >/dev/null 2>&1; then
+    cargo "$@"
+  elif command -v rustup >/dev/null 2>&1; then
+    rustup run 1.96.0 cargo "$@"
+  else
+    echo "resource-usage: cargo not found" >&2
+    exit 2
+  fi
+}
+
 cd "$ROOT"
 if [[ ! -x "$BIN" ]]; then
   echo "resource-usage: building release puck..." >&2
-  rustup run 1.96.0 cargo build --release -p puck_cli
+  run_cargo build --release -p puck_cli
 fi
 
 WORKDIR="$(mktemp -d "$ROOT/.tmp-rss.XXXXXX")"

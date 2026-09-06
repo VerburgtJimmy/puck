@@ -5,7 +5,8 @@
 # Default fixture: laravel-skeleton (always --no-dev).
 #
 # Prints a markdown table to stdout and appends/updates
-# ~/Developer/personal/puck-notes/docs/benchmarks.md
+# puck-notes benchmarks.md, or ./bench-out/benchmarks.md if unset/unwritable.
+# Override with PUCK_NOTES_BENCHMARKS.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -85,12 +86,24 @@ run_composer() {
 echo "timing: fixture=$FIXTURE_NAME (--no-dev --no-scripts)"
 echo "timing: composer=$COMPOSER_BIN"
 
+# Prefer plain cargo (rust-toolchain.toml / CI default); rustup run as fallback.
+run_cargo() {
+  if command -v cargo >/dev/null 2>&1; then
+    cargo "$@"
+  elif command -v rustup >/dev/null 2>&1; then
+    rustup run 1.96.0 cargo "$@"
+  else
+    echo "timing: cargo not found" >&2
+    exit 2
+  fi
+}
+
 if [[ -n "${PUCK_BIN:-}" && -x "${PUCK_BIN}" ]]; then
   echo "timing: using PUCK_BIN=$PUCK_BIN"
 else
   echo "timing: building release puck…"
-  rustup run 1.96.0 cargo build --release -q -p puck_cli
-  TARGET_DIR="$(rustup run 1.96.0 cargo metadata --format-version 1 --no-deps | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
+  run_cargo build --release -q -p puck_cli
+  TARGET_DIR="$(run_cargo metadata --format-version 1 --no-deps | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
   PUCK_BIN="$TARGET_DIR/release/puck"
   if [[ ! -x "$PUCK_BIN" ]]; then
     echo "timing: missing release binary at $PUCK_BIN" >&2
@@ -159,17 +172,42 @@ echo
 echo "$TABLE"
 echo
 
-mkdir -p "$(dirname "$NOTES_DOC")"
-{
-  echo
-  echo "## Install timing: \`${FIXTURE_NAME}\` --no-dev"
-  echo
-  echo "- when: ${DATE_UTC}"
-  echo "- host: ${HOST}"
-  echo "- composer: \`$( "$COMPOSER_BIN" --version 2>/dev/null | head -1)\`"
-  echo
-  echo "$TABLE"
-  echo
-} >>"$NOTES_DOC"
+resolve_notes_doc() {
+  local doc="$NOTES_DOC"
+  local parent
+  parent="$(dirname "$doc")"
+  if [[ -z "${PUCK_NOTES_BENCHMARKS:-}" ]]; then
+    if [[ ! -d "$parent" || ! -w "$parent" ]]; then
+      doc="$ROOT/bench-out/benchmarks.md"
+      parent="$(dirname "$doc")"
+    fi
+  fi
+  if ! mkdir -p "$parent" 2>/dev/null || [[ ! -w "$parent" ]]; then
+    echo ""
+    return
+  fi
+  # Ensure the file itself is creatable / writable
+  if [[ -e "$doc" && ! -w "$doc" ]]; then
+    echo ""
+    return
+  fi
+  echo "$doc"
+}
 
-echo "timing: appended to $NOTES_DOC"
+NOTES_TARGET="$(resolve_notes_doc)"
+if [[ -z "$NOTES_TARGET" ]]; then
+  echo "timing: skipping notes append (path missing or not writable: $NOTES_DOC); stdout table above is authoritative"
+else
+  {
+    echo
+    echo "## Install timing: \`${FIXTURE_NAME}\` --no-dev"
+    echo
+    echo "- when: ${DATE_UTC}"
+    echo "- host: ${HOST}"
+    echo "- composer: \`$( "$COMPOSER_BIN" --version 2>/dev/null | head -1)\`"
+    echo
+    echo "$TABLE"
+    echo
+  } >>"$NOTES_TARGET"
+  echo "timing: appended to $NOTES_TARGET"
+fi

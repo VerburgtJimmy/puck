@@ -28,3 +28,7 @@ composer.phar
 .idea/
 .vscode/
 *.swp
+
+# CI / local bench output
+/bench-out/
+.tmp-rss*/
