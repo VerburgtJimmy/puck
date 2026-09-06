@@ -8,6 +8,7 @@ repository.workspace = true
 authors.workspace = true
 description = "puck: native PHP package manager CLI"
 default-run = "puck"
+build = "build.rs"
 
 [[bin]]
 name = "puck"

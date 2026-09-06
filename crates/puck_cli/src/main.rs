@@ -1,5 +1,7 @@
 //! `puck` - native PHP package manager (Laravel-first).
 
+
+mod dist_urls;
 use clap::{Parser, Subcommand};
 use puck_autoload::{DumpOptions, dump, dump_is_current};
 use puck_install::{
@@ -30,7 +32,7 @@ use std::time::Instant;
 #[derive(Debug, Parser)]
 #[command(
     name = "puck",
-    version,
+    version = env!("PUCK_FULL_VERSION"),
     about = "Native package manager for PHP. Laravel-first. Composer-compatible.",
     long_about = None
 )]
