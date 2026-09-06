@@ -1,4 +1,4 @@
-//! Constraint-filtered package loading from Packagist p2 VCR snapshots.
+//! Constraint-filtered package loading from Packagist p2 metadata.
 //!
 //! Subset of Composer `PoolBuilder` name/constraint marking: start from root
 //! requires, load matching p2 versions, enqueue their requires, OR-merge
@@ -13,14 +13,20 @@ use indexmap::{IndexMap, IndexSet};
 use puck_version::{parse_constraints, parse_stability, ConstraintExpr, Operator, Stability};
 use serde_json::Value;
 use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const MINIFIED_MARKER: &str = "composer/2.0";
 
-/// Build an [`ArrayRepository`] from recorded p2 metadata using root requires
-/// as the seed, filtering versions by accumulated constraints.
+/// Load p2 JSON for a package name.
+///
+/// `Ok(None)` means metadata is unavailable (skip; may be replace/provide only).
+/// `Err` is a hard failure.
+pub type P2Getter<'a> = dyn Fn(&str) -> std::result::Result<Option<Vec<u8>>, String> + 'a;
+
+/// Build an [`ArrayRepository`] from p2 metadata using root requires as the
+/// seed, filtering versions by accumulated constraints.
 pub fn array_repository_from_p2_constraints(
-    p2_dir: &Path,
+    load_p2: &P2Getter<'_>,
     root_requires: &[(String, String)],
     minimum_stability: Stability,
 ) -> Result<ArrayRepository> {
@@ -48,15 +54,17 @@ pub fn array_repository_from_p2_constraints(
             }
         }
 
-        let path = p2_path(p2_dir, &name);
-        if !path.is_file() {
-            // May be satisfied only via replace/provide of another package.
-            loaded_constraint.insert(name, constraint);
-            continue;
-        }
-
-        let bytes = std::fs::read(&path)
-            .map_err(|e| Error::Message(format!("read {}: {e}", path.display())))?;
+        let bytes = match load_p2(&name) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => {
+                // May be satisfied only via replace/provide of another package.
+                loaded_constraint.insert(name, constraint);
+                continue;
+            }
+            Err(e) => {
+                return Err(Error::Message(format!("p2 metadata for {name}: {e}")));
+            }
+        };
         let packages = packages_matching_constraint(&bytes, &name, &constraint, minimum_stability)?;
         for package in packages {
             let key = (package.name.clone(), package.version.clone());
@@ -87,8 +95,15 @@ pub fn array_repository_from_p2_constraints(
     Ok(repo)
 }
 
-fn p2_path(p2_dir: &Path, name: &str) -> PathBuf {
-    p2_dir.join(format!("{}.json", name.replace('/', "$")))
+/// Filesystem getter rooted at a `packagist/p2` directory (tests / VCR).
+pub fn p2_dir_getter(p2_dir: PathBuf) -> impl Fn(&str) -> std::result::Result<Option<Vec<u8>>, String> {
+    move |name: &str| {
+        let path = p2_dir.join(format!("{}.json", name.replace('/', "$")));
+        if !path.is_file() {
+            return Ok(None);
+        }
+        std::fs::read(&path).map(Some).map_err(|e| format!("read {}: {e}", path.display()))
+    }
 }
 
 fn mark_for_loading(
@@ -181,8 +196,9 @@ mod tests {
 
     #[test]
     fn loads_framework_versions_for_caret_constraint() {
+        let get = p2_dir_getter(p2_dir());
         let repo = array_repository_from_p2_constraints(
-            &p2_dir(),
+            &get,
             &[("laravel/framework".into(), "^13.17".into())],
             Stability::Stable,
         )

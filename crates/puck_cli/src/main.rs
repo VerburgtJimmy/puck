@@ -16,7 +16,7 @@ use puck_plugins::{
     PestPluginDumpStatus, PhpstanExtensionInstallStatus, refuse_message, run_pest_plugin_dump,
     run_phpstan_extension_installer, unsupported_allowed_plugins,
 };
-use puck_registry::p2_path;
+use puck_registry::{load_p2_optional, P2Loader};
 use puck_resolver::{
     UpdateAllowTransitive, expand_update_unlock, load_path_packages, resolve_lock_document,
 };
@@ -81,7 +81,7 @@ enum Commands {
         /// Edit composer.json and lock only; do not install into vendor/
         #[arg(long)]
         no_install: bool,
-        /// Packagist p2 metadata root (contains `packagist/p2/`). Defaults to `$PUCK_REGISTRY`.
+        /// Optional VCR registry root (`packagist/p2/`). Defaults to `$PUCK_REGISTRY`; omit for live Packagist.
         #[arg(long, value_name = "DIR")]
         registry: Option<PathBuf>,
         #[arg(long, value_name = "DIR")]
@@ -93,7 +93,7 @@ enum Commands {
         /// Edit composer.json and lock only; do not change vendor/
         #[arg(long)]
         no_install: bool,
-        /// Packagist p2 metadata root (contains `packagist/p2/`). Defaults to `$PUCK_REGISTRY`.
+        /// Optional VCR registry root (`packagist/p2/`). Defaults to `$PUCK_REGISTRY`; omit for live Packagist.
         #[arg(long, value_name = "DIR")]
         registry: Option<PathBuf>,
         #[arg(long, value_name = "DIR")]
@@ -129,7 +129,7 @@ enum Commands {
         /// Do not audit packages listed under packages-dev
         #[arg(long)]
         no_dev: bool,
-        /// Packagist p2 metadata root (contains `packagist/p2/`). Defaults to `$PUCK_REGISTRY`.
+        /// Optional VCR registry root (`packagist/p2/`). Defaults to `$PUCK_REGISTRY`; omit for live Packagist.
         #[arg(long, value_name = "DIR")]
         registry: Option<PathBuf>,
         #[arg(long, value_name = "DIR")]
@@ -369,8 +369,8 @@ async fn run_require(
         return Err(format!("no composer.json in {}", root.display()));
     }
 
-    let registry_root = resolve_registry_root(registry)?;
-    let p2_dir = registry_root.join("packagist/p2");
+    let loader = p2_loader_for(registry, &root)?;
+    let load_p2 = p2_getter(&loader);
 
     let mut unlock = Vec::new();
     let mut composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
@@ -386,14 +386,20 @@ async fn run_require(
 
     for spec in &packages {
         let req = PackageRequirement::parse(spec).map_err(|e| e.to_string())?;
-        // Ensure VCR has metadata before mutating the project (path repos exempt).
-        let meta_path = p2_path(&registry_root, &req.name);
-        if !meta_path.is_file() && !path_provided.contains(&req.name) {
-            return Err(format!(
-                "no recorded p2 metadata for {} at {} (record with benches/record-packagist-p2.sh or widen the VCR)",
-                req.name,
-                meta_path.display()
-            ));
+        // Ensure metadata is loadable before mutating the project (path repos exempt).
+        if !path_provided.contains(&req.name) {
+            match load_p2_optional(&loader, &req.name) {
+                Ok(Some(_)) => {}
+                Ok(None) => {
+                    return Err(format!(
+                        "no p2 metadata for {} (live Packagist miss or VCR gap; set --registry / $PUCK_REGISTRY or check the package name)",
+                        req.name
+                    ));
+                }
+                Err(e) => {
+                    return Err(format!("p2 metadata for {}: {e}", req.name));
+                }
+            }
         }
         let root_json: Value =
             serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
@@ -463,7 +469,7 @@ async fn run_require(
     let lock_doc = resolve_lock_document(
         &composer_text,
         lock_bytes.as_deref(),
-        &p2_dir,
+        &load_p2,
         &unlock,
         true,
         &root,
@@ -509,8 +515,8 @@ async fn run_remove(
         return Err(format!("no composer.lock in {}", root.display()));
     }
 
-    let registry_root = resolve_registry_root(registry)?;
-    let p2_dir = registry_root.join("packagist/p2");
+    let loader = p2_loader_for(registry, &root)?;
+    let load_p2 = p2_getter(&loader);
 
     let mut unlock = Vec::new();
     let mut composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
@@ -546,7 +552,7 @@ async fn run_remove(
     let lock_doc = resolve_lock_document(
         &composer_text,
         Some(&lock_bytes),
-        &p2_dir,
+        &load_p2,
         &unlock,
         true,
         &root,
@@ -588,14 +594,14 @@ async fn run_lock(
         return Err(format!("no composer.lock in {}", root.display()));
     }
 
-    let registry_root = resolve_registry_root(registry)?;
-    let p2_dir = registry_root.join("packagist/p2");
+    let loader = p2_loader_for(registry, &root)?;
+    let load_p2 = p2_getter(&loader);
     let composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
     let lock_bytes = std::fs::read(&lock_path).map_err(|e| e.to_string())?;
 
-    // Empty unlock: keep every locked package fixed; rewrite dump from VCR p2 / path repos.
+    // Empty unlock: keep every locked package fixed; rewrite dump from p2 / path repos.
     let lock_doc =
-        resolve_lock_document(&composer_text, Some(&lock_bytes), &p2_dir, &[], true, &root)
+        resolve_lock_document(&composer_text, Some(&lock_bytes), &load_p2, &[], true, &root)
             .map_err(|e| e.to_string())?;
 
     write_lock_file(&lock_path, &lock_doc)?;
@@ -629,8 +635,8 @@ async fn run_update(
         return Err(format!("no composer.json in {}", root.display()));
     }
 
-    let registry_root = resolve_registry_root(registry)?;
-    let p2_dir = registry_root.join("packagist/p2");
+    let loader = p2_loader_for(registry, &root)?;
+    let load_p2 = p2_getter(&loader);
     let composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
     let lock_bytes = if lock_path.is_file() {
         Some(std::fs::read(&lock_path).map_err(|e| e.to_string())?)
@@ -731,7 +737,7 @@ async fn run_update(
     let lock_doc = resolve_lock_document(
         &composer_text,
         lock_bytes.as_deref(),
-        &p2_dir,
+        &load_p2,
         &unlock,
         true,
         &root,
@@ -772,7 +778,10 @@ fn run_audit(
         return Err(format!("no composer.lock in {}", root.display()));
     }
     let lock = LockFile::from_path(&lock_path).map_err(|e| e.to_string())?;
-    let registry_root = resolve_registry_root(registry)?;
+    let registry_root = resolve_registry_root(registry)?.ok_or_else(|| {
+        "audit requires --registry DIR or $PUCK_REGISTRY (VCR-only; live advisory fetch not implemented)"
+            .to_string()
+    })?;
 
     let mut packages: Vec<(&str, &str)> = lock
         .packages
@@ -826,13 +835,12 @@ fn run_audit(
     Ok(hits)
 }
 
-fn resolve_registry_root(registry: Option<PathBuf>) -> Result<PathBuf, String> {
-    let registry_root = registry
+fn resolve_registry_root(registry: Option<PathBuf>) -> Result<Option<PathBuf>, String> {
+    let Some(registry_root) = registry
         .or_else(|| std::env::var_os("PUCK_REGISTRY").map(PathBuf::from))
-        .ok_or_else(|| {
-            "need --registry DIR or $PUCK_REGISTRY pointing at a registry root with packagist/p2/"
-                .to_string()
-        })?;
+    else {
+        return Ok(None);
+    };
     let p2_dir = registry_root.join("packagist/p2");
     if !p2_dir.is_dir() {
         return Err(format!(
@@ -840,7 +848,18 @@ fn resolve_registry_root(registry: Option<PathBuf>) -> Result<PathBuf, String> {
             p2_dir.display()
         ));
     }
-    Ok(registry_root)
+    Ok(Some(registry_root))
+}
+
+fn p2_loader_for(registry: Option<PathBuf>, project_dir: &std::path::Path) -> Result<P2Loader, String> {
+    let registry_root = resolve_registry_root(registry)?;
+    P2Loader::from_env_and_registry(registry_root, Some(project_dir)).map_err(|e| e.to_string())
+}
+
+fn p2_getter<'a>(
+    loader: &'a P2Loader,
+) -> impl Fn(&str) -> std::result::Result<Option<Vec<u8>>, String> + 'a {
+    move |name: &str| load_p2_optional(loader, name).map_err(|e| e.to_string())
 }
 
 fn reindent_json_pretty_4(pretty_2: &str) -> String {

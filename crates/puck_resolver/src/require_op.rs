@@ -14,7 +14,7 @@ use crate::pool_builder::{ArrayRepository, PoolBuilder};
 use crate::request::Request;
 use crate::solver::Solver;
 use crate::transaction::Operation;
-use crate::vcr_pool::array_repository_from_p2_constraints;
+use crate::vcr_pool::{array_repository_from_p2_constraints, P2Getter};
 use crate::{Error, Result};
 use indexmap::{IndexMap, IndexSet};
 use puck_lock::{build_lock_document, LockWriteInput, PLUGIN_API_VERSION};
@@ -101,8 +101,9 @@ pub fn expand_update_unlock(
     Ok(unlock.into_iter().collect())
 }
 
-/// Resolve root requires against `p2_dir` (+ path repositories) and build a lock document.
+/// Resolve root requires against p2 metadata (+ path repositories) and build a lock document.
 ///
+/// `load_p2` returns `Ok(None)` when metadata is missing (pool skips; lock dump errors).
 /// `unlock` names are not fixed from the existing lock (they may change version
 /// or be newly installed). All other locked packages are fixed.
 ///
@@ -110,7 +111,7 @@ pub fn expand_update_unlock(
 pub fn resolve_lock_document(
     composer_json: &str,
     lock_bytes: Option<&[u8]>,
-    p2_dir: &Path,
+    load_p2: &P2Getter<'_>,
     unlock: &[String],
     include_dev: bool,
     project_root: &Path,
@@ -170,7 +171,7 @@ pub fn resolve_lock_document(
     let prod_requires = root_requires_from_json(&root, false);
     let all_requires = root_requires_from_json(&root, include_dev);
 
-    let mut prod_repo = array_repository_from_p2_constraints(p2_dir, &prod_requires, stability)?;
+    let mut prod_repo = array_repository_from_p2_constraints(load_p2, &prod_requires, stability)?;
     merge_path_packages(&mut prod_repo, &path_packages);
     let prod_names = solve_names(
         &prod_repo,
@@ -180,7 +181,7 @@ pub fn resolve_lock_document(
         &stability_flags,
     )?;
 
-    let mut all_repo = array_repository_from_p2_constraints(p2_dir, &all_requires, stability)?;
+    let mut all_repo = array_repository_from_p2_constraints(load_p2, &all_requires, stability)?;
     merge_path_packages(&mut all_repo, &path_packages);
     let installed = solve_packages(
         &all_repo,
@@ -196,10 +197,9 @@ pub fn resolve_lock_document(
         let raw = if let Some(path_pkg) = path_by_name.get(name) {
             path_pkg.to_lock_value()
         } else {
-            let path = p2_dir.join(format!("{}.json", name.replace('/', "$")));
-            let bytes = std::fs::read(&path).map_err(|e| {
-                Error::Message(format!("missing p2 for {name} at {}: {e}", path.display()))
-            })?;
+            let bytes = load_p2(name)
+                .map_err(|e| Error::Message(format!("p2 for {name}: {e}")))?
+                .ok_or_else(|| Error::Message(format!("missing p2 metadata for {name}")))?;
             find_p2_version_value(&bytes, pretty)?.ok_or_else(|| {
                 Error::Message(format!("p2 for {name} has no version {pretty}"))
             })?
@@ -353,6 +353,7 @@ fn solve_packages(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vcr_pool::p2_dir_getter;
     use std::path::PathBuf;
 
     fn skeleton() -> PathBuf {
@@ -363,8 +364,15 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/registry/packagist/p2")
     }
 
+    fn fixture_p2() -> impl Fn(&str) -> std::result::Result<Option<Vec<u8>>, String> {
+        p2_dir_getter(p2_dir())
+    }
+
+
+
     #[test]
     fn require_webmozart_assert_dev_keeps_prod_lock_pins() {
+        let get = fixture_p2();
         let dir = skeleton();
         let mut root: Value = serde_json::from_str(
             &std::fs::read_to_string(dir.join("composer.json")).unwrap(),
@@ -387,7 +395,7 @@ mod tests {
         let doc = resolve_lock_document(
             &composer,
             Some(&lock_bytes),
-            &p2_dir(),
+            &get,
             &["webmozart/assert".into()],
             true,
             &dir,
@@ -426,6 +434,7 @@ mod tests {
 
     #[test]
     fn remove_laravel_pail_drops_dev_package_keeps_prod() {
+        let get = fixture_p2();
         let dir = skeleton();
         let mut root: Value = serde_json::from_str(
             &std::fs::read_to_string(dir.join("composer.json")).unwrap(),
@@ -445,7 +454,7 @@ mod tests {
         let doc = resolve_lock_document(
             &composer,
             Some(&lock_bytes),
-            &p2_dir(),
+            &get,
             &["laravel/pail".into()],
             true,
             &dir,
@@ -511,10 +520,11 @@ mod tests {
 
     #[test]
     fn resolve_path_local_selects_path_dist() {
+        let get = fixture_p2();
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/path-local");
         let composer = std::fs::read_to_string(root.join("composer.json")).unwrap();
         // Empty unlock + no prior lock: full resolve from path repo only.
-        let doc = resolve_lock_document(&composer, None, &p2_dir(), &[], true, &root)
+        let doc = resolve_lock_document(&composer, None, &get, &[], true, &root)
             .expect("resolve path-local");
         let packages = doc["packages"].as_array().unwrap();
         assert_eq!(packages.len(), 1);
@@ -529,13 +539,14 @@ mod tests {
 
     #[test]
     fn resolve_path_local_rewrites_from_existing_lock() {
+        let get = fixture_p2();
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/path-local");
         let composer = std::fs::read_to_string(root.join("composer.json")).unwrap();
         let lock_bytes = std::fs::read(root.join("composer.lock")).unwrap();
         let doc = resolve_lock_document(
             &composer,
             Some(&lock_bytes),
-            &p2_dir(),
+            &get,
             &["acme/hello".into()],
             true,
             &root,

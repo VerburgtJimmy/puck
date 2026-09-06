@@ -13,7 +13,7 @@ use crate::pool_builder::{ArrayRepository, PoolBuilder};
 use crate::request::Request;
 use crate::solver::Solver;
 use crate::transaction::Operation;
-use crate::vcr_pool::array_repository_from_p2_constraints;
+use crate::vcr_pool::{array_repository_from_p2_constraints, p2_dir_getter};
 use puck_lock::{build_lock_document, LockWriteInput, PLUGIN_API_VERSION};
 use puck_version::{parse_constraints, Stability};
 use serde_json::Value;
@@ -115,40 +115,44 @@ fn laravel_skeleton_with_dev_solve_matches_vcr_p2_pins() {
 
 #[test]
 fn laravel_skeleton_no_dev_solve_matches_constraint_filtered_vcr() {
+    let get = p2_dir_getter(p2_dir());
     let dir = skeleton_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, false);
-    let repo = array_repository_from_p2_constraints(&p2_dir(), &requires, Stability::Stable)
+    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable)
         .expect("constraint-filtered vcr pool");
     assert_solve_matches_lock(&dir, repo.packages().to_vec(), false, "constraint-filtered vcr");
 }
 
 #[test]
 fn laravel_app_no_dev_solve_matches_constraint_filtered_vcr() {
+    let get = p2_dir_getter(p2_dir());
     let dir = app_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, false);
-    let repo = array_repository_from_p2_constraints(&p2_dir(), &requires, Stability::Stable)
+    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable)
         .expect("constraint-filtered vcr pool");
     assert_solve_matches_lock(&dir, repo.packages().to_vec(), false, "constraint-filtered vcr");
 }
 
 #[test]
 fn laravel_skeleton_with_dev_solve_matches_constraint_filtered_vcr() {
+    let get = p2_dir_getter(p2_dir());
     let dir = skeleton_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, true);
-    let repo = array_repository_from_p2_constraints(&p2_dir(), &requires, Stability::Stable)
+    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable)
         .expect("constraint-filtered vcr pool");
     assert_solve_matches_lock(&dir, repo.packages().to_vec(), true, "constraint-filtered vcr");
 }
 
 #[test]
 fn laravel_app_with_dev_solve_matches_constraint_filtered_vcr() {
+    let get = p2_dir_getter(p2_dir());
     let dir = app_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, true);
-    let repo = array_repository_from_p2_constraints(&p2_dir(), &requires, Stability::Stable)
+    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable)
         .expect("constraint-filtered vcr pool");
     assert_solve_matches_lock(&dir, repo.packages().to_vec(), true, "constraint-filtered vcr");
 }
@@ -169,19 +173,20 @@ fn laravel_app_with_dev_lock_document_matches_m3_lock_gate() {
 }
 
 fn assert_written_lock_matches_fixture(dir: &PathBuf, include_dev: bool) {
+    let get = p2_dir_getter(p2_dir());
     let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
     let json_text = fs::read_to_string(dir.join("composer.json")).expect("composer.json");
     let json_bytes = json_text.as_bytes();
 
     let prod_requires = load_root_requires(json_bytes, false);
     let prod_repo =
-        array_repository_from_p2_constraints(&p2_dir(), &prod_requires, Stability::Stable)
+        array_repository_from_p2_constraints(&get, &prod_requires, Stability::Stable)
             .expect("prod vcr pool");
     let prod_names = solve_install_names(&prod_repo, &prod_requires);
     let prod_name_set: BTreeSet<String> = prod_names.into_iter().map(|(n, _)| n).collect();
 
     let all_requires = load_root_requires(json_bytes, include_dev);
-    let all_repo = array_repository_from_p2_constraints(&p2_dir(), &all_requires, Stability::Stable)
+    let all_repo = array_repository_from_p2_constraints(&get, &all_requires, Stability::Stable)
         .expect("full vcr pool");
     let installed = solve_install_packages(&all_repo, &all_requires);
 

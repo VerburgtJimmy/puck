@@ -51,7 +51,7 @@ pub use rule_set_generator::RuleSetGenerator;
 pub use solver::{Solver, SolverProblems};
 pub use stability::is_package_acceptable;
 pub use transaction::{Operation, Transaction};
-pub use vcr_pool::array_repository_from_p2_constraints;
+pub use vcr_pool::{array_repository_from_p2_constraints, p2_dir_getter, P2Getter};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

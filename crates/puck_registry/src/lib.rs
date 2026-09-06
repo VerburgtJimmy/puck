@@ -1,13 +1,15 @@
-//! Packagist / Satis client with optional VCR-style replay.
+//! Packagist / Satis client with optional VCR-style replay and live p2 fetch.
 
 #![deny(unsafe_code)]
 #![warn(clippy::unwrap_used)]
 
 mod audit;
+mod loader;
 mod packagist;
 mod replay;
 
 pub use audit::{AdvisoryHit, SecurityAdvisory, advisories_for_package, find_advisory_hits};
+pub use loader::{load_p2_optional, P2Loader};
 pub use packagist::{load_p2_metadata, p2_filename, p2_path, p2_replay_store, p2_url_key};
 pub use replay::{ReplayError, ReplayMode, ReplayStore};
 
