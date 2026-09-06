@@ -57,7 +57,10 @@ pub fn path_code(rel_from_project: &str) -> String {
 pub fn static_path_code(rel_from_project: &str) -> String {
     let rel = rel_from_project.replace('\\', "/");
     if let Some(rest) = rel.strip_prefix("vendor/") {
-        return format!("__DIR__ . '/..' . {}", php_export_string(&format!("/{rest}")));
+        return format!(
+            "__DIR__ . '/..' . {}",
+            php_export_string(&format!("/{rest}"))
+        );
     }
     if rel == "vendor" {
         return "__DIR__ . '/..' . ''".to_owned();

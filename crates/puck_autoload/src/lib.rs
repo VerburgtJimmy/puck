@@ -122,10 +122,7 @@ mod tests {
             }"#,
         )
         .expect("lock");
-        assert_eq!(
-            autoload_suffix(&lock),
-            "72565bddcbd249d9a96a8d790293c736"
-        );
+        assert_eq!(autoload_suffix(&lock), "72565bddcbd249d9a96a8d790293c736");
     }
 
     #[test]
@@ -188,8 +185,7 @@ mod tests {
             fs::read_to_string(vendor.join("composer/platform_check.php")).expect("platform");
         assert!(platform.contains("PHP_VERSION_ID >= 80300"));
 
-        let real =
-            fs::read_to_string(vendor.join("composer/autoload_real.php")).expect("real");
+        let real = fs::read_to_string(vendor.join("composer/autoload_real.php")).expect("real");
         assert!(real.contains("require __DIR__ . '/platform_check.php';"));
 
         let psr4 = fs::read_to_string(vendor.join("composer/autoload_psr4.php")).expect("psr4");
@@ -256,16 +252,14 @@ mod tests {
         )
         .expect("dump");
 
-        let classmap =
-            fs::read_to_string(dir.path().join("vendor/composer/autoload_classmap.php"))
-                .expect("classmap");
+        let classmap = fs::read_to_string(dir.path().join("vendor/composer/autoload_classmap.php"))
+            .expect("classmap");
         assert!(classmap.contains("Acme\\\\Lib\\\\Widget"));
         assert!(classmap.contains("$vendorDir . '/acme/lib/src/Widget.php'"));
         assert!(classmap.contains("Composer\\\\InstalledVersions"));
 
-        let static_php =
-            fs::read_to_string(dir.path().join("vendor/composer/autoload_static.php"))
-                .expect("static");
+        let static_php = fs::read_to_string(dir.path().join("vendor/composer/autoload_static.php"))
+            .expect("static");
         assert!(static_php.contains("Acme\\\\Lib\\\\Widget"));
         assert!(static_php.contains("public static $classMap = array"));
     }
@@ -307,8 +301,8 @@ mod tests {
             },
         )
         .expect("dump");
-        let plain =
-            fs::read_to_string(dir.path().join("vendor/composer/autoload_classmap.php")).expect("cm");
+        let plain = fs::read_to_string(dir.path().join("vendor/composer/autoload_classmap.php"))
+            .expect("cm");
         assert!(!plain.contains("Acme\\\\Lib\\\\Widget"));
 
         dump(
@@ -323,7 +317,8 @@ mod tests {
         )
         .expect("dump -o");
         let optimized =
-            fs::read_to_string(dir.path().join("vendor/composer/autoload_classmap.php")).expect("cm");
+            fs::read_to_string(dir.path().join("vendor/composer/autoload_classmap.php"))
+                .expect("cm");
         assert!(optimized.contains("Acme\\\\Lib\\\\Widget"));
         let real =
             fs::read_to_string(dir.path().join("vendor/composer/autoload_real.php")).expect("real");

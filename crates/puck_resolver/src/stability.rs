@@ -2,7 +2,7 @@
 
 use crate::package::Package;
 use indexmap::IndexMap;
-use puck_version::{parse_stability, Stability};
+use puck_version::{Stability, parse_stability};
 
 /// `StabilityFilter::isPackageAcceptable`.
 ///
@@ -35,13 +35,21 @@ mod tests {
     #[test]
     fn stable_min_rejects_dev() {
         let pkg = Package::new("a/a", "1.0.0.0-dev", "1.0-dev");
-        assert!(!is_package_acceptable(&pkg, Stability::Stable, &IndexMap::new()));
+        assert!(!is_package_acceptable(
+            &pkg,
+            Stability::Stable,
+            &IndexMap::new()
+        ));
     }
 
     #[test]
     fn stable_min_accepts_stable() {
         let pkg = Package::new("a/a", "1.0.0.0", "1.0");
-        assert!(is_package_acceptable(&pkg, Stability::Stable, &IndexMap::new()));
+        assert!(is_package_acceptable(
+            &pkg,
+            Stability::Stable,
+            &IndexMap::new()
+        ));
     }
 
     #[test]

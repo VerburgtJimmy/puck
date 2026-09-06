@@ -9,9 +9,8 @@
 //! Lookup order: listed composer repos (first wins), then default Packagist if enabled.
 
 use crate::composer_repo::{
-    canonicalize_metadata_url, default_packagist_url, metadata_url_for_package,
-    metadata_url_template, packages_json_url, parse_repositories, PackagesJsonCache,
-    RepositoryConfig,
+    PackagesJsonCache, RepositoryConfig, canonicalize_metadata_url, default_packagist_url,
+    metadata_url_for_package, metadata_url_template, packages_json_url, parse_repositories,
 };
 use crate::packagist::{load_p2_metadata, p2_path};
 use crate::replay::{ReplayError, ReplayMode};
@@ -209,10 +208,8 @@ impl P2Loader {
             // No Composer 2 metadata-url (V1-only repo) — treat as miss for this source.
             return Err(Error::Replay(ReplayError::Miss(package.to_owned())));
         };
-        let url = metadata_url_for_package(
-            &canonicalize_metadata_url(repo_base, &template),
-            package,
-        );
+        let url =
+            metadata_url_for_package(&canonicalize_metadata_url(repo_base, &template), package);
         self.http_get_bytes(&url, package)
     }
 
@@ -222,9 +219,8 @@ impl P2Loader {
         }
         let index_url = packages_json_url(repo_base);
         let bytes = self.http_get_bytes(&index_url, repo_base)?;
-        let doc: Value = serde_json::from_slice(&bytes).map_err(|e| {
-            Error::Message(format!("invalid packages.json from {repo_base}: {e}"))
-        })?;
+        let doc: Value = serde_json::from_slice(&bytes)
+            .map_err(|e| Error::Message(format!("invalid packages.json from {repo_base}: {e}")))?;
         let template = metadata_url_template(&doc);
         self.packages_json_cache
             .borrow_mut()
@@ -371,14 +367,14 @@ pub fn load_p2_optional(loader: &P2Loader, package: &str) -> Result<Option<Vec<u
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     fn replay_miss_errors() {
         let dir = tempfile::tempdir().unwrap();
-        let loader = P2Loader::new(ReplayMode::Replay, Some(dir.path().to_path_buf()), None)
-            .unwrap();
+        let loader =
+            P2Loader::new(ReplayMode::Replay, Some(dir.path().to_path_buf()), None).unwrap();
         let err = loader.get("no/such").unwrap_err();
         assert!(
             matches!(err, Error::Replay(ReplayError::Miss(ref p)) if p == "no/such"),
@@ -471,7 +467,10 @@ mod tests {
             .with_base_url("https://packagist.test")
             .with_http_get(|url| {
                 if url.contains("private.example.com/packages.json") {
-                    return Ok(br#"{"metadata-url":"https://private.example.com/p2/%package%.json"}"#.to_vec());
+                    return Ok(
+                        br#"{"metadata-url":"https://private.example.com/p2/%package%.json"}"#
+                            .to_vec(),
+                    );
                 }
                 if url.contains("private.example.com/p2/") {
                     return Err(Error::Replay(ReplayError::Miss("missing".into())));
@@ -507,7 +506,10 @@ mod tests {
             })
             .with_http_get(|url| {
                 if url.ends_with("/packages.json") {
-                    return Ok(br#"{"metadata-url":"https://first.example.com/p2/%package%.json"}"#.to_vec());
+                    return Ok(
+                        br#"{"metadata-url":"https://first.example.com/p2/%package%.json"}"#
+                            .to_vec(),
+                    );
                 }
                 if url.contains("first.example.com/p2/acme/priv.json") {
                     return Ok(br#"{"packages":{"acme/priv":[{"version":"1.0.0"}]}}"#.to_vec());

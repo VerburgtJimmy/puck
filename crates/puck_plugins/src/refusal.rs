@@ -1,10 +1,7 @@
 //! Tier 3: refuse allowed lock plugins that lack a native adapter.
 
 /// Packages with a Tier 1 native adapter in `puck_plugins`.
-pub const NATIVE_ADAPTERS: &[&str] = &[
-    "pestphp/pest-plugin",
-    "phpstan/extension-installer",
-];
+pub const NATIVE_ADAPTERS: &[&str] = &["pestphp/pest-plugin", "phpstan/extension-installer"];
 
 /// Package types that Composer treats as plugins (`composer-plugin` / legacy
 /// `composer-installer`).

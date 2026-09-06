@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 const CACHE_FILE: &str = "pest-plugins.json";
 const PLUGIN_VENDOR_DIR: &str = "vendor/pestphp/pest-plugin";
 
-
 /// Outcome of the native pest plugin dump.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PestPluginDumpStatus {

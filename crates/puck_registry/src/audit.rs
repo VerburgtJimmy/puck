@@ -93,7 +93,10 @@ fn parse_advisories_from_p2(bytes: &[u8]) -> Result<Vec<SecurityAdvisory>> {
             continue;
         };
         for version in arr {
-            let Some(list) = version.get("security-advisories").and_then(|v| v.as_array()) else {
+            let Some(list) = version
+                .get("security-advisories")
+                .and_then(|v| v.as_array())
+            else {
                 continue;
             };
             for item in list {

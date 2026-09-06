@@ -104,11 +104,7 @@ impl<'a> RuleSetGenerator<'a> {
                 work.push_back(alias_of_id);
                 self.add_rule(
                     RuleType::Package,
-                    Self::create_require_rule(
-                        package_id,
-                        &[alias_of_id],
-                        RuleReason::PackageAlias,
-                    ),
+                    Self::create_require_rule(package_id, &[alias_of_id], RuleReason::PackageAlias),
                 );
                 self.add_rule(
                     RuleType::Package,
@@ -118,7 +114,11 @@ impl<'a> RuleSetGenerator<'a> {
                         RuleReason::PackageInverseAlias,
                     ),
                 );
-                if !self.pool.package_by_id(package_id).has_self_version_requires {
+                if !self
+                    .pool
+                    .package_by_id(package_id)
+                    .has_self_version_requires
+                {
                     continue;
                 }
             } else {
@@ -172,12 +172,7 @@ impl<'a> RuleSetGenerator<'a> {
 
     /// `RuleSetGenerator::addRulesForRootAliases`.
     fn add_rules_for_root_aliases(&mut self) -> Result<()> {
-        let package_ids: Vec<PackageId> = self
-            .pool
-            .packages()
-            .iter()
-            .map(|p| p.id)
-            .collect();
+        let package_ids: Vec<PackageId> = self.pool.packages().iter().map(|p| p.id).collect();
         for package_id in package_ids {
             if self.added_map.contains_key(&package_id) {
                 continue;
@@ -253,9 +248,7 @@ impl<'a> RuleSetGenerator<'a> {
                     RuleType::Package,
                     Some(Self::create_multi_conflict_rule(
                         &packages,
-                        RuleReason::PackageSameName {
-                            package_name: name,
-                        },
+                        RuleReason::PackageSameName { package_name: name },
                     )),
                 );
             }
@@ -266,10 +259,8 @@ impl<'a> RuleSetGenerator<'a> {
     fn add_rules_for_request(&mut self, request: &Request) -> Result<()> {
         for &package_id in request.fixed_packages.keys() {
             self.add_rules_for_package(package_id)?;
-            let rule = Self::create_install_one_of_rule(
-                &[package_id],
-                RuleReason::Fixed { package_id },
-            );
+            let rule =
+                Self::create_install_one_of_rule(&[package_id], RuleReason::Fixed { package_id });
             self.add_rule(RuleType::Request, Some(rule));
         }
 
@@ -358,12 +349,10 @@ mod tests {
             .unwrap();
 
         assert!(
-            rules
-                .rules_of_type(RuleType::Package)
-                .any(|r| matches!(
-                    r.reason(),
-                    RuleReason::PackageRequires { target, .. } if target == "a/a"
-                )),
+            rules.rules_of_type(RuleType::Package).any(|r| matches!(
+                r.reason(),
+                RuleReason::PackageRequires { target, .. } if target == "a/a"
+            )),
             "expected PACKAGE_REQUIRES for a/a"
         );
     }

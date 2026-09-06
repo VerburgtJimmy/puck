@@ -6,17 +6,17 @@
 #![deny(unsafe_code)]
 #![warn(clippy::unwrap_used)]
 
-mod manifest;
 mod edit;
 mod json_manipulator;
+mod manifest;
 
 pub use edit::{
-    add_requirement, add_requirement_to_file, remove_requirement, sort_packages_enabled,
-    PackageRequirement,
+    PackageRequirement, add_requirement, add_requirement_to_file, remove_requirement,
+    sort_packages_enabled,
 };
 pub use json_manipulator::{
-    add_requirement_preserving, is_platform_package, remove_requirement_preserving,
-    sort_packages_map, JsonManipulator,
+    JsonManipulator, add_requirement_preserving, is_platform_package,
+    remove_requirement_preserving, sort_packages_map,
 };
 pub use manifest::{Autoload, Manifest, PackageLinks};
 

@@ -3,10 +3,10 @@
 //! Packagist p2 bodies with `"minified": "composer/2.0"` are expanded with the
 //! same algorithm as `Composer\MetadataMinifier\MetadataMinifier::expand`.
 
-use crate::link::Link;
-use crate::package::Package;
 use crate::Error;
 use crate::Result;
+use crate::link::Link;
+use crate::package::Package;
 use indexmap::IndexMap;
 use puck_version::{normalize, parse_constraints};
 use serde_json::{Map, Value};
@@ -148,9 +148,9 @@ fn parse_link_map(
 ) -> Result<IndexMap<String, Link>> {
     let mut out = IndexMap::new();
     for (target, constraint_v) in map {
-        let pretty = constraint_v
-            .as_str()
-            .ok_or_else(|| Error::Message(format!("link constraint for {target} is not a string")))?;
+        let pretty = constraint_v.as_str().ok_or_else(|| {
+            Error::Message(format!("link constraint for {target} is not a string"))
+        })?;
         // ArrayLoader::createLink: self.version -> package version
         let expanded = if pretty == "self.version" {
             self_version
@@ -187,7 +187,10 @@ pub fn find_p2_version_value(bytes: &[u8], pretty_or_normalized: &str) -> Result
             versions.clone()
         };
         for version in versions {
-            let pretty = version.get("version").and_then(|v| v.as_str()).unwrap_or("");
+            let pretty = version
+                .get("version")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let normalized = version
                 .get("version_normalized")
                 .and_then(|v| v.as_str())
@@ -241,9 +244,8 @@ pub fn packages_from_p2_lock_pins(
             let bytes = std::fs::read(&path).map_err(|e| {
                 Error::Message(format!("missing p2 for {name} at {}: {e}", path.display()))
             })?;
-            let package = find_p2_version(&bytes, pretty)?.ok_or_else(|| {
-                Error::Message(format!("p2 for {name} has no version {pretty}"))
-            })?;
+            let package = find_p2_version(&bytes, pretty)?
+                .ok_or_else(|| Error::Message(format!("p2 for {name} has no version {pretty}")))?;
             out.push(package);
         }
     }
@@ -312,8 +314,8 @@ mod tests {
 
     #[test]
     fn skeleton_lock_pins_from_vcr_p2_match_lock_replace_count() {
-        let p2_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/registry/packagist/p2");
+        let p2_dir =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/registry/packagist/p2");
         let packages = packages_from_p2_lock_pins(&p2_dir, &skeleton_lock(), false).unwrap();
         assert_eq!(packages.len(), 76);
         let fw = packages

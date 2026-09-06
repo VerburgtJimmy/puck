@@ -7,7 +7,9 @@ fn puck_bin() -> &'static str {
 }
 
 fn fixture(name: &str) -> std::path::PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures").join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures")
+        .join(name)
 }
 
 use std::path::PathBuf;
@@ -20,7 +22,12 @@ fn doctor_laravel_skeleton_ready() {
         .output()
         .expect("run doctor");
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(out.status.code(), Some(0), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(
         stdout.lines().last() == Some("ready to switch"),
         "stdout={stdout}"
@@ -35,7 +42,12 @@ fn doctor_laravel_app_ready() {
         .output()
         .expect("run doctor");
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(out.status.code(), Some(0), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(
         stdout.lines().last() == Some("ready to switch"),
         "stdout={stdout}"

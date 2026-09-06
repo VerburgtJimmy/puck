@@ -249,11 +249,7 @@ fn build_generated_config(
             .unwrap_or_else(|_| generated_dir.to_path_buf());
         let relative = relative_path(&generated_dir_abs, &absolute);
 
-        let phpstan_extra = pkg
-            .extra
-            .get("phpstan")
-            .cloned()
-            .filter(|v| !v.is_null());
+        let phpstan_extra = pkg.extra.get("phpstan").cloned().filter(|v| !v.is_null());
 
         let mut phpstan_constraint_str = None;
         if let Some(raw) = pkg.require.get("phpstan/phpstan") {
@@ -301,10 +297,7 @@ fn build_generated_config(
     };
 
     let contents = GENERATED_TEMPLATE
-        .replace(
-            "%EXTENSIONS%",
-            &php_var_export_extensions(&extensions),
-        )
+        .replace("%EXTENSIONS%", &php_var_export_extensions(&extensions))
         .replace(
             "%NOT_INSTALLED%",
             &php_var_export_string_map(&not_installed),
@@ -340,7 +333,10 @@ fn make_absolute(root: &Path, path: &Path) -> PathBuf {
 fn relative_path(from_dir: &Path, to: &Path) -> String {
     // Mirror Composer Filesystem::findShortestPath(..., true) for the usual
     // vendor layout: from vendor/phpstan/extension-installer/src → vendor/{pkg}.
-    let from = from_dir.components().map(|c| c.as_os_str()).collect::<Vec<_>>();
+    let from = from_dir
+        .components()
+        .map(|c| c.as_os_str())
+        .collect::<Vec<_>>();
     let to_c = to.components().map(|c| c.as_os_str()).collect::<Vec<_>>();
     let mut i = 0;
     while i < from.len() && i < to_c.len() && from[i] == to_c[i] {

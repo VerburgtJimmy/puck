@@ -181,10 +181,7 @@ pub fn find_classes(contents: &str) -> Vec<String> {
 
         if name.starts_with(':') {
             // XHP: `:foo:bar` -> `xhp_foo__bar`
-            name = format!(
-                "xhp{}",
-                name[1..].replace('-', "_").replace(':', "__")
-            );
+            name = format!("xhp{}", name[1..].replace('-', "_").replace(':', "__"));
         } else if type_name == "enum"
             && let Some(pos) = name.rfind(':')
         {
@@ -365,8 +362,11 @@ enum E: string { case A = 'a'; }
         let dir = tempfile::tempdir().expect("tempdir");
         let src = dir.path().join("src");
         fs::create_dir_all(&src).expect("mkdir");
-        fs::write(src.join("Foo.php"), "<?php\nnamespace Acme;\nclass Foo {}\n")
-            .expect("write");
+        fs::write(
+            src.join("Foo.php"),
+            "<?php\nnamespace Acme;\nclass Foo {}\n",
+        )
+        .expect("write");
 
         let map = build_classmap(dir.path(), &["src".to_owned()], &[]);
         assert_eq!(

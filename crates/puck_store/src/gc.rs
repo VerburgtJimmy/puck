@@ -178,15 +178,21 @@ mod tests {
         put_archive(&store, &orphan_hash, &orphan_bytes, ArchiveKind::Zip).expect("orphan");
 
         // Incomplete package dir.
-        let incomplete = store.package_dir("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let incomplete =
+            store.package_dir("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
         fs::create_dir_all(&incomplete).expect("mkdir");
         fs::write(incomplete.join("x.txt"), b"x").expect("write");
 
         // Stale index key.
-        let stale = store.root().join(".index/sha1/cccccccccccccccccccccccccccccccccccccccc");
+        let stale = store
+            .root()
+            .join(".index/sha1/cccccccccccccccccccccccccccccccccccccccc");
         fs::create_dir_all(stale.parent().expect("parent")).expect("mkdir");
-        fs::write(&stale, b"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
-            .expect("stale");
+        fs::write(
+            &stale,
+            b"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        )
+        .expect("stale");
 
         let report = gc(&store).expect("gc");
         assert_eq!(report.kept_packages, 1);

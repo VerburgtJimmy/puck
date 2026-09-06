@@ -1,9 +1,7 @@
 //! Write `vendor/autoload.php` and `vendor/composer/*` autoload files.
 
 use crate::classmap::build_classmap;
-use crate::collect::{
-    CollectedAutoloads, RelPath, prefix_lengths_psr4, prefixes_psr0,
-};
+use crate::collect::{CollectedAutoloads, RelPath, prefix_lengths_psr4, prefixes_psr0};
 use crate::php::{path_code, php_export_string, static_path_code};
 use crate::platform_check::render_platform_check;
 use crate::{Error, Result};
@@ -36,7 +34,10 @@ pub fn write_autoload_files(
     })?;
 
     write_file(&composer_dir.join("ClassLoader.php"), CLASS_LOADER)?;
-    write_file(&composer_dir.join("InstalledVersions.php"), INSTALLED_VERSIONS)?;
+    write_file(
+        &composer_dir.join("InstalledVersions.php"),
+        INSTALLED_VERSIONS,
+    )?;
     write_file(&composer_dir.join("LICENSE"), LICENSE)?;
 
     let psr4 = collected.psr4_sorted();
@@ -292,7 +293,10 @@ class ComposerStaticInit{suffix}
         let lengths = prefix_lengths_psr4(psr4);
         out.push_str("    public static $prefixLengthsPsr4 = array (\n");
         for (ch, group) in &lengths {
-            out.push_str(&format!("        '{}' =>\n        array (\n", escape_char(*ch)));
+            out.push_str(&format!(
+                "        '{}' =>\n        array (\n",
+                escape_char(*ch)
+            ));
             for (ns, len) in group {
                 out.push_str("            ");
                 out.push_str(&php_export_string(ns));
@@ -308,10 +312,7 @@ class ComposerStaticInit{suffix}
             out.push_str(&php_export_string(ns));
             out.push_str(" =>\n        array (\n");
             for (i, path) in paths.iter().enumerate() {
-                out.push_str(&format!(
-                    "            {i} => {},\n",
-                    static_path_code(path)
-                ));
+                out.push_str(&format!("            {i} => {},\n", static_path_code(path)));
             }
             out.push_str("        ),\n");
         }
@@ -329,7 +330,10 @@ class ComposerStaticInit{suffix}
         let grouped = prefixes_psr0(psr0);
         out.push_str("    public static $prefixesPsr0 = array (\n");
         for (ch, group) in &grouped {
-            out.push_str(&format!("        '{}' =>\n        array (\n", escape_char(*ch)));
+            out.push_str(&format!(
+                "        '{}' =>\n        array (\n",
+                escape_char(*ch)
+            ));
             for (ns, paths) in group {
                 out.push_str("            ");
                 out.push_str(&php_export_string(ns));

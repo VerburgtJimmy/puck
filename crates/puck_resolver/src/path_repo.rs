@@ -8,7 +8,7 @@
 use crate::metadata::package_from_composer_package;
 use crate::package::Package;
 use crate::{Error, Result};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
 /// Transport options for a path repository (`options.symlink` / `options.relative`).
@@ -168,10 +168,7 @@ fn load_one_path_repo(project_root: &Path, entry: &Value) -> Result<Vec<PathPack
     })
 }
 
-fn load_one_path_repository(
-    project_root: &Path,
-    entry: &Value,
-) -> Result<Option<PathRepository>> {
+fn load_one_path_repository(project_root: &Path, entry: &Value) -> Result<Option<PathRepository>> {
     let Some(obj) = entry.as_object() else {
         return Ok(None);
     };
@@ -179,9 +176,7 @@ fn load_one_path_repository(
         return Ok(None);
     }
     let Some(url) = obj.get("url").and_then(|v| v.as_str()) else {
-        return Err(Error::Message(
-            "path repository missing string url".into(),
-        ));
+        return Err(Error::Message("path repository missing string url".into()));
     };
 
     let canonical = obj
@@ -233,12 +228,10 @@ fn load_path_package_at(
             composer_path.display()
         )));
     }
-    let bytes = std::fs::read(&composer_path).map_err(|e| {
-        Error::Message(format!("read {}: {e}", composer_path.display()))
-    })?;
-    let mut composer: Value = serde_json::from_slice(&bytes).map_err(|e| {
-        Error::Message(format!("invalid {}: {e}", composer_path.display()))
-    })?;
+    let bytes = std::fs::read(&composer_path)
+        .map_err(|e| Error::Message(format!("read {}: {e}", composer_path.display())))?;
+    let mut composer: Value = serde_json::from_slice(&bytes)
+        .map_err(|e| Error::Message(format!("invalid {}: {e}", composer_path.display())))?;
 
     if composer
         .get("version")
@@ -449,17 +442,18 @@ mod tests {
     #[test]
     fn loads_path_local_fixture_acme_hello() {
         let root = path_local_root();
-        let composer: Value = serde_json::from_str(
-            &fs::read_to_string(root.join("composer.json")).unwrap(),
-        )
-        .unwrap();
+        let composer: Value =
+            serde_json::from_str(&fs::read_to_string(root.join("composer.json")).unwrap()).unwrap();
         let pkgs = load_path_packages(&root, &composer).unwrap();
         assert!(
             pkgs.iter().any(|p| p.package.name == "acme/hello"),
             "expected acme/hello in {:?}",
             pkgs.iter().map(|p| &p.package.name).collect::<Vec<_>>()
         );
-        let hello = pkgs.iter().find(|p| p.package.name == "acme/hello").unwrap();
+        let hello = pkgs
+            .iter()
+            .find(|p| p.package.name == "acme/hello")
+            .unwrap();
         assert_eq!(hello.package.pretty_version, "dev-main");
         assert_eq!(hello.url, "packages/acme-hello");
         assert!(hello.options.symlink);
@@ -508,8 +502,16 @@ mod tests {
         fs::create_dir_all(&a).unwrap();
         fs::create_dir_all(&b).unwrap();
         fs::create_dir_all(&empty).unwrap();
-        fs::write(a.join("composer.json"), r#"{"name":"tmp/a","version":"1.0.0"}"#).unwrap();
-        fs::write(b.join("composer.json"), r#"{"name":"tmp/b","version":"2.0.0"}"#).unwrap();
+        fs::write(
+            a.join("composer.json"),
+            r#"{"name":"tmp/a","version":"1.0.0"}"#,
+        )
+        .unwrap();
+        fs::write(
+            b.join("composer.json"),
+            r#"{"name":"tmp/b","version":"2.0.0"}"#,
+        )
+        .unwrap();
         // empty/ has no composer.json
         let root = json!({
             "repositories": [

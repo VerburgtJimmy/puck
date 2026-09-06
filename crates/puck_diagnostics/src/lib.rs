@@ -4,7 +4,7 @@
 #![warn(clippy::unwrap_used)]
 
 use indexmap::IndexMap;
-use puck_lock::{abandoned_warnings, content_hash, LockFile, PLUGIN_API_VERSION};
+use puck_lock::{LockFile, PLUGIN_API_VERSION, abandoned_warnings, content_hash};
 use puck_manifest::Manifest;
 use puck_php::find_php;
 use puck_plugins::unsupported_allowed_plugins;
@@ -117,9 +117,8 @@ pub fn diagnose(working_dir: &Path) -> Result<Report> {
         )));
     }
 
-    let manifest_text = fs::read_to_string(&manifest_path).map_err(|e| {
-        Error::Message(format!("read {}: {e}", manifest_path.display()))
-    })?;
+    let manifest_text = fs::read_to_string(&manifest_path)
+        .map_err(|e| Error::Message(format!("read {}: {e}", manifest_path.display())))?;
     let manifest_value: Value = serde_json::from_str(&manifest_text)
         .map_err(|e| Error::Message(format!("parse composer.json: {e}")))?;
     let manifest = Manifest::from_value(manifest_value)
@@ -448,10 +447,7 @@ fn collect_info(manifest: &Manifest, report: &mut Report) {
                 .unwrap_or_default();
             report.findings.push(Finding {
                 severity: Severity::Info,
-                message: format!(
-                    "info: PHP {}{ver} (from {why})",
-                    path.display()
-                ),
+                message: format!("info: PHP {}{ver} (from {why})", path.display()),
             });
         }
         None => {
@@ -563,7 +559,10 @@ mod tests {
         map.insert("bin-dir".into(), json!("bin"));
         map.insert("use-github-api".into(), json!(false));
         let keys = unknown_config_keys(&map);
-        assert_eq!(keys, vec!["bin-dir".to_string(), "use-github-api".to_string()]);
+        assert_eq!(
+            keys,
+            vec!["bin-dir".to_string(), "use-github-api".to_string()]
+        );
     }
 
     #[test]
@@ -576,10 +575,16 @@ mod tests {
                     "Composer\\Config::disableProcessTimeout"
                 ]),
             ),
-            ("pre-package-uninstall".into(), json!("Illuminate\\Foundation\\ComposerScripts::prePackageUninstall")),
+            (
+                "pre-package-uninstall".into(),
+                json!("Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"),
+            ),
         ]);
         let got = non_laravel_class_method_scripts(&scripts);
-        assert_eq!(got, vec!["Composer\\Config::disableProcessTimeout".to_string()]);
+        assert_eq!(
+            got,
+            vec!["Composer\\Config::disableProcessTimeout".to_string()]
+        );
     }
 
     #[test]
@@ -602,7 +607,8 @@ mod tests {
 
     #[test]
     fn diagnose_fixture_laravel_skeleton_ready() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/laravel-skeleton");
+        let root =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/laravel-skeleton");
         let report = diagnose(&root).expect("diagnose");
         assert_eq!(report.blocker_count(), 0, "{:?}", report.findings);
         assert_eq!(report.summary_line(), "ready to switch");
@@ -649,7 +655,9 @@ mod tests {
         let report = diagnose(dir.path()).unwrap();
         assert!(report.blocker_count() >= 1);
         assert!(report.findings.iter().any(|f| {
-            f.severity == Severity::Blocker && f.message.contains("php-http/discovery") && f.message.contains("planned")
+            f.severity == Severity::Blocker
+                && f.message.contains("php-http/discovery")
+                && f.message.contains("planned")
         }));
     }
 
@@ -680,9 +688,12 @@ mod tests {
         fs::write(dir.path().join("composer.json"), json).unwrap();
         fs::write(dir.path().join("composer.lock"), lock).unwrap();
         let report = diagnose(dir.path()).unwrap();
-        assert!(report.findings.iter().any(|f| {
-            f.severity == Severity::Blocker && f.message.contains("vcs")
-        }));
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| { f.severity == Severity::Blocker && f.message.contains("vcs") })
+        );
         assert_eq!(report.exit_code(), 1);
     }
 }

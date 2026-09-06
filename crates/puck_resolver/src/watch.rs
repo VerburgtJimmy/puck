@@ -90,7 +90,10 @@ impl RuleWatchGraph {
         self.nodes.push(node);
 
         for literal in watches {
-            self.watch_chains.entry(literal).or_default().push_front(node_id);
+            self.watch_chains
+                .entry(literal)
+                .or_default()
+                .push_front(node_id);
         }
     }
 
@@ -110,7 +113,11 @@ impl RuleWatchGraph {
         // Index into the chain; mutate carefully like Composer's SplDoublyLinkedList.
         let mut index = 0;
         loop {
-            let chain_len = self.watch_chains.get(&literal).map(|c| c.len()).unwrap_or(0);
+            let chain_len = self
+                .watch_chains
+                .get(&literal)
+                .map(|c| c.len())
+                .unwrap_or(0);
             if index >= chain_len {
                 break;
             }

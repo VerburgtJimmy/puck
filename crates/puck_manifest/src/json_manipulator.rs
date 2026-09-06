@@ -26,9 +26,7 @@ impl JsonManipulator {
             trimmed.to_string()
         };
         if !contents.starts_with('{') || !contents.ends_with('}') {
-            return Err(Error::Parse(
-                "The json file must be an object ({})".into(),
-            ));
+            return Err(Error::Parse("The json file must be an object ({})".into()));
         }
         let newline = if contents.contains("\r\n") {
             "\r\n".to_string()
@@ -60,8 +58,8 @@ impl JsonManipulator {
         constraint: &str,
         sort_packages: bool,
     ) -> Result<()> {
-        let decoded: Value = serde_json::from_str(&self.contents)
-            .map_err(|e| Error::Parse(e.to_string()))?;
+        let decoded: Value =
+            serde_json::from_str(&self.contents).map_err(|e| Error::Parse(e.to_string()))?;
         let Value::Object(root) = &decoded else {
             return Err(Error::RootNotObject);
         };
@@ -125,8 +123,8 @@ impl JsonManipulator {
     }
 
     fn remove_sub_node(&mut self, main_node: &str, name: &str) -> Result<bool> {
-        let decoded: Value = serde_json::from_str(&self.contents)
-            .map_err(|e| Error::Parse(e.to_string()))?;
+        let decoded: Value =
+            serde_json::from_str(&self.contents).map_err(|e| Error::Parse(e.to_string()))?;
         let Some(Value::Object(map)) = decoded.get(main_node) else {
             return Ok(false);
         };
@@ -134,10 +132,7 @@ impl JsonManipulator {
             return Ok(true);
         }
         // Case-insensitive match on existing key (Composer uses regex /i).
-        let existing = map
-            .keys()
-            .find(|k| k.eq_ignore_ascii_case(name))
-            .cloned();
+        let existing = map.keys().find(|k| k.eq_ignore_ascii_case(name)).cloned();
         let Some(existing) = existing else {
             return Ok(false);
         };
@@ -178,12 +173,7 @@ impl JsonManipulator {
         if empty_root {
             self.contents = format!(
                 "{{{}{}{}: {}{}{}",
-                self.newline,
-                self.indent,
-                key_enc,
-                formatted,
-                self.newline,
-                '}'
+                self.newline, self.indent, key_enc, formatted, self.newline, '}'
             );
             return Ok(());
         }
@@ -194,24 +184,14 @@ impl JsonManipulator {
             .to_string();
         self.contents = format!(
             "{},{}{}{}: {}{}{}",
-            before,
-            self.newline,
-            self.indent,
-            key_enc,
-            formatted,
-            self.newline,
-            '}'
+            before, self.newline, self.indent, key_enc, formatted, self.newline, '}'
         );
         Ok(())
     }
 
     fn format_object(&self, map: &Map<String, Value>, depth: usize) -> String {
         if map.is_empty() {
-            return format!(
-                "{{{}{}}}",
-                self.newline,
-                self.indent.repeat(depth + 1)
-            );
+            return format!("{{{}{}}}", self.newline, self.indent.repeat(depth + 1));
         }
         let mut elems = Vec::with_capacity(map.len());
         for (k, v) in map {
@@ -581,18 +561,13 @@ fn skip_json_value(contents: &str, start: usize) -> Result<usize> {
         b'-' | b'0'..=b'9' => {
             i += 1;
             while i < bytes.len()
-                && matches!(
-                    bytes[i],
-                    b'0'..=b'9' | b'.' | b'e' | b'E' | b'+' | b'-'
-                )
+                && matches!(bytes[i], b'0'..=b'9' | b'.' | b'e' | b'E' | b'+' | b'-')
             {
                 i += 1;
             }
             Ok(i)
         }
-        _ => Err(Error::Parse(format!(
-            "unexpected json value at byte {i}"
-        ))),
+        _ => Err(Error::Parse(format!("unexpected json value at byte {i}"))),
     }
 }
 
@@ -676,10 +651,7 @@ mod tests {
         map.insert("laravel/framework".into(), Value::String("^13".into()));
         sort_packages_map(&mut map);
         let keys: Vec<_> = map.keys().cloned().collect();
-        assert_eq!(
-            keys,
-            vec!["php", "laravel/framework", "webmozart/assert"]
-        );
+        assert_eq!(keys, vec!["php", "laravel/framework", "webmozart/assert"]);
     }
 
     #[test]
@@ -694,14 +666,8 @@ mod tests {
         "sort-packages": true
     }
 }"#;
-        let out = add_requirement_preserving(
-            input,
-            "webmozart/assert",
-            "^1.11",
-            false,
-            true,
-        )
-        .unwrap();
+        let out =
+            add_requirement_preserving(input, "webmozart/assert", "^1.11", false, true).unwrap();
         let expected = r#"{
     "name": "app/app",
     "require": {
@@ -726,14 +692,8 @@ mod tests {
         "php": "^8.3"
     }
 }"#;
-        let out = add_requirement_preserving(
-            input,
-            "webmozart/assert",
-            "^1.11",
-            false,
-            false,
-        )
-        .unwrap();
+        let out =
+            add_requirement_preserving(input, "webmozart/assert", "^1.11", false, false).unwrap();
         let expected = r#"{
     "name": "app/app",
     "require": {
@@ -758,14 +718,8 @@ mod tests {
         "sort-packages": true
     }
 }"#;
-        let out = add_requirement_preserving(
-            input,
-            "laravel/framework",
-            "^13.0",
-            false,
-            true,
-        )
-        .unwrap();
+        let out =
+            add_requirement_preserving(input, "laravel/framework", "^13.0", false, true).unwrap();
         let expected = r#"{
     "name": "app/app",
     "require": {
@@ -824,14 +778,8 @@ mod tests {
         "php": "^8.3"
     }
 }"#;
-        let out = add_requirement_preserving(
-            input,
-            "phpunit/phpunit",
-            "^11.0",
-            true,
-            false,
-        )
-        .unwrap();
+        let out =
+            add_requirement_preserving(input, "phpunit/phpunit", "^11.0", true, false).unwrap();
         let expected = r#"{
     "name": "app/app",
     "require": {
@@ -857,14 +805,8 @@ mod tests {
         "sort-packages": true
     }
 }"#;
-        let out = add_requirement_preserving(
-            input,
-            "laravel/framework",
-            "^13.0",
-            false,
-            true,
-        )
-        .unwrap();
+        let out =
+            add_requirement_preserving(input, "laravel/framework", "^13.0", false, true).unwrap();
         let expected = r#"{
     "name": "app/app",
     "require": {

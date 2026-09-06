@@ -4,9 +4,7 @@
 //! solver’s install set for root requires matches `composer.lock` packages
 //! (name + pretty version) for lock-dump, VCR pin, and constraint-filtered pools.
 
-use crate::metadata::{
-    find_p2_version_value, packages_from_lock_json, packages_from_p2_lock_pins,
-};
+use crate::metadata::{find_p2_version_value, packages_from_lock_json, packages_from_p2_lock_pins};
 use crate::package::Package;
 use crate::platform::is_platform_package;
 use crate::pool_builder::{ArrayRepository, PoolBuilder};
@@ -15,8 +13,8 @@ use crate::solver::Solver;
 use crate::transaction::Operation;
 use crate::vcr_pool::{array_repository_from_p2_constraints, p2_dir_getter};
 use indexmap::IndexSet;
-use puck_lock::{build_lock_document, LockWriteInput, PLUGIN_API_VERSION};
-use puck_version::{parse_constraints, Stability};
+use puck_lock::{LockWriteInput, PLUGIN_API_VERSION, build_lock_document};
+use puck_version::{Stability, parse_constraints};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fs;
@@ -120,9 +118,15 @@ fn laravel_skeleton_no_dev_solve_matches_constraint_filtered_vcr() {
     let dir = skeleton_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, false);
-    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
-        .expect("constraint-filtered vcr pool");
-    assert_solve_matches_lock(&dir, repo.packages().to_vec(), false, "constraint-filtered vcr");
+    let repo =
+        array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
+            .expect("constraint-filtered vcr pool");
+    assert_solve_matches_lock(
+        &dir,
+        repo.packages().to_vec(),
+        false,
+        "constraint-filtered vcr",
+    );
 }
 
 #[test]
@@ -131,9 +135,15 @@ fn laravel_app_no_dev_solve_matches_constraint_filtered_vcr() {
     let dir = app_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, false);
-    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
-        .expect("constraint-filtered vcr pool");
-    assert_solve_matches_lock(&dir, repo.packages().to_vec(), false, "constraint-filtered vcr");
+    let repo =
+        array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
+            .expect("constraint-filtered vcr pool");
+    assert_solve_matches_lock(
+        &dir,
+        repo.packages().to_vec(),
+        false,
+        "constraint-filtered vcr",
+    );
 }
 
 #[test]
@@ -142,9 +152,15 @@ fn laravel_skeleton_with_dev_solve_matches_constraint_filtered_vcr() {
     let dir = skeleton_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, true);
-    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
-        .expect("constraint-filtered vcr pool");
-    assert_solve_matches_lock(&dir, repo.packages().to_vec(), true, "constraint-filtered vcr");
+    let repo =
+        array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
+            .expect("constraint-filtered vcr pool");
+    assert_solve_matches_lock(
+        &dir,
+        repo.packages().to_vec(),
+        true,
+        "constraint-filtered vcr",
+    );
 }
 
 #[test]
@@ -153,9 +169,15 @@ fn laravel_app_with_dev_solve_matches_constraint_filtered_vcr() {
     let dir = app_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, true);
-    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
-        .expect("constraint-filtered vcr pool");
-    assert_solve_matches_lock(&dir, repo.packages().to_vec(), true, "constraint-filtered vcr");
+    let repo =
+        array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
+            .expect("constraint-filtered vcr pool");
+    assert_solve_matches_lock(
+        &dir,
+        repo.packages().to_vec(),
+        true,
+        "constraint-filtered vcr",
+    );
 }
 
 #[test]
@@ -180,15 +202,24 @@ fn assert_written_lock_matches_fixture(dir: &PathBuf, include_dev: bool) {
     let json_bytes = json_text.as_bytes();
 
     let prod_requires = load_root_requires(json_bytes, false);
-    let prod_repo =
-        array_repository_from_p2_constraints(&get, &prod_requires, Stability::Stable, &IndexSet::new())
-            .expect("prod vcr pool");
+    let prod_repo = array_repository_from_p2_constraints(
+        &get,
+        &prod_requires,
+        Stability::Stable,
+        &IndexSet::new(),
+    )
+    .expect("prod vcr pool");
     let prod_names = solve_install_names(&prod_repo, &prod_requires);
     let prod_name_set: BTreeSet<String> = prod_names.into_iter().map(|(n, _)| n).collect();
 
     let all_requires = load_root_requires(json_bytes, include_dev);
-    let all_repo = array_repository_from_p2_constraints(&get, &all_requires, Stability::Stable, &IndexSet::new())
-        .expect("full vcr pool");
+    let all_repo = array_repository_from_p2_constraints(
+        &get,
+        &all_requires,
+        Stability::Stable,
+        &IndexSet::new(),
+    )
+    .expect("full vcr pool");
     let installed = solve_install_packages(&all_repo, &all_requires);
 
     let mut packages = Vec::new();
@@ -245,7 +276,10 @@ fn assert_written_lock_matches_fixture(dir: &PathBuf, include_dev: bool) {
     assert_eq!(written["minimum-stability"], expected["minimum-stability"]);
     assert_eq!(written["prefer-stable"], expected["prefer-stable"]);
     assert_eq!(written["prefer-lowest"], expected["prefer-lowest"]);
-    assert_eq!(written["plugin-api-version"], expected["plugin-api-version"]);
+    assert_eq!(
+        written["plugin-api-version"],
+        expected["plugin-api-version"]
+    );
     assert_eq!(written["platform"], expected["platform"]);
     assert_eq!(written["platform-dev"], expected["platform-dev"]);
     assert_eq!(written["aliases"], expected["aliases"]);
@@ -332,7 +366,12 @@ fn assert_critical_package_fields(got: &[Value], want: &[Value], label: &str) {
             "{label} source.reference for {:?}",
             w.get("name")
         );
-        assert_eq!(g.get("time"), w.get("time"), "{label} time for {:?}", w.get("name"));
+        assert_eq!(
+            g.get("time"),
+            w.get("time"),
+            "{label} time for {:?}",
+            w.get("name")
+        );
     }
 }
 
@@ -383,7 +422,8 @@ fn assert_solve_matches_lock(
     }
 
     assert_eq!(
-        got, expected,
+        got,
+        expected,
         "solver install set must match lock packages ({mode}, {source}) for {}\nonly in lock: {:?}\nonly in solve: {:?}",
         dir.display(),
         expected.difference(&got).collect::<Vec<_>>(),

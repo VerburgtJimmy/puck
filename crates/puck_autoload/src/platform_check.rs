@@ -28,7 +28,10 @@ pub fn render_platform_check(
 
     if let Some(manifest) = manifest {
         consider_require_map(
-            manifest.require.iter().map(|(k, v)| (k.as_str(), v.as_str())),
+            manifest
+                .require
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str())),
             &mut lowest,
             &mut require_64bit,
         );

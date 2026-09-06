@@ -54,7 +54,12 @@ pub fn parse_repositories(root: &Value) -> RepositoryConfig {
         }
         Value::Object(map) => {
             for (name, entry) in map {
-                apply_repo_entry(entry, Some(name.as_str()), &mut composer_urls, &mut packagist_enabled);
+                apply_repo_entry(
+                    entry,
+                    Some(name.as_str()),
+                    &mut composer_urls,
+                    &mut packagist_enabled,
+                );
             }
         }
         _ => {}
@@ -127,9 +132,7 @@ pub fn is_packagist_org_url(url: &str) -> bool {
         return false;
     };
     let host = rest.split('/').next().unwrap_or("");
-    host == "packagist.org"
-        || host == "repo.packagist.org"
-        || host.ends_with(".packagist.org")
+    host == "packagist.org" || host == "repo.packagist.org" || host.ends_with(".packagist.org")
 }
 
 /// Strip trailing slash; leave path intact (Satis / Private Packagist org paths).
@@ -332,13 +335,9 @@ mod tests {
             metadata_url_template(&doc).as_deref(),
             Some("/p2/%package%.json")
         );
-        let url = resolve_package_metadata_url(
-            "https://repo.packagist.com/acme",
-            &doc,
-            "Acme/Foo",
-        )
-        .unwrap()
-        .unwrap();
+        let url = resolve_package_metadata_url("https://repo.packagist.com/acme", &doc, "Acme/Foo")
+            .unwrap()
+            .unwrap();
         assert_eq!(url, "https://repo.packagist.com/p2/acme/foo.json");
     }
 
@@ -347,22 +346,16 @@ mod tests {
         let doc = json!({
             "metadata-url": "https://repo.packagist.org/p2/%package%.json"
         });
-        let url = resolve_package_metadata_url(
-            "https://repo.packagist.org",
-            &doc,
-            "monolog/monolog",
-        )
-        .unwrap()
-        .unwrap();
+        let url =
+            resolve_package_metadata_url("https://repo.packagist.org", &doc, "monolog/monolog")
+                .unwrap()
+                .unwrap();
         assert_eq!(url, "https://repo.packagist.org/p2/monolog/monolog.json");
     }
 
     #[test]
     fn relative_path_metadata_url() {
-        let abs = canonicalize_metadata_url(
-            "https://satis.example.com/foo",
-            "p2/%package%.json",
-        );
+        let abs = canonicalize_metadata_url("https://satis.example.com/foo", "p2/%package%.json");
         assert_eq!(abs, "https://satis.example.com/foo/p2/%package%.json");
     }
 

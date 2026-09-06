@@ -10,7 +10,7 @@ use crate::platform::is_platform_package;
 use crate::pool_builder::ArrayRepository;
 use crate::{Error, Result};
 use indexmap::{IndexMap, IndexSet};
-use puck_version::{parse_constraints, parse_stability, ConstraintExpr, Operator, Stability};
+use puck_version::{ConstraintExpr, Operator, Stability, parse_constraints, parse_stability};
 use serde_json::Value;
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -105,13 +105,17 @@ pub fn array_repository_from_p2_constraints(
 }
 
 /// Filesystem getter rooted at a `packagist/p2` directory (tests / VCR).
-pub fn p2_dir_getter(p2_dir: PathBuf) -> impl Fn(&str) -> std::result::Result<Option<Vec<u8>>, String> {
+pub fn p2_dir_getter(
+    p2_dir: PathBuf,
+) -> impl Fn(&str) -> std::result::Result<Option<Vec<u8>>, String> {
     move |name: &str| {
         let path = p2_dir.join(format!("{}.json", name.replace('/', "$")));
         if !path.is_file() {
             return Ok(None);
         }
-        std::fs::read(&path).map(Some).map_err(|e| format!("read {}: {e}", path.display()))
+        std::fs::read(&path)
+            .map(Some)
+            .map_err(|e| format!("read {}: {e}", path.display()))
     }
 }
 

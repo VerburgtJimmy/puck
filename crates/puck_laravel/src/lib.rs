@@ -236,8 +236,7 @@ fn var_export(value: &Value, indent: usize) -> String {
             export_array(&entries, indent, false)
         }
         Value::Object(map) => {
-            let entries: Vec<(String, &Value)> =
-                map.iter().map(|(k, v)| (k.clone(), v)).collect();
+            let entries: Vec<(String, &Value)> = map.iter().map(|(k, v)| (k.clone(), v)).collect();
             export_array(&entries, indent, true)
         }
     }
@@ -306,7 +305,10 @@ mod tests {
     fn builds_sorted_manifest_skipping_empty() {
         let packages = vec![
             meta("zebra/pkg", json!({"providers": ["Z\\Prov"]})),
-            meta("nesbot/carbon", json!({"providers": ["Carbon\\Laravel\\ServiceProvider"]})),
+            meta(
+                "nesbot/carbon",
+                json!({"providers": ["Carbon\\Laravel\\ServiceProvider"]}),
+            ),
             meta("plain/lib", json!({})),
         ];
         let manifest = build_manifest(&packages, &[]);
@@ -335,10 +337,7 @@ mod tests {
                 "laravel/tinker",
                 json!({"providers": ["Laravel\\Tinker\\TinkerServiceProvider"]}),
             ),
-            meta(
-                "acme/blocker",
-                json!({"dont-discover": ["laravel/tinker"]}),
-            ),
+            meta("acme/blocker", json!({"dont-discover": ["laravel/tinker"]})),
         ];
         let manifest = build_manifest(&packages, &["nesbot/carbon".into()]);
         assert!(!manifest.contains_key("nesbot/carbon"));
@@ -402,7 +401,10 @@ mod tests {
 
         let status = discover(root).expect("discover");
         match status {
-            DiscoverStatus::Written { path, package_count } => {
+            DiscoverStatus::Written {
+                path,
+                package_count,
+            } => {
                 assert_eq!(package_count, 1);
                 assert!(path.ends_with("bootstrap/cache/packages.php"));
                 let body = fs::read_to_string(path).expect("read");
