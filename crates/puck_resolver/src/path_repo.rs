@@ -2,7 +2,8 @@
 //!
 //! Loads `type: path` entries from root `composer.json` `repositories`, reads each
 //! `{url}/composer.json`, and exposes pool packages plus lock dump metadata.
-//! Does not expand glob `*` urls (out of scope).
+//! Relative urls may include `*` globs (e.g. `packages/*`); matches are directories
+//! that contain `composer.json`.
 
 use crate::metadata::package_from_composer_package;
 use crate::package::Package;
@@ -30,7 +31,7 @@ impl Default for PathTransportOptions {
 #[derive(Debug, Clone)]
 pub struct PathPackage {
     pub package: Package,
-    /// Repository `url` as written in root `composer.json` (usually project-relative).
+    /// Repository `url` as written for this package (concrete path after glob expand).
     pub url: String,
     pub options: PathTransportOptions,
     /// Raw package `composer.json` object (with version defaulted when missing).
@@ -102,17 +103,13 @@ pub fn load_path_packages(project_root: &Path, root_composer: &Value) -> Result<
     match repos {
         Value::Array(arr) => {
             for entry in arr {
-                if let Some(pkg) = load_one_path_repo(project_root, entry)? {
-                    out.push(pkg);
-                }
+                out.extend(load_one_path_repo(project_root, entry)?);
             }
         }
         Value::Object(map) => {
             // Composer also allows object-keyed repositories.
             for (_key, entry) in map {
-                if let Some(pkg) = load_one_path_repo(project_root, entry)? {
-                    out.push(pkg);
-                }
+                out.extend(load_one_path_repo(project_root, entry)?);
             }
         }
         _ => {}
@@ -125,25 +122,48 @@ pub fn path_package_names(packages: &[PathPackage]) -> indexmap::IndexSet<String
     packages.iter().map(|p| p.package.name.clone()).collect()
 }
 
-fn load_one_path_repo(project_root: &Path, entry: &Value) -> Result<Option<PathPackage>> {
+fn load_one_path_repo(project_root: &Path, entry: &Value) -> Result<Vec<PathPackage>> {
     let Some(obj) = entry.as_object() else {
-        return Ok(None);
+        return Ok(Vec::new());
     };
     if obj.get("type").and_then(|v| v.as_str()) != Some("path") {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let Some(url) = obj.get("url").and_then(|v| v.as_str()) else {
         return Err(Error::Message(
             "path repository missing string url".into(),
         ));
     };
-    if url.contains('*') {
-        // Glob path urls are out of scope for this slice.
-        return Ok(None);
-    }
 
     let options = options_from_entry(obj);
-    let package_dir = resolve_path_url(project_root, url);
+    let targets = expand_path_repo_urls(project_root, url)?;
+    if targets.is_empty() {
+        if url.contains('*') {
+            // Glob with no composer.json matches: empty repository (Composer-like).
+            return Ok(Vec::new());
+        }
+        return Err(Error::Message(format!(
+            "path repository {}: no package directory found",
+            url
+        )));
+    }
+
+    let mut out = Vec::new();
+    for (concrete_url, package_dir) in targets {
+        out.push(load_path_package_at(
+            &concrete_url,
+            &package_dir,
+            options,
+        )?);
+    }
+    Ok(out)
+}
+
+fn load_path_package_at(
+    url: &str,
+    package_dir: &Path,
+    options: PathTransportOptions,
+) -> Result<PathPackage> {
     let composer_path = package_dir.join("composer.json");
     if !composer_path.is_file() {
         return Err(Error::Message(format!(
@@ -178,12 +198,130 @@ fn load_one_path_repo(project_root: &Path, entry: &Value) -> Result<Option<PathP
         ))
     })?;
 
-    Ok(Some(PathPackage {
+    Ok(PathPackage {
         package,
         url: url.to_string(),
         options,
         composer,
-    }))
+    })
+}
+
+/// Expand a path-repo `url` into concrete `(lock_url, absolute_dir)` pairs.
+///
+/// Non-glob urls yield a single candidate. Glob urls (containing `*`) match
+/// directories under the pattern that contain `composer.json`.
+fn expand_path_repo_urls(project_root: &Path, url: &str) -> Result<Vec<(String, PathBuf)>> {
+    if !url.contains('*') {
+        let package_dir = resolve_path_url(project_root, url);
+        return Ok(vec![(url.to_string(), package_dir)]);
+    }
+
+    let pattern = resolve_path_url(project_root, url);
+    let matched_dirs = match_glob_directories(&pattern)?;
+    let mut out = Vec::new();
+    for dir in matched_dirs {
+        if !dir.join("composer.json").is_file() {
+            continue;
+        }
+        let concrete = concrete_url_for(project_root, url, &dir);
+        out.push((concrete, dir));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(out)
+}
+
+fn concrete_url_for(project_root: &Path, original_url: &str, dir: &Path) -> String {
+    if Path::new(original_url).is_absolute() {
+        return dir.to_string_lossy().replace('\\', "/");
+    }
+    match dir.strip_prefix(project_root) {
+        Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
+        Err(_) => dir.to_string_lossy().replace('\\', "/"),
+    }
+}
+
+/// Walk path components of `pattern`, expanding `*` wildcards in components.
+fn match_glob_directories(pattern: &Path) -> Result<Vec<PathBuf>> {
+    let components: Vec<String> = pattern
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    if components.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Absolute patterns keep a root prefix; relative patterns start from "".
+    let (mut roots, start_idx) = if pattern.is_absolute() {
+        let root = PathBuf::from(&components[0]);
+        // On Windows `C:` etc.; on Unix `/` is a component via Prefix/RootDir.
+        // `Path::components` yields RootDir as `/` on Unix.
+        (vec![root], 1)
+    } else {
+        (vec![PathBuf::new()], 0)
+    };
+
+    for comp in &components[start_idx..] {
+        let mut next = Vec::new();
+        for root in &roots {
+            let base = if root.as_os_str().is_empty() {
+                PathBuf::from(".")
+            } else {
+                root.clone()
+            };
+            if comp.contains('*') {
+                let read_dir = match std::fs::read_dir(&base) {
+                    Ok(rd) => rd,
+                    Err(_) => continue,
+                };
+                for entry in read_dir.flatten() {
+                    let name = entry.file_name();
+                    let name_str = name.to_string_lossy();
+                    if !wildcard_match(comp, &name_str) {
+                        continue;
+                    }
+                    let path = entry.path();
+                    if path.is_dir() {
+                        next.push(path);
+                    }
+                }
+            } else {
+                let path = base.join(comp);
+                if path.is_dir() {
+                    next.push(path);
+                }
+            }
+        }
+        roots = next;
+        if roots.is_empty() {
+            break;
+        }
+    }
+
+    // Normalize "."-relative roots back to absolute-ish paths without "./".
+    let cleaned: Vec<PathBuf> = roots
+        .into_iter()
+        .map(|p| {
+            if p.starts_with(".") {
+                std::fs::canonicalize(&p).unwrap_or(p)
+            } else {
+                p
+            }
+        })
+        .collect();
+    Ok(cleaned)
+}
+
+/// Match `pattern` against `name` where `*` matches any sequence (no `/`).
+fn wildcard_match(pattern: &str, name: &str) -> bool {
+    fn rec(p: &[u8], n: &[u8]) -> bool {
+        match (p.first().copied(), n.first().copied()) {
+            (None, None) => true,
+            (Some(b'*'), _) => rec(&p[1..], n) || (!n.is_empty() && rec(p, &n[1..])),
+            (Some(pc), Some(nc)) if pc == nc => rec(&p[1..], &n[1..]),
+            _ => false,
+        }
+    }
+    rec(pattern.as_bytes(), name.as_bytes())
 }
 
 fn options_from_entry(obj: &Map<String, Value>) -> PathTransportOptions {
@@ -254,19 +392,75 @@ mod tests {
         )
         .unwrap();
         let pkgs = load_path_packages(&root, &composer).unwrap();
-        assert_eq!(pkgs.len(), 1);
-        assert_eq!(pkgs[0].package.name, "acme/hello");
-        assert_eq!(pkgs[0].package.pretty_version, "dev-main");
-        assert_eq!(pkgs[0].url, "packages/acme-hello");
-        assert!(pkgs[0].options.symlink);
-        assert!(pkgs[0].options.relative);
+        assert!(
+            pkgs.iter().any(|p| p.package.name == "acme/hello"),
+            "expected acme/hello in {:?}",
+            pkgs.iter().map(|p| &p.package.name).collect::<Vec<_>>()
+        );
+        let hello = pkgs.iter().find(|p| p.package.name == "acme/hello").unwrap();
+        assert_eq!(hello.package.pretty_version, "dev-main");
+        assert_eq!(hello.url, "packages/acme-hello");
+        assert!(hello.options.symlink);
+        assert!(hello.options.relative);
 
-        let lock = pkgs[0].to_lock_value();
+        let lock = hello.to_lock_value();
         assert_eq!(lock["dist"]["type"], "path");
         assert_eq!(lock["dist"]["url"], "packages/acme-hello");
         assert_eq!(lock["transport-options"]["symlink"], true);
         assert_eq!(lock["transport-options"]["relative"], true);
         assert!(lock.get("notification-url").is_none());
+    }
+
+    #[test]
+    fn expands_packages_star_glob_in_fixture() {
+        let root = path_local_root();
+        let composer = json!({
+            "repositories": [
+                { "type": "path", "url": "packages/*" }
+            ]
+        });
+        let pkgs = load_path_packages(&root, &composer).unwrap();
+        let names: Vec<_> = pkgs.iter().map(|p| p.package.name.as_str()).collect();
+        assert!(names.contains(&"acme/hello"), "names={names:?}");
+        assert!(names.contains(&"acme/world"), "names={names:?}");
+        assert_eq!(pkgs.len(), 2);
+        for p in &pkgs {
+            assert!(p.url.starts_with("packages/"), "url={}", p.url);
+            assert!(!p.url.contains('*'));
+        }
+    }
+
+    #[test]
+    fn expands_glob_in_tempfile_and_skips_dirs_without_composer() {
+        let dir = std::env::temp_dir().join(format!(
+            "puck-path-glob-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let a = dir.join("packages/a");
+        let b = dir.join("packages/b");
+        let empty = dir.join("packages/empty");
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        fs::create_dir_all(&empty).unwrap();
+        fs::write(a.join("composer.json"), r#"{"name":"tmp/a","version":"1.0.0"}"#).unwrap();
+        fs::write(b.join("composer.json"), r#"{"name":"tmp/b","version":"2.0.0"}"#).unwrap();
+        // empty/ has no composer.json
+        let root = json!({
+            "repositories": [
+                { "type": "path", "url": "packages/*" }
+            ]
+        });
+        let pkgs = load_path_packages(&dir, &root).unwrap();
+        assert_eq!(pkgs.len(), 2);
+        assert_eq!(pkgs[0].url, "packages/a");
+        assert_eq!(pkgs[0].package.name, "tmp/a");
+        assert_eq!(pkgs[1].url, "packages/b");
+        assert_eq!(pkgs[1].package.name, "tmp/b");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -314,7 +508,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_non_path_and_glob_urls() {
+    fn skips_non_path_and_empty_glob() {
         let dir = std::env::temp_dir().join(format!(
             "puck-path-skip-{}-{}",
             std::process::id(),
@@ -323,7 +517,7 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(dir.join("packages")).unwrap();
         let root = json!({
             "repositories": [
                 { "type": "composer", "url": "https://example.test" },
@@ -333,5 +527,13 @@ mod tests {
         let pkgs = load_path_packages(&dir, &root).unwrap();
         assert!(pkgs.is_empty());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn wildcard_match_basics() {
+        assert!(wildcard_match("*", "acme-hello"));
+        assert!(wildcard_match("acme-*", "acme-hello"));
+        assert!(!wildcard_match("acme-*", "other"));
+        assert!(wildcard_match("a*e", "acme"));
     }
 }

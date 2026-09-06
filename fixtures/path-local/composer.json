@@ -8,7 +8,7 @@
     "repositories": [
         {
             "type": "path",
-            "url": "packages/acme-hello"
+            "url": "packages/*"
         }
     ]
 }

@@ -1,0 +1,10 @@
+{
+    "name": "acme/world",
+    "description": "Second path package for packages/* glob expansion",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "Acme\\World\\": "src/"
+        }
+    }
+}

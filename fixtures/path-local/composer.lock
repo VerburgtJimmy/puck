@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7a16be0ebda476dff7fb6a0d99af038b",
+    "content-hash": "665e1ddcc76547b224682a94b7b8839e",
     "packages": [
         {
             "name": "acme/hello",
