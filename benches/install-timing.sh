@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # Cold/warm install timings: Composer vs puck on a fixture.
 #
-# Usage: ./benches/install-timing.sh [fixture-name]
-# Default fixture: laravel-skeleton (always --no-dev).
+# Usage: ./benches/install-timing.sh [fixture-name] [with-dev]
+# Default fixture: laravel-skeleton.
+#
+# Dev packages:
+#   - Default / skeleton: --no-dev (typical publishable skeleton numbers).
+#   - laravel-app publishable numbers must install require-dev (Pest, Larastan,
+#     etc.). Pass second arg `with-dev` or set PUCK_BENCH_DEV=1; otherwise
+#     laravel-app looks identical to skeleton under --no-dev.
 #
 # Prints a markdown table to stdout and appends/updates
 # puck-notes benchmarks.md, or ./bench-out/benchmarks.md if unset/unwritable.
@@ -11,6 +17,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FIXTURE_NAME="${1:-laravel-skeleton}"
+DEV_MODE=0
+if [[ "${2:-}" == "with-dev" || "${PUCK_BENCH_DEV:-}" == "1" ]]; then
+  DEV_MODE=1
+fi
 FIXTURE="$ROOT/fixtures/$FIXTURE_NAME"
 NOTES_DOC="${PUCK_NOTES_BENCHMARKS:-$HOME/Developer/personal/puck-notes/docs/benchmarks.md}"
 
@@ -67,11 +77,21 @@ time_cmd_ms() {
   elapsed_ms "$start"
 }
 
+COMPOSER_DEV_ARGS=()
+PUCK_DEV_ARGS=()
+DEV_LABEL="--no-dev"
+if [[ "$DEV_MODE" -eq 1 ]]; then
+  DEV_LABEL="with require-dev (--dev)"
+else
+  COMPOSER_DEV_ARGS+=(--no-dev)
+  PUCK_DEV_ARGS+=(--no-dev)
+fi
+
 run_puck() {
   local dir="$1"
   (
     cd "$ROOT"
-    "$PUCK_BIN" install --working-dir "$dir" --no-dev --no-scripts
+    "$PUCK_BIN" install --working-dir "$dir" "${PUCK_DEV_ARGS[@]}" --no-scripts
   )
 }
 
@@ -79,11 +99,11 @@ run_composer() {
   local dir="$1"
   (
     cd "$dir"
-    "$COMPOSER_BIN" install --no-dev --no-scripts --ignore-platform-reqs --no-interaction --no-ansi
+    "$COMPOSER_BIN" install "${COMPOSER_DEV_ARGS[@]}" --no-scripts --ignore-platform-reqs --no-interaction --no-ansi
   )
 }
 
-echo "timing: fixture=$FIXTURE_NAME (--no-dev --no-scripts)"
+echo "timing: fixture=$FIXTURE_NAME ($DEV_LABEL --no-scripts)"
 echo "timing: composer=$COMPOSER_BIN"
 
 # Prefer plain cargo (rust-toolchain.toml / CI default); rustup run as fallback.
@@ -153,17 +173,23 @@ WARM_COMPOSER_CACHE_MS="$(time_cmd_ms run_composer "$WARM_C")"
 DATE_UTC="$(date -u +"%Y-%m-%d %H:%M:%SZ")"
 HOST="$(uname -s)/$(uname -m)"
 
-TABLE=$(cat <<EOF
+if [[ "$DEV_MODE" -eq 1 ]]; then
+  TITLE_SUFFIX="with require-dev (--dev)"
+else
+  TITLE_SUFFIX="--no-dev"
+fi
+
+TABLE=$(cat <<TABLEEOF
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
 | cold (empty vendor) | ${COLD_COMPOSER_MS} | ${COLD_PUCK_MS} |
 | warm (vendor present) | ${WARM_COMPOSER_PRESENT_MS} | ${WARM_PUCK_PRESENT_MS} |
 | warm (wipe vendor, cache/store warm) | ${WARM_COMPOSER_CACHE_MS} | ${WARM_PUCK_WIPE_MS} |
-EOF
+TABLEEOF
 )
 
 echo
-echo "## Install timing: \`${FIXTURE_NAME}\` --no-dev"
+echo "## Install timing: \`${FIXTURE_NAME}\` ${TITLE_SUFFIX}"
 echo
 echo "- when: ${DATE_UTC}"
 echo "- host: ${HOST}"
@@ -200,7 +226,7 @@ if [[ -z "$NOTES_TARGET" ]]; then
 else
   {
     echo
-    echo "## Install timing: \`${FIXTURE_NAME}\` --no-dev"
+    echo "## Install timing: \`${FIXTURE_NAME}\` ${TITLE_SUFFIX}"
     echo
     echo "- when: ${DATE_UTC}"
     echo "- host: ${HOST}"
