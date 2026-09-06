@@ -37,7 +37,7 @@ pub use metadata::{
 };
 pub use order::{PackageIdSet, PresentMap};
 pub use package::Package;
-pub use path_repo::{load_path_packages, path_package_names, PathPackage, PathTransportOptions};
+pub use path_repo::{load_path_packages, load_path_repositories, path_package_names, PathPackage, PathRepository, PathTransportOptions};
 pub use platform::is_platform_package;
 pub use policy::DefaultPolicy;
 pub use pool::Pool;

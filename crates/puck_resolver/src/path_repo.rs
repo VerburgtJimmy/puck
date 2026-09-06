@@ -34,6 +34,8 @@ pub struct PathPackage {
     /// Repository `url` as written for this package (concrete path after glob expand).
     pub url: String,
     pub options: PathTransportOptions,
+    /// Composer `canonical` on the path repository entry (default true).
+    pub canonical: bool,
     /// Raw package `composer.json` object (with version defaulted when missing).
     pub composer: Value,
 }
@@ -122,12 +124,59 @@ pub fn path_package_names(packages: &[PathPackage]) -> indexmap::IndexSet<String
     packages.iter().map(|p| p.package.name.clone()).collect()
 }
 
-fn load_one_path_repo(project_root: &Path, entry: &Value) -> Result<Vec<PathPackage>> {
-    let Some(obj) = entry.as_object() else {
+/// One `type: path` repository entry (order + `canonical` preserved).
+#[derive(Debug, Clone)]
+pub struct PathRepository {
+    pub canonical: bool,
+    pub packages: Vec<PathPackage>,
+}
+
+/// Load each `type: path` repository in `repositories` order (skips non-path entries).
+pub fn load_path_repositories(
+    project_root: &Path,
+    root_composer: &Value,
+) -> Result<Vec<PathRepository>> {
+    let Some(repos) = root_composer.get("repositories") else {
         return Ok(Vec::new());
     };
+
+    let mut out = Vec::new();
+    match repos {
+        Value::Array(arr) => {
+            for entry in arr {
+                if let Some(repo) = load_one_path_repository(project_root, entry)? {
+                    out.push(repo);
+                }
+            }
+        }
+        Value::Object(map) => {
+            for (_key, entry) in map {
+                if let Some(repo) = load_one_path_repository(project_root, entry)? {
+                    out.push(repo);
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(out)
+}
+
+fn load_one_path_repo(project_root: &Path, entry: &Value) -> Result<Vec<PathPackage>> {
+    Ok(match load_one_path_repository(project_root, entry)? {
+        Some(repo) => repo.packages,
+        None => Vec::new(),
+    })
+}
+
+fn load_one_path_repository(
+    project_root: &Path,
+    entry: &Value,
+) -> Result<Option<PathRepository>> {
+    let Some(obj) = entry.as_object() else {
+        return Ok(None);
+    };
     if obj.get("type").and_then(|v| v.as_str()) != Some("path") {
-        return Ok(Vec::new());
+        return Ok(None);
     }
     let Some(url) = obj.get("url").and_then(|v| v.as_str()) else {
         return Err(Error::Message(
@@ -135,12 +184,19 @@ fn load_one_path_repo(project_root: &Path, entry: &Value) -> Result<Vec<PathPack
         ));
     };
 
+    let canonical = obj
+        .get("canonical")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
     let options = options_from_entry(obj);
     let targets = expand_path_repo_urls(project_root, url)?;
     if targets.is_empty() {
         if url.contains('*') {
             // Glob with no composer.json matches: empty repository (Composer-like).
-            return Ok(Vec::new());
+            return Ok(Some(PathRepository {
+                canonical,
+                packages: Vec::new(),
+            }));
         }
         return Err(Error::Message(format!(
             "path repository {}: no package directory found",
@@ -148,21 +204,26 @@ fn load_one_path_repo(project_root: &Path, entry: &Value) -> Result<Vec<PathPack
         )));
     }
 
-    let mut out = Vec::new();
+    let mut packages = Vec::new();
     for (concrete_url, package_dir) in targets {
-        out.push(load_path_package_at(
+        packages.push(load_path_package_at(
             &concrete_url,
             &package_dir,
             options,
+            canonical,
         )?);
     }
-    Ok(out)
+    Ok(Some(PathRepository {
+        canonical,
+        packages,
+    }))
 }
 
 fn load_path_package_at(
     url: &str,
     package_dir: &Path,
     options: PathTransportOptions,
+    canonical: bool,
 ) -> Result<PathPackage> {
     let composer_path = package_dir.join("composer.json");
     if !composer_path.is_file() {
@@ -202,6 +263,7 @@ fn load_path_package_at(
         package,
         url: url.to_string(),
         options,
+        canonical,
         composer,
     })
 }
