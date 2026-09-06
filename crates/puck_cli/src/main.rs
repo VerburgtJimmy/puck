@@ -967,13 +967,49 @@ async fn run_install(
     let installed = read_installed(root.join("vendor/composer")).map_err(|e| e.to_string())?;
     let options = InstallOptions { no_dev, offline };
     let mut plan = plan_install(&lock, &installed, options).map_err(|e| e.to_string())?;
-    reconcile_vendor_presence(&mut plan, &root.join("vendor"));
 
     // CLI `-o` wins; otherwise honour composer.json `config.optimize-autoloader`.
     let optimize = optimize
         || manifest
             .as_ref()
             .is_some_and(Manifest::optimize_autoloader);
+
+    // Warm-keep O(1): lock vs installed.json only. Skip reconcile_vendor_presence
+    // (is_dir per Keep package) and install_binaries. Trust installed.json; missing
+    // package dirs without an installed.json update are an edge case.
+    // With PUCK_TIMINGS=1, plan_ms/total_ms should stay flat vs package count.
+    if plan.is_noop()
+        && dump_meta_current(&root, &lock.content_hash, optimize)
+        && dump_is_current(&root, &lock)
+        && root.join("vendor").is_dir()
+    {
+        let keep = plan.packages.len();
+        let plan_ms = plan_started.elapsed().as_millis();
+        eprintln!(
+            "puck: plan  install=0  update=0  keep={keep}  remove=0  (lock {})",
+            lock.content_hash
+        );
+        if optimize {
+            eprintln!("puck: optimize-autoloader enabled");
+        }
+        eprintln!("puck: nothing to install");
+        for line in abandoned_warnings(&lock.packages, &lock.packages_dev, !no_dev) {
+            eprintln!("puck: {line}");
+        }
+        eprintln!("puck: autoload up to date");
+        eprintln!("puck: done");
+        print_install_timings(
+            plan_ms,
+            &ExecuteTimings::default(),
+            0,
+            0,
+            0,
+            total_started.elapsed().as_millis(),
+        );
+        return Ok(());
+    }
+
+    reconcile_vendor_presence(&mut plan, &root.join("vendor"));
 
     let mut install = 0usize;
     let mut update = 0usize;
