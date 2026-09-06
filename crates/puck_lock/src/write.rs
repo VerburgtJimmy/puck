@@ -1,8 +1,8 @@
 //! Write helpers for `composer.lock` (`Composer\Package\Locker::setLockData` / `lockPackages`).
 
+use crate::Result;
 use crate::array_dumper::{dump_lock_package_from_p2, dump_lock_package_from_path};
 use crate::content_hash::content_hash;
-use crate::Result;
 use serde_json::{Map, Value, json};
 
 /// Matches Composer `PluginInterface::PLUGIN_API_VERSION` used when fixtures were locked.
@@ -175,9 +175,11 @@ mod tests {
         assert_eq!(doc["content-hash"], "5990a31168e72d02970542ea15afa375");
         assert_eq!(doc["prefer-stable"], true);
         assert_eq!(doc["plugin-api-version"], PLUGIN_API_VERSION);
-        assert!(doc["packages"].as_array().unwrap()[0]
-            .get("version_normalized")
-            .is_none());
+        assert!(
+            doc["packages"].as_array().unwrap()[0]
+                .get("version_normalized")
+                .is_none()
+        );
         assert!(doc["platform"].as_object().unwrap().is_empty());
         assert!(doc["packages-dev"].as_array().unwrap().is_empty());
     }

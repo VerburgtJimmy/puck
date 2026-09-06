@@ -157,9 +157,13 @@ mod tests {
         assert_eq!(by_url, hash);
 
         assert!(
-            lookup(&store, Some("ffffffffffffffffffffffffffffffffffffffff"), None)
-                .expect("miss")
-                .is_none()
+            lookup(
+                &store,
+                Some("ffffffffffffffffffffffffffffffffffffffff"),
+                None
+            )
+            .expect("miss")
+            .is_none()
         );
     }
 }

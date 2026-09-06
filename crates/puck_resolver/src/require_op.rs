@@ -5,20 +5,20 @@
 //! constraint-filtered VCR/p2 pool. Enough for requiring a package whose deps
 //! are already satisfied (or platform-only).
 
-use crate::request::UpdateAllowTransitive;
 use crate::metadata::{find_p2_version_value, packages_from_lock_json};
 use crate::package::Package;
 use crate::path_repo::{PathPackage, PathRepository};
 use crate::platform::is_platform_package;
 use crate::pool_builder::{ArrayRepository, PoolBuilder};
 use crate::request::Request;
+use crate::request::UpdateAllowTransitive;
 use crate::solver::Solver;
 use crate::transaction::Operation;
-use crate::vcr_pool::{array_repository_from_p2_constraints, P2Getter};
+use crate::vcr_pool::{P2Getter, array_repository_from_p2_constraints};
 use crate::{Error, Result};
 use indexmap::{IndexMap, IndexSet};
-use puck_lock::{build_lock_document, LockWriteInput, PLUGIN_API_VERSION};
-use puck_version::{parse_constraints, Stability};
+use puck_lock::{LockWriteInput, PLUGIN_API_VERSION, build_lock_document};
+use puck_version::{Stability, parse_constraints};
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
@@ -39,10 +39,7 @@ pub fn expand_update_unlock(
     mode: UpdateAllowTransitive,
 ) -> Result<Vec<String>> {
     if matches!(mode, UpdateAllowTransitive::OnlyListed) || listed.is_empty() {
-        return Ok(listed
-            .iter()
-            .map(|n| n.to_ascii_lowercase())
-            .collect());
+        return Ok(listed.iter().map(|n| n.to_ascii_lowercase()).collect());
     }
 
     let lock: Value = serde_json::from_slice(lock_bytes)
@@ -75,8 +72,10 @@ pub fn expand_update_unlock(
         .iter()
         .map(|n| n.to_ascii_lowercase())
         .collect();
-    let exclude_root =
-        matches!(mode, UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire);
+    let exclude_root = matches!(
+        mode,
+        UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire
+    );
 
     let mut unlock: IndexSet<String> = listed.iter().map(|n| n.to_ascii_lowercase()).collect();
     let mut queue: VecDeque<String> = unlock.iter().cloned().collect();
@@ -158,20 +157,10 @@ pub fn resolve_lock_document(
     let prod_requires = root_requires_from_json(&root, false);
     let all_requires = root_requires_from_json(&root, include_dev);
 
-    let (prod_repos, _) = build_ordered_repositories(
-        project_root,
-        &root,
-        load_p2,
-        &prod_requires,
-        stability,
-    )?;
-    let (all_repos, path_by_name) = build_ordered_repositories(
-        project_root,
-        &root,
-        load_p2,
-        &all_requires,
-        stability,
-    )?;
+    let (prod_repos, _) =
+        build_ordered_repositories(project_root, &root, load_p2, &prod_requires, stability)?;
+    let (all_repos, path_by_name) =
+        build_ordered_repositories(project_root, &root, load_p2, &all_requires, stability)?;
 
     // Path packages default to `dev-main` (VersionGuesser fallback); allow them
     // under stable minimum-stability like Composer root requires of path pkgs.
@@ -218,9 +207,8 @@ pub fn resolve_lock_document(
             let bytes = load_p2(name)
                 .map_err(|e| Error::Message(format!("p2 for {name}: {e}")))?
                 .ok_or_else(|| Error::Message(format!("missing p2 metadata for {name}")))?;
-            find_p2_version_value(&bytes, pretty)?.ok_or_else(|| {
-                Error::Message(format!("p2 for {name} has no version {pretty}"))
-            })?
+            find_p2_version_value(&bytes, pretty)?
+                .ok_or_else(|| Error::Message(format!("p2 for {name} has no version {pretty}")))?
         };
         if prod_names.contains(name) {
             packages.push(raw);
@@ -228,7 +216,6 @@ pub fn resolve_lock_document(
             packages_dev.push(raw);
         }
     }
-
 
     build_lock_document(
         composer_json,
@@ -301,12 +288,8 @@ fn build_ordered_repositories(
                 }
             }
             PoolPlanEntry::Remote { canonical } => {
-                let repo = array_repository_from_p2_constraints(
-                    load_p2,
-                    requires,
-                    stability,
-                    &claimed,
-                )?;
+                let repo =
+                    array_repository_from_p2_constraints(load_p2, requires, stability, &claimed)?;
                 if canonical {
                     for package in repo.packages() {
                         claimed.insert(package.name.clone());
@@ -461,9 +444,7 @@ fn is_packagist_org_url(url: &str) -> bool {
         .or_else(|| lower.trim_end_matches('/').strip_prefix("http://"))
         .unwrap_or(lower.trim_end_matches('/'));
     let host = trimmed.split('/').next().unwrap_or("");
-    host == "packagist.org"
-        || host == "repo.packagist.org"
-        || host.ends_with(".packagist.org")
+    host == "packagist.org" || host == "repo.packagist.org" || host.ends_with(".packagist.org")
 }
 
 fn root_requires_from_json(root: &Value, include_dev: bool) -> Vec<(String, String)> {
@@ -510,10 +491,12 @@ fn solve_names(
     minimum_stability: Stability,
     stability_flags: &IndexMap<String, Stability>,
 ) -> Result<BTreeSet<String>> {
-    Ok(solve_packages(repos, requires, fixed, minimum_stability, stability_flags)?
-        .into_iter()
-        .map(|(n, _)| n)
-        .collect())
+    Ok(
+        solve_packages(repos, requires, fixed, minimum_stability, stability_flags)?
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect(),
+    )
 }
 
 fn solve_packages(
@@ -589,20 +572,17 @@ mod tests {
         p2_dir_getter(p2_dir())
     }
 
-
-
     #[test]
     fn require_webmozart_assert_dev_keeps_prod_lock_pins() {
         let get = fixture_p2();
         let dir = skeleton();
-        let mut root: Value = serde_json::from_str(
-            &std::fs::read_to_string(dir.join("composer.json")).unwrap(),
-        )
-        .unwrap();
-        root["require-dev"].as_object_mut().unwrap().insert(
-            "webmozart/assert".into(),
-            Value::String("^2.0".into()),
-        );
+        let mut root: Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("composer.json")).unwrap())
+                .unwrap();
+        root["require-dev"]
+            .as_object_mut()
+            .unwrap()
+            .insert("webmozart/assert".into(), Value::String("^2.0".into()));
         let map = root["require-dev"].as_object_mut().unwrap();
         let old = std::mem::take(map);
         let mut entries: Vec<_> = old.into_iter().collect();
@@ -626,9 +606,7 @@ mod tests {
         let packages = doc["packages"].as_array().unwrap();
         let packages_dev = doc["packages-dev"].as_array().unwrap();
         assert!(packages.iter().any(|p| p["name"] == "laravel/framework"));
-        assert!(packages_dev
-            .iter()
-            .any(|p| p["name"] == "webmozart/assert"));
+        assert!(packages_dev.iter().any(|p| p["name"] == "webmozart/assert"));
         assert!(!packages.iter().any(|p| p["name"] == "webmozart/assert"));
 
         let expected: Value = serde_json::from_slice(&lock_bytes).unwrap();
@@ -657,15 +635,16 @@ mod tests {
     fn remove_laravel_pail_drops_dev_package_keeps_prod() {
         let get = fixture_p2();
         let dir = skeleton();
-        let mut root: Value = serde_json::from_str(
-            &std::fs::read_to_string(dir.join("composer.json")).unwrap(),
-        )
-        .unwrap();
-        assert!(root["require-dev"]
-            .as_object_mut()
-            .unwrap()
-            .shift_remove("laravel/pail")
-            .is_some());
+        let mut root: Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("composer.json")).unwrap())
+                .unwrap();
+        assert!(
+            root["require-dev"]
+                .as_object_mut()
+                .unwrap()
+                .shift_remove("laravel/pail")
+                .is_some()
+        );
 
         let composer = serde_json::to_string_pretty(&root).unwrap();
         let lock_bytes = std::fs::read(dir.join("composer.lock")).unwrap();
@@ -773,7 +752,12 @@ mod tests {
             &root,
         )
         .expect("resolve path-local with unlock");
-        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/hello").unwrap();
+        let pkg = doc["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == "acme/hello")
+            .unwrap();
         assert_eq!(pkg["dist"]["type"], "path");
         assert_eq!(pkg["dist"]["url"], "packages/acme-hello");
     }
@@ -792,7 +776,10 @@ mod tests {
         dir
     }
 
-    fn dual_p2_getter(version: &str, reference: &str) -> impl Fn(&str) -> std::result::Result<Option<Vec<u8>>, String> {
+    fn dual_p2_getter(
+        version: &str,
+        reference: &str,
+    ) -> impl Fn(&str) -> std::result::Result<Option<Vec<u8>>, String> {
         let p2 = serde_json::json!({
             "packages": {
                 "acme/dual": [{
@@ -834,7 +821,12 @@ mod tests {
 
         let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
             .expect("resolve dual-source same version");
-        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/dual").unwrap();
+        let pkg = doc["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == "acme/dual")
+            .unwrap();
         assert_eq!(pkg["version"], "1.0.0");
         assert_eq!(pkg["dist"]["type"], "path");
         assert_eq!(pkg["dist"]["url"], "local-pkg");
@@ -861,7 +853,12 @@ mod tests {
 
         let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
             .expect("resolve path wins over higher Packagist");
-        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/dual").unwrap();
+        let pkg = doc["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == "acme/dual")
+            .unwrap();
         assert_eq!(pkg["version"], "dev-main");
         assert_eq!(pkg["dist"]["type"], "path");
         assert_eq!(pkg["dist"]["url"], "local-pkg");
@@ -889,7 +886,12 @@ mod tests {
 
         let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
             .expect("resolve packagist before path");
-        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/dual").unwrap();
+        let pkg = doc["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == "acme/dual")
+            .unwrap();
         assert_eq!(pkg["version"], "1.0.0");
         assert_eq!(pkg["dist"]["type"], "zip");
         assert_eq!(
@@ -919,7 +921,12 @@ mod tests {
 
         let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
             .expect("resolve non-canonical path");
-        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/dual").unwrap();
+        let pkg = doc["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == "acme/dual")
+            .unwrap();
         assert_eq!(pkg["version"], "2.0.0");
         assert_eq!(pkg["dist"]["type"], "zip");
         assert_eq!(

@@ -31,18 +31,21 @@ mod watch;
 pub use decisions::Decisions;
 pub use link::Link;
 pub use metadata::{
-    expand_minified_versions, find_p2_version, find_p2_version_value, package_from_composer_package,
-    package_from_p2_version, packages_from_lock_json, packages_from_p2_json,
-    packages_from_p2_lock_pins,
+    expand_minified_versions, find_p2_version, find_p2_version_value,
+    package_from_composer_package, package_from_p2_version, packages_from_lock_json,
+    packages_from_p2_json, packages_from_p2_lock_pins,
 };
 pub use order::{PackageIdSet, PresentMap};
 pub use package::Package;
-pub use path_repo::{load_path_packages, load_path_repositories, path_package_names, PathPackage, PathRepository, PathTransportOptions};
+pub use path_repo::{
+    PathPackage, PathRepository, PathTransportOptions, load_path_packages, load_path_repositories,
+    path_package_names,
+};
 pub use platform::is_platform_package;
 pub use policy::DefaultPolicy;
 pub use pool::Pool;
 pub use pool_builder::{ArrayRepository, PoolBuilder};
-pub use problem::{format_problems, Problem};
+pub use problem::{Problem, format_problems};
 pub use request::{Request, UpdateAllowTransitive};
 pub use require_op::{expand_update_unlock, resolve_lock_document};
 pub use rule::{Rule, RuleReason, RuleType};
@@ -51,7 +54,7 @@ pub use rule_set_generator::RuleSetGenerator;
 pub use solver::{Solver, SolverProblems};
 pub use stability::is_package_acceptable;
 pub use transaction::{Operation, Transaction};
-pub use vcr_pool::{array_repository_from_p2_constraints, p2_dir_getter, P2Getter};
+pub use vcr_pool::{P2Getter, array_repository_from_p2_constraints, p2_dir_getter};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

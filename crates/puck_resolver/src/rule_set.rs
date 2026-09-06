@@ -121,12 +121,14 @@ mod tests {
             package_name: String::new(),
             constraint: ConstraintExpr::MatchAll,
         };
-        assert!(set
-            .add(Rule::generic(vec![], reason.clone()), RuleType::Request)
-            .is_some());
-        assert!(set
-            .add(Rule::generic(vec![], reason.clone()), RuleType::Request)
-            .is_none());
+        assert!(
+            set.add(Rule::generic(vec![], reason.clone()), RuleType::Request)
+                .is_some()
+        );
+        assert!(
+            set.add(Rule::generic(vec![], reason.clone()), RuleType::Request)
+                .is_none()
+        );
         assert_eq!(set.len(), 1);
     }
 }

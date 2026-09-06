@@ -1,9 +1,9 @@
 //! Pool package (`Composer\Package\BasePackage` / `AliasPackage` subset).
 
-use crate::link::Link;
 use crate::PackageId;
+use crate::link::Link;
 use indexmap::IndexMap;
-use puck_version::{parse_constraints, Operator};
+use puck_version::{Operator, parse_constraints};
 
 /// A concrete package version in the pool (or an [`AliasPackage`](Self::alias)).
 #[derive(Debug, Clone)]
@@ -27,7 +27,11 @@ pub struct Package {
 }
 
 impl Package {
-    pub fn new(name: impl Into<String>, version: impl Into<String>, pretty_version: impl Into<String>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        version: impl Into<String>,
+        pretty_version: impl Into<String>,
+    ) -> Self {
         let pretty_version = pretty_version.into();
         let version = version.into();
         Self {
@@ -60,14 +64,22 @@ impl Package {
     ) -> Self {
         let version = version.into();
         let pretty_version = pretty_version.into();
-        let mut package = Self::new(alias_of.name.clone(), version.clone(), pretty_version.clone());
+        let mut package = Self::new(
+            alias_of.name.clone(),
+            version.clone(),
+            pretty_version.clone(),
+        );
         package.alias_of = Some(alias_of_id);
-        let (requires, has_self) = rewrite_self_version_links(&alias_of.requires, &version, &pretty_version);
+        let (requires, has_self) =
+            rewrite_self_version_links(&alias_of.requires, &version, &pretty_version);
         package.requires = requires;
         package.has_self_version_requires = has_self;
-        package.conflicts = rewrite_self_version_links(&alias_of.conflicts, &version, &pretty_version).0;
-        package.provides = rewrite_self_version_links(&alias_of.provides, &version, &pretty_version).0;
-        package.replaces = rewrite_self_version_links(&alias_of.replaces, &version, &pretty_version).0;
+        package.conflicts =
+            rewrite_self_version_links(&alias_of.conflicts, &version, &pretty_version).0;
+        package.provides =
+            rewrite_self_version_links(&alias_of.provides, &version, &pretty_version).0;
+        package.replaces =
+            rewrite_self_version_links(&alias_of.replaces, &version, &pretty_version).0;
         package
     }
 
@@ -102,10 +114,9 @@ fn rewrite_self_version_links(
     for (key, link) in links {
         if link.pretty_constraint == "self.version" {
             has_self = true;
-            let constraint = parse_constraints(&format!("={version}"))
-                .unwrap_or_else(|_| {
-                    puck_version::ConstraintExpr::simple(Operator::Eq, version.to_string())
-                });
+            let constraint = parse_constraints(&format!("={version}")).unwrap_or_else(|_| {
+                puck_version::ConstraintExpr::simple(Operator::Eq, version.to_string())
+            });
             out.insert(
                 key.clone(),
                 Link::new(

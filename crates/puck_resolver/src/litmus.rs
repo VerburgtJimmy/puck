@@ -12,8 +12,7 @@ use std::fs;
 use std::path::PathBuf;
 
 fn registry_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/registry/packagist/p2")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/registry/packagist/p2")
 }
 
 fn load_framework_v13_30_1() -> Package {

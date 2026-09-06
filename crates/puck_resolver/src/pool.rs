@@ -56,11 +56,7 @@ impl Pool {
     pub fn literal_to_pretty_string(&self, literal: Literal, installed: &PresentMap) -> String {
         let package = self.literal_to_package(literal);
         let prefix = if installed.contains_key(&package.id) {
-            if literal > 0 {
-                "keep"
-            } else {
-                "remove"
-            }
+            if literal > 0 { "keep" } else { "remove" }
         } else if literal > 0 {
             "install"
         } else {

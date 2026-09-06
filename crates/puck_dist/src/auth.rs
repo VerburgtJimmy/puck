@@ -13,7 +13,10 @@ use std::path::{Path, PathBuf};
 /// Authorization to attach to an HTTP request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthHeader {
-    Basic { username: String, password: String },
+    Basic {
+        username: String,
+        password: String,
+    },
     Bearer(String),
     /// GitHub token style: `Authorization: token …`
     GithubToken(String),
@@ -31,9 +34,15 @@ pub struct AuthStore {
 impl std::fmt::Debug for AuthStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AuthStore")
-            .field("http_basic_hosts", &self.http_basic.keys().collect::<Vec<_>>())
+            .field(
+                "http_basic_hosts",
+                &self.http_basic.keys().collect::<Vec<_>>(),
+            )
             .field("bearer_hosts", &self.bearer.keys().collect::<Vec<_>>())
-            .field("github_oauth", &self.github_oauth.as_ref().map(|_| "[redacted]"))
+            .field(
+                "github_oauth",
+                &self.github_oauth.as_ref().map(|_| "[redacted]"),
+            )
             .finish()
     }
 }
@@ -78,20 +87,14 @@ impl AuthStore {
         let home = composer_home_dir();
         let project = std::env::current_dir().ok();
         let env_json = std::env::var("COMPOSER_AUTH").ok();
-        Self::load_merged(
-            home.as_deref(),
-            project.as_deref(),
-            env_json.as_deref(),
-        )
+        Self::load_merged(home.as_deref(), project.as_deref(), env_json.as_deref())
     }
 
     fn merge_file(&mut self, path: &Path) -> crate::Result<()> {
-        let bytes = std::fs::read(path).map_err(|e| {
-            crate::Error::Auth(format!("read {}: {e}", path.display()))
-        })?;
-        let value: Value = serde_json::from_slice(&bytes).map_err(|e| {
-            crate::Error::Auth(format!("invalid {}: {e}", path.display()))
-        })?;
+        let bytes = std::fs::read(path)
+            .map_err(|e| crate::Error::Auth(format!("read {}: {e}", path.display())))?;
+        let value: Value = serde_json::from_slice(&bytes)
+            .map_err(|e| crate::Error::Auth(format!("invalid {}: {e}", path.display())))?;
         self.merge_value(&value);
         Ok(())
     }
@@ -288,9 +291,11 @@ mod tests {
             store.authorization_for_url("https://codeload.github.com/o/r/legacy.zip/abc"),
             Some(AuthHeader::GithubToken("gh-secret".into()))
         );
-        assert!(store
-            .authorization_for_url("https://other.example.com/x.zip")
-            .is_none());
+        assert!(
+            store
+                .authorization_for_url("https://other.example.com/x.zip")
+                .is_none()
+        );
 
         // Debug formatting must not embed the secret token value for AuthStore.
         let dbg = format!("{store:?}");

@@ -11,11 +11,11 @@ mod replay;
 
 pub use audit::{AdvisoryHit, SecurityAdvisory, advisories_for_package, find_advisory_hits};
 pub use composer_repo::{
-    canonicalize_metadata_url, default_packagist_url, is_packagist_org_url,
+    RepositoryConfig, canonicalize_metadata_url, default_packagist_url, is_packagist_org_url,
     metadata_url_for_package, metadata_url_template, packages_json_url, parse_repositories,
-    resolve_package_metadata_url, RepositoryConfig,
+    resolve_package_metadata_url,
 };
-pub use loader::{load_p2_optional, P2Loader};
+pub use loader::{P2Loader, load_p2_optional};
 pub use packagist::{load_p2_metadata, p2_filename, p2_path, p2_replay_store, p2_url_key};
 pub use replay::{ReplayError, ReplayMode, ReplayStore};
 

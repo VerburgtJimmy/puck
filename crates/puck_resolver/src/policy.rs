@@ -1,7 +1,7 @@
 //! Policy (`Composer\DependencyResolver\DefaultPolicy`).
 
-use crate::pool::Pool;
 use crate::Literal;
+use crate::pool::Pool;
 use indexmap::IndexMap;
 use puck_version::{Operator, version_compare};
 

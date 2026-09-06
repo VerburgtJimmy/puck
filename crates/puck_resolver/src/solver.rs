@@ -1,6 +1,7 @@
 //! CDCL solver (`Composer\DependencyResolver\Solver`).
 
 use crate::decisions::Decisions;
+use crate::order::PresentMap;
 use crate::policy::DefaultPolicy;
 use crate::pool::Pool;
 use crate::problem::Problem;
@@ -11,7 +12,6 @@ use crate::rule_set_generator::RuleSetGenerator;
 use crate::transaction::Transaction;
 use crate::watch::{RuleWatchGraph, RuleWatchNode};
 use crate::{Error, Literal, PackageId, Result};
-use crate::order::PresentMap;
 use indexmap::IndexMap;
 
 /// Composer CDCL dependency solver.
@@ -76,11 +76,7 @@ impl<'a> Solver<'a> {
     }
 
     /// `Solver::solve`.
-    pub fn solve(
-        mut self,
-        request: &Request,
-        present: &PresentMap,
-    ) -> Result<Transaction> {
+    pub fn solve(mut self, request: &Request, present: &PresentMap) -> Result<Transaction> {
         self.setup_fixed_map(request);
         self.rules = RuleSetGenerator::new(self.pool).get_rules_for(request)?;
         self.check_for_root_require_problems(request)?;
@@ -213,9 +209,12 @@ impl<'a> Solver<'a> {
                 .expect("valid offset")
                 .clone();
 
-            let conflict =
-                self.watch_graph
-                    .propagate_literal(self.pool, literal, level, &mut self.decisions)?;
+            let conflict = self.watch_graph.propagate_literal(
+                self.pool,
+                literal,
+                level,
+                &mut self.decisions,
+            )?;
 
             self.propagate_index += 1;
 
@@ -528,10 +527,8 @@ impl<'a> Solver<'a> {
             }
 
             if level < system_level {
-                let request_ids: Vec<usize> = self
-                    .rules
-                    .rule_ids_of_type(RuleType::Request)
-                    .to_vec();
+                let request_ids: Vec<usize> =
+                    self.rules.rule_ids_of_type(RuleType::Request).to_vec();
                 let mut restart_request_pass = false;
 
                 for &rule_id in &request_ids {
@@ -658,7 +655,9 @@ impl<'a> Solver<'a> {
                 }
 
                 if let (Some(last_literal), Some(last_level)) = (last_literal, last_level) {
-                    self.branches[last_branch_index].0.remove(last_branch_offset);
+                    self.branches[last_branch_index]
+                        .0
+                        .remove(last_branch_offset);
                     level = last_level;
                     self.revert(level);
                     let why = self

@@ -23,10 +23,7 @@ fn solver_install_single() {
         .solve(&request, &empty_present())
         .unwrap();
 
-    assert_eq!(
-        tx.operations(),
-        &[Operation::Install { package_id: 1 }]
-    );
+    assert_eq!(tx.operations(), &[Operation::Install { package_id: 1 }]);
 }
 
 #[test]
@@ -37,9 +34,7 @@ fn solver_remove_if_not_requested() {
     let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
 
     assert_eq!(tx.operations(), &[Operation::Remove { package_id: 1 }]);
 }
@@ -49,12 +44,7 @@ fn solver_install_with_deps() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            "<1.1",
-            parse_constraints("<1.1").unwrap(),
-        ),
+        Link::new("a/a", "b/b", "<1.1", parse_constraints("<1.1").unwrap()),
     );
     let package_b = Package::new("b/b", "1.0.0.0", "1.0");
     let package_b11 = Package::new("b/b", "1.1.0.0", "1.1");
@@ -102,30 +92,15 @@ fn solver_install_deps_in_order() {
     let mut package_c = Package::new("c/c", "1.0.0.0", "1.0");
     package_b.requires.insert(
         "a/a".into(),
-        Link::new(
-            "b/b",
-            "a/a",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("b/b", "a/a", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     package_b.requires.insert(
         "c/c".into(),
-        Link::new(
-            "b/b",
-            "c/c",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("b/b", "c/c", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     package_c.requires.insert(
         "a/a".into(),
-        Link::new(
-            "c/c",
-            "a/a",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("c/c", "a/a", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
 
     let mut pool = Pool::new(vec![package_a, package_b, package_c]);
@@ -176,9 +151,7 @@ fn solver_fix_locked() {
     let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
     assert!(tx.operations().is_empty());
 }
 
@@ -192,13 +165,8 @@ fn solver_update_single() {
     let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
-    assert_eq!(
-        tx.operations(),
-        &[Operation::Update { from: 1, to: 2 }]
-    );
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
+    assert_eq!(tx.operations(), &[Operation::Update { from: 1, to: 2 }]);
 }
 
 #[test]
@@ -211,9 +179,7 @@ fn solver_update_current_noop() {
     let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
     // Prefer lower id among equal versions -> keep locked id 1
     assert!(tx.operations().is_empty());
 }
@@ -231,13 +197,8 @@ fn solver_update_constrained() {
     let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
-    assert_eq!(
-        tx.operations(),
-        &[Operation::Update { from: 1, to: 2 }]
-    );
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
+    assert_eq!(tx.operations(), &[Operation::Update { from: 1, to: 2 }]);
 }
 
 #[test]
@@ -245,21 +206,11 @@ fn solver_three_alternative_require_and_conflict() {
     let mut package_a = Package::new("a/a", "2.0.0.0", "2.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            "<1.1",
-            parse_constraints("<1.1").unwrap(),
-        ),
+        Link::new("a/a", "b/b", "<1.1", parse_constraints("<1.1").unwrap()),
     );
     package_a.conflicts.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            "<1.0",
-            parse_constraints("<1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", "<1.0", parse_constraints("<1.0").unwrap()),
     );
     let middle_b = Package::new("b/b", "1.0.0.0", "1.0");
     let new_b = Package::new("b/b", "1.1.0.0", "1.1");
@@ -287,12 +238,7 @@ fn solver_obsolete_replaced_package() {
     let mut package_b = Package::new("b/b", "1.0.0.0", "1.0");
     package_b.replaces.insert(
         "a/a".into(),
-        Link::new(
-            "b/b",
-            "a/a",
-            "*",
-            parse_constraints("*").unwrap(),
-        ),
+        Link::new("b/b", "a/a", "*", parse_constraints("*").unwrap()),
     );
 
     let mut pool = Pool::new(vec![package_a, package_b]);
@@ -301,9 +247,7 @@ fn solver_obsolete_replaced_package() {
     let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
     assert_eq!(
         tx.operations(),
         &[
@@ -318,22 +262,12 @@ fn solver_skip_replacer_of_existing_package() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
     package_q.replaces.insert(
         "b/b".into(),
-        Link::new(
-            "q/q",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("q/q", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     let package_b = Package::new("b/b", "1.0.0.0", "1.0");
 
@@ -358,22 +292,12 @@ fn solver_skip_replaced_package_if_replacer_selected() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
     package_q.replaces.insert(
         "b/b".into(),
-        Link::new(
-            "q/q",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("q/q", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     let package_b = Package::new("b/b", "1.0.0.0", "1.0");
 
@@ -449,9 +373,7 @@ fn solver_update_all_with_deps() {
     present.insert(1, ());
     present.insert(2, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
     assert_eq!(
         tx.operations(),
         &[
@@ -472,16 +394,10 @@ fn solver_update_via_pool_builder() {
 
     let mut request = Request::new();
     request.require_name("a/a", None).unwrap();
-    let (mut pool, present) =
-        PoolBuilder::build(&[&repo], &[locked], &[], &mut request).unwrap();
+    let (mut pool, present) = PoolBuilder::build(&[&repo], &[locked], &[], &mut request).unwrap();
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
-    assert_eq!(
-        tx.operations(),
-        &[Operation::Update { from: 1, to: 2 }]
-    );
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
+    assert_eq!(tx.operations(), &[Operation::Update { from: 1, to: 2 }]);
 }
 
 #[test]
@@ -530,23 +446,13 @@ fn solver_install_circular_require() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     let package_b1 = Package::new("b/b", "0.9.0.0", "0.9");
     let mut package_b2 = Package::new("b/b", "1.1.0.0", "1.1");
     package_b2.requires.insert(
         "a/a".into(),
-        Link::new(
-            "b/b",
-            "a/a",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("b/b", "a/a", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
 
     let mut pool = Pool::new(vec![package_a, package_b1, package_b2]);
@@ -574,21 +480,11 @@ fn solver_use_replacer_if_necessary() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     package_a.requires.insert(
         "c/c".into(),
-        Link::new(
-            "a/a",
-            "c/c",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "c/c", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     let package_b = Package::new("b/b", "1.0.0.0", "1.0");
     let mut package_d = Package::new("d/d", "1.0.0.0", "1.0");
@@ -596,21 +492,11 @@ fn solver_use_replacer_if_necessary() {
     for pkg in [&mut package_d, &mut package_d2] {
         pkg.replaces.insert(
             "b/b".into(),
-            Link::new(
-                "d/d",
-                "b/b",
-                ">=1.0",
-                parse_constraints(">=1.0").unwrap(),
-            ),
+            Link::new("d/d", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
         );
         pkg.replaces.insert(
             "c/c".into(),
-            Link::new(
-                "d/d",
-                "c/c",
-                ">=1.0",
-                parse_constraints(">=1.0").unwrap(),
-            ),
+            Link::new("d/d", "c/c", ">=1.0", parse_constraints(">=1.0").unwrap()),
         );
     }
 
@@ -729,10 +615,7 @@ fn solver_install_one_of_two_alternatives() {
     let tx = Solver::new(&mut pool)
         .solve(&request, &empty_present())
         .unwrap();
-    assert_eq!(
-        tx.operations(),
-        &[Operation::Install { package_id: 1 }]
-    );
+    assert_eq!(tx.operations(), &[Operation::Install { package_id: 1 }]);
 }
 
 /// Composer `ArrayRepository` / createPool never loads a provide-only package
@@ -744,22 +627,12 @@ fn solver_install_provider_alone_fails() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
     package_q.provides.insert(
         "b/b".into(),
-        Link::new(
-            "q/q",
-            "b/b",
-            "=1.0",
-            parse_constraints("=1.0").unwrap(),
-        ),
+        Link::new("q/q", "b/b", "=1.0", parse_constraints("=1.0").unwrap()),
     );
 
     let mut repo = ArrayRepository::new();
@@ -783,22 +656,12 @@ fn solver_no_install_replacer_of_missing_package() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
     package_q.replaces.insert(
         "b/b".into(),
-        Link::new(
-            "q/q",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("q/q", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
 
     let mut repo = ArrayRepository::new();
@@ -819,12 +682,7 @@ fn solver_unsatisfiable_requires() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">= 2.0",
-            parse_constraints(">=2.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">= 2.0", parse_constraints(">=2.0").unwrap()),
     );
     let package_b = Package::new("b/b", "1.0.0.0", "1.0");
 
@@ -849,12 +707,7 @@ fn solver_conflict_result_fails() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.conflicts.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">= 1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">= 1.0", parse_constraints(">=1.0").unwrap()),
     );
     let package_b = Package::new("b/b", "1.0.0.0", "1.0");
 
@@ -887,9 +740,7 @@ fn solver_fix_locked_with_alternative() {
     let mut present = crate::PresentMap::new();
     present.insert(1, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
     assert!(tx.operations().is_empty());
 }
 
@@ -907,13 +758,8 @@ fn solver_update_only_updates_selected_package() {
     present.insert(1, ());
     present.insert(2, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
-    assert_eq!(
-        tx.operations(),
-        &[Operation::Update { from: 1, to: 3 }]
-    );
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
+    assert_eq!(tx.operations(), &[Operation::Update { from: 1, to: 3 }]);
 }
 
 #[test]
@@ -940,13 +786,8 @@ fn solver_update_does_only_update() {
     present.insert(1, ());
     present.insert(2, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
-    assert_eq!(
-        tx.operations(),
-        &[Operation::Update { from: 2, to: 3 }]
-    );
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
+    assert_eq!(tx.operations(), &[Operation::Update { from: 2, to: 3 }]);
 }
 
 #[test]
@@ -956,12 +797,7 @@ fn solver_all_jobs() {
     let mut package_a = Package::new("a/a", "2.0.0.0", "2.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            "<1.1",
-            parse_constraints("<1.1").unwrap(),
-        ),
+        Link::new("a/a", "b/b", "<1.1", parse_constraints("<1.1").unwrap()),
     );
     let package_b = Package::new("b/b", "1.0.0.0", "1.0");
     let new_b = Package::new("b/b", "1.1.0.0", "1.1");
@@ -984,9 +820,7 @@ fn solver_all_jobs() {
     present.insert(1, ()); // d/d
     present.insert(2, ()); // c/c 1.0
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
     assert_eq!(
         tx.operations(),
         &[
@@ -1016,9 +850,7 @@ fn solver_update_fully_constrained_prunes_installed() {
     present.insert(1, ());
     present.insert(2, ());
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
     assert_eq!(
         tx.operations(),
         &[
@@ -1042,9 +874,7 @@ fn solver_install_same_package_from_different_repositories() {
     let (mut pool, present) =
         PoolBuilder::build(&[&repo1, &repo2], &[], &[], &mut request).unwrap();
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
     // Prefer first repository (lower pool id).
     assert_eq!(tx.operations(), &[Operation::Install { package_id: 1 }]);
     assert_eq!(pool.len(), 2);
@@ -1058,12 +888,7 @@ fn solver_install_alternative_with_circular_require() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">=1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
     );
     let mut package_b = Package::new("b/b", "1.0.0.0", "1.0");
     package_b.requires.insert(
@@ -1087,12 +912,7 @@ fn solver_install_alternative_with_circular_require() {
     );
     package_c.requires.insert(
         "a/a".into(),
-        Link::new(
-            "c/c",
-            "a/a",
-            "=1.0",
-            parse_constraints("=1.0").unwrap(),
-        ),
+        Link::new("c/c", "a/a", "=1.0", parse_constraints("=1.0").unwrap()),
     );
     let mut package_d = Package::new("d/d", "1.0.0.0", "1.0");
     package_d.provides.insert(
@@ -1106,12 +926,7 @@ fn solver_install_alternative_with_circular_require() {
     );
     package_d.requires.insert(
         "a/a".into(),
-        Link::new(
-            "d/d",
-            "a/a",
-            "=1.0",
-            parse_constraints("=1.0").unwrap(),
-        ),
+        Link::new("d/d", "a/a", "=1.0", parse_constraints("=1.0").unwrap()),
     );
 
     let mut repo = ArrayRepository::new();
@@ -1125,16 +940,12 @@ fn solver_install_alternative_with_circular_require() {
     request.require_name("c/c", None).unwrap();
     let (mut pool, present) = PoolBuilder::build(&[&repo], &[], &[], &mut request).unwrap();
 
-    let tx = Solver::new(&mut pool)
-        .solve(&request, &present)
-        .unwrap();
+    let tx = Solver::new(&mut pool).solve(&request, &present).unwrap();
     let mut names: Vec<_> = tx
         .operations()
         .iter()
         .map(|op| match op {
-            Operation::Install { package_id } => {
-                pool.package_by_id(*package_id).name.clone()
-            }
+            Operation::Install { package_id } => pool.package_by_id(*package_id).name.clone(),
             other => panic!("unexpected {other:?}"),
         })
         .collect();
@@ -1149,12 +960,7 @@ fn solver_install_dev_alias() {
     let mut package_b = Package::new("b/b", "1.0.0.0", "1.0");
     package_b.requires.insert(
         "a/a".into(),
-        Link::new(
-            "b/b",
-            "a/a",
-            "<2.0",
-            parse_constraints("<2.0").unwrap(),
-        ),
+        Link::new("b/b", "a/a", "<2.0", parse_constraints("<2.0").unwrap()),
     );
     // Pool ids: a=1, b=2, alias=3
     let package_a_alias = Package::alias(&package_a, 1, "1.1.0.0", "1.1");
@@ -1186,21 +992,11 @@ fn solver_install_recursive_alias_dependencies() {
     let mut package_a2 = Package::new("a/a", "2.0.0.0", "2.0");
     package_a2.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            "=2.0",
-            parse_constraints("=2.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", "=2.0", parse_constraints("=2.0").unwrap()),
     );
     package_b.requires.insert(
         "a/a".into(),
-        Link::new(
-            "b/b",
-            "a/a",
-            ">=2.0",
-            parse_constraints(">=2.0").unwrap(),
-        ),
+        Link::new("b/b", "a/a", ">=2.0", parse_constraints(">=2.0").unwrap()),
     );
     // Pool ids: a=1, b=2, a2=3, alias=4
     let package_a2_alias = Package::alias(&package_a2, 3, "1.1.0.0", "1.1");
@@ -1288,26 +1084,10 @@ fn solver_install_root_aliases_if_alias_of_is_installed() {
 fn solver_multi_package_name_version_depends_on_require_order() {
     use puck_version::normalize;
 
-    let php74 = Package::new(
-        "ourcustom/php",
-        normalize("7.4.23").unwrap(),
-        "7.4.23",
-    );
-    let php80 = Package::new(
-        "ourcustom/php",
-        normalize("8.0.10").unwrap(),
-        "8.0.10",
-    );
-    let mut ext74 = Package::new(
-        "ourcustom/ext-foobar",
-        normalize("1.0").unwrap(),
-        "1.0",
-    );
-    let mut ext80 = Package::new(
-        "ourcustom/ext-foobar",
-        normalize("1.0").unwrap(),
-        "1.0",
-    );
+    let php74 = Package::new("ourcustom/php", normalize("7.4.23").unwrap(), "7.4.23");
+    let php80 = Package::new("ourcustom/php", normalize("8.0.10").unwrap(), "8.0.10");
+    let mut ext74 = Package::new("ourcustom/ext-foobar", normalize("1.0").unwrap(), "1.0");
+    let mut ext80 = Package::new("ourcustom/ext-foobar", normalize("1.0").unwrap(), "1.0");
     ext74.requires.insert(
         "ourcustom/php".into(),
         Link::new(
@@ -1385,16 +1165,8 @@ fn solver_multi_package_name_version_independent_when_ordered_descending() {
 
     let php74 = Package::new("ourcustom/php", normalize("7.4").unwrap(), "7.4");
     let php80 = Package::new("ourcustom/php", normalize("8.0").unwrap(), "8.0");
-    let mut ext80 = Package::new(
-        "ourcustom/ext-foobar",
-        normalize("1.0").unwrap(),
-        "1.0",
-    );
-    let mut ext74 = Package::new(
-        "ourcustom/ext-foobar",
-        normalize("1.0").unwrap(),
-        "1.0",
-    );
+    let mut ext80 = Package::new("ourcustom/ext-foobar", normalize("1.0").unwrap(), "1.0");
+    let mut ext74 = Package::new("ourcustom/ext-foobar", normalize("1.0").unwrap(), "1.0");
     ext80.requires.insert(
         "ourcustom/php".into(),
         Link::new(
@@ -1464,30 +1236,15 @@ fn solver_issue_265_unsatisfiable() {
 
     c.requires.insert(
         "a/a".into(),
-        Link::new(
-            "c/c",
-            "a/a",
-            ">=2.0",
-            parse_constraints(">=2.0").unwrap(),
-        ),
+        Link::new("c/c", "a/a", ">=2.0", parse_constraints(">=2.0").unwrap()),
     );
     c.requires.insert(
         "d/d".into(),
-        Link::new(
-            "c/c",
-            "d/d",
-            ">=2.0",
-            parse_constraints(">=2.0").unwrap(),
-        ),
+        Link::new("c/c", "d/d", ">=2.0", parse_constraints(">=2.0").unwrap()),
     );
     d.requires.insert(
         "a/a".into(),
-        Link::new(
-            "d/d",
-            "a/a",
-            ">=2.1",
-            parse_constraints(">=2.1").unwrap(),
-        ),
+        Link::new("d/d", "a/a", ">=2.1", parse_constraints(">=2.1").unwrap()),
     );
     d.requires.insert(
         "b/b".into(),
@@ -1547,48 +1304,26 @@ fn solver_require_mismatch_exception() {
     let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
     package_a.requires.insert(
         "b/b".into(),
-        Link::new(
-            "a/a",
-            "b/b",
-            ">= 1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("a/a", "b/b", ">= 1.0", parse_constraints(">=1.0").unwrap()),
     );
     let mut package_b = Package::new("b/b", "1.0.0.0", "1.0");
     package_b.requires.insert(
         "c/c".into(),
-        Link::new(
-            "b/b",
-            "c/c",
-            ">= 1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("b/b", "c/c", ">= 1.0", parse_constraints(">=1.0").unwrap()),
     );
     let package_b2 = Package::new("b/b", "0.9.0.0", "0.9");
     let mut package_c = Package::new("c/c", "1.0.0.0", "1.0");
     package_c.requires.insert(
         "d/d".into(),
-        Link::new(
-            "c/c",
-            "d/d",
-            ">= 1.0",
-            parse_constraints(">=1.0").unwrap(),
-        ),
+        Link::new("c/c", "d/d", ">= 1.0", parse_constraints(">=1.0").unwrap()),
     );
     let mut package_d = Package::new("d/d", "1.0.0.0", "1.0");
     package_d.requires.insert(
         "b/b".into(),
-        Link::new(
-            "d/d",
-            "b/b",
-            "< 1.0",
-            parse_constraints("<1.0").unwrap(),
-        ),
+        Link::new("d/d", "b/b", "< 1.0", parse_constraints("<1.0").unwrap()),
     );
 
-    let mut pool = Pool::new(vec![
-        package_a, package_b, package_b2, package_c, package_d,
-    ]);
+    let mut pool = Pool::new(vec![package_a, package_b, package_b2, package_c, package_d]);
     let mut request = Request::new();
     request.require_name("a/a", None).unwrap();
 
@@ -1704,17 +1439,8 @@ fn solver_learn_positive_literal() {
     );
 
     let mut pool = Pool::new(vec![
-        package_a,
-        package_b,
-        package_c1,
-        package_c2,
-        package_d,
-        package_e,
-        package_f1,
-        package_f2,
-        package_g1,
-        package_g2,
-        package_g3,
+        package_a, package_b, package_c1, package_c2, package_d, package_e, package_f1, package_f2,
+        package_g1, package_g2, package_g3,
     ]);
     let mut request = Request::new();
     request.require_name("a/a", None).unwrap();
@@ -1737,13 +1463,7 @@ fn solver_learn_positive_literal() {
     assert_eq!(
         names,
         [
-            "a/a@1.0",
-            "b/b@1.0",
-            "c/c@2.0",
-            "d/d@1.0",
-            "e/e@1.0",
-            "f/f@1.0",
-            "g/g@2.0",
+            "a/a@1.0", "b/b@1.0", "c/c@2.0", "d/d@1.0", "e/e@1.0", "f/f@1.0", "g/g@2.0",
         ]
     );
 }

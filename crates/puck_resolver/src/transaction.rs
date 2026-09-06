@@ -1,10 +1,10 @@
 //! Transaction operations from solver decisions.
 
+use crate::PackageId;
 use crate::decisions::Decisions;
 use crate::order::{PackageIdSet, PresentMap};
 use crate::package::Package;
 use crate::pool::Pool;
-use crate::PackageId;
 use indexmap::IndexMap;
 
 /// One install / remove / update / alias step.

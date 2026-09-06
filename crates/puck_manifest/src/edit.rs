@@ -21,9 +21,7 @@ impl PackageRequirement {
         }
         // Constraint may contain `:`; split on first `:` after the name slash.
         let (name, constraint) = match spec.find(':') {
-            Some(idx) if spec[..idx].contains('/') => {
-                (&spec[..idx], spec[idx + 1..].trim())
-            }
+            Some(idx) if spec[..idx].contains('/') => (&spec[..idx], spec[idx + 1..].trim()),
             _ => (spec, "*"),
         };
         if !name.contains('/') {
@@ -112,7 +110,10 @@ pub fn add_requirement_to_file(
     })?;
     let mut root: Value = serde_json::from_str(&text).map_err(|e| Error::Parse(e.to_string()))?;
     add_requirement(&mut root, req, dev)?;
-    let out = format!("{}\n", serde_json::to_string_pretty(&root).map_err(|e| Error::Parse(e.to_string()))?);
+    let out = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&root).map_err(|e| Error::Parse(e.to_string()))?
+    );
     // Composer uses 4-space indent; serde_json pretty uses 2. Expand.
     let out = reindent_json_pretty_4(&out);
     fs::write(path, &out).map_err(|e| Error::Io {
@@ -178,10 +179,7 @@ mod tests {
             .keys()
             .cloned()
             .collect();
-        assert_eq!(
-            keys,
-            vec!["php", "laravel/framework", "webmozart/assert"]
-        );
+        assert_eq!(keys, vec!["php", "laravel/framework", "webmozart/assert"]);
     }
 
     #[test]

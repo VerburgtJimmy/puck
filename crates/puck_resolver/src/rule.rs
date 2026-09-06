@@ -12,7 +12,9 @@ pub enum RuleReason {
         package_name: String,
         constraint: puck_version::ConstraintExpr,
     },
-    Fixed { package_id: u32 },
+    Fixed {
+        package_id: u32,
+    },
     PackageConflict {
         /// Conflicting package name (link source).
         source: String,
@@ -23,11 +25,17 @@ pub enum RuleReason {
         target: String,
         pretty_constraint: String,
     },
-    PackageSameName { package_name: String },
-    Learned { why: i32 },
+    PackageSameName {
+        package_name: String,
+    },
+    Learned {
+        why: i32,
+    },
     PackageAlias,
     PackageInverseAlias,
-    LockedFilterListRemoved { package_id: u32 },
+    LockedFilterListRemoved {
+        package_id: u32,
+    },
 }
 
 /// Rule type (`RuleSet::TYPE_*`).

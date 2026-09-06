@@ -1,7 +1,7 @@
 //! Solver request (`Composer\DependencyResolver\Request`).
 
-use crate::order::PresentMap;
 use crate::PackageId;
+use crate::order::PresentMap;
 use indexmap::IndexMap;
 use puck_version::ConstraintExpr;
 

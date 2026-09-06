@@ -46,7 +46,12 @@ impl CollectedAutoloads {
 
         for pkg in &packages {
             if let Some(autoload) = pkg.extra.get("autoload") {
-                merge_json_autoload(&mut out, &pkg.name, autoload, &vendor_install_path(&pkg.name));
+                merge_json_autoload(
+                    &mut out,
+                    &pkg.name,
+                    autoload,
+                    &vendor_install_path(&pkg.name),
+                );
             }
         }
 
@@ -96,9 +101,7 @@ fn merge_manifest_autoload(out: &mut CollectedAutoloads, m: &Manifest, no_dev: b
     if let Some(a) = &m.autoload {
         merge_typed_autoload(out, &m.name, a, "");
     }
-    if !no_dev
-        && let Some(a) = &m.autoload_dev
-    {
+    if !no_dev && let Some(a) = &m.autoload_dev {
         merge_typed_autoload(out, &m.name, a, "");
     }
 }
@@ -207,9 +210,7 @@ fn append_manifest_files(files: &mut IndexMap<String, RelPath>, m: &Manifest, no
             files.insert(id, join_install("", &p));
         }
     }
-    if !no_dev
-        && let Some(a) = &m.autoload_dev
-    {
+    if !no_dev && let Some(a) = &m.autoload_dev {
         for path in &a.files {
             let Some(p) = value_as_path(path) else {
                 continue;
@@ -270,7 +271,9 @@ fn normalize_rel_path(path: &str) -> String {
 }
 
 /// Group PSR-4 namespaces by first character for `prefixLengthsPsr4`.
-pub fn prefix_lengths_psr4(psr4: &[(&str, &Vec<RelPath>)]) -> BTreeMap<char, BTreeMap<String, usize>> {
+pub fn prefix_lengths_psr4(
+    psr4: &[(&str, &Vec<RelPath>)],
+) -> BTreeMap<char, BTreeMap<String, usize>> {
     let mut out: BTreeMap<char, BTreeMap<String, usize>> = BTreeMap::new();
     for (ns, _) in psr4 {
         let first = ns.chars().next().unwrap_or('\\');

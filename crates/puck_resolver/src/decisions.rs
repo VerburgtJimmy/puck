@@ -161,7 +161,7 @@ mod tests {
     use super::*;
     use crate::package::Package;
     use crate::rule::{Rule, RuleReason};
-        fn pool_one() -> Pool {
+    fn pool_one() -> Pool {
         Pool::new(vec![Package::new("a/a", "1.0.0.0", "1.0")])
     }
 
@@ -169,10 +169,7 @@ mod tests {
     fn decide_install_and_satisfy() {
         let pool = pool_one();
         let mut decisions = Decisions::new();
-        let why = Rule::generic(
-            vec![1],
-            RuleReason::Learned { why: 0 },
-        );
+        let why = Rule::generic(vec![1], RuleReason::Learned { why: 0 });
         decisions.decide(&pool, 1, 1, why).unwrap();
         assert!(decisions.satisfy(1));
         assert!(decisions.conflict(-1));

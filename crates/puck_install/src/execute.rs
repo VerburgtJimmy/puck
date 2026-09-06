@@ -120,8 +120,7 @@ pub async fn execute_install(
         });
     }
     while let Some(joined) = link_set.join_next().await {
-        let (name, action) =
-            joined.map_err(|e| Error::Message(format!("link task: {e}")))??;
+        let (name, action) = joined.map_err(|e| Error::Message(format!("link task: {e}")))??;
         eprintln!("puck: {} {name}", action_word(action));
     }
     let link_ms = link_started.elapsed().as_millis();
@@ -189,15 +188,12 @@ fn is_path_dist(pkg: &PlannedPackage) -> bool {
 }
 
 fn path_prefer_symlink(locked: &LockedPackage) -> bool {
-    let opts = locked
-        .extra
-        .get("transport-options")
-        .or_else(|| {
-            locked
-                .dist
-                .as_ref()
-                .and_then(|d| d.extra.get("transport-options"))
-        });
+    let opts = locked.extra.get("transport-options").or_else(|| {
+        locked
+            .dist
+            .as_ref()
+            .and_then(|d| d.extra.get("transport-options"))
+    });
     match opts.and_then(|v| v.get("symlink")) {
         Some(Value::Bool(false)) => false,
         Some(Value::Number(n)) if n.as_u64() == Some(0) => false,
@@ -212,12 +208,10 @@ fn install_path_package(
     pkg: &PlannedPackage,
     locked: &LockedPackage,
 ) -> Result<()> {
-    let rel = pkg.dist_url.as_deref().ok_or_else(|| {
-        Error::Message(format!(
-            "path package {} has no dist url",
-            pkg.name
-        ))
-    })?;
+    let rel = pkg
+        .dist_url
+        .as_deref()
+        .ok_or_else(|| Error::Message(format!("path package {} has no dist url", pkg.name)))?;
     let source = {
         let p = Path::new(rel);
         if p.is_absolute() {
@@ -453,7 +447,8 @@ async fn fetch_one(
         ))
     })?;
 
-    if let Some(sha) = lookup(store, shasum, Some(url)).map_err(|e| Error::Message(e.to_string()))?
+    if let Some(sha) =
+        lookup(store, shasum, Some(url)).map_err(|e| Error::Message(e.to_string()))?
     {
         eprintln!("puck: cache hit {name}");
         return Ok((sha, FetchKind::CacheHit));
@@ -655,7 +650,13 @@ mod path_dist_tests {
             .await
             .expect("install");
         let linked = root.join("vendor/acme/hello");
-        assert!(linked.symlink_metadata().expect("meta").file_type().is_symlink());
+        assert!(
+            linked
+                .symlink_metadata()
+                .expect("meta")
+                .file_type()
+                .is_symlink()
+        );
         assert!(linked.join("composer.json").is_file());
         assert!(linked.join("src/Hello.php").is_file());
     }
@@ -721,7 +722,10 @@ mod path_dist_tests {
         let _ = fs::remove_dir_all(root.join("vendor"));
         let lock = LockFile::from_path(root.join("composer.lock")).expect("lock");
         assert_eq!(
-            lock.packages[0].dist.as_ref().and_then(|d| d.dist_type.as_deref()),
+            lock.packages[0]
+                .dist
+                .as_ref()
+                .and_then(|d| d.dist_type.as_deref()),
             Some("path"),
             "fixture dist.type"
         );
@@ -745,6 +749,12 @@ mod path_dist_tests {
             .await
             .expect("install");
         let linked = root.join("vendor/acme/hello");
-        assert!(linked.symlink_metadata().expect("meta").file_type().is_symlink());
+        assert!(
+            linked
+                .symlink_metadata()
+                .expect("meta")
+                .file_type()
+                .is_symlink()
+        );
     }
 }

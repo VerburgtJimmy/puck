@@ -1,6 +1,5 @@
 //! `puck` - native PHP package manager (Laravel-first).
 
-
 mod dist_urls;
 use clap::{Parser, Subcommand};
 use puck_autoload::{DumpOptions, dump, dump_is_current};
@@ -11,14 +10,14 @@ use puck_install::{
 use puck_laravel::{DiscoverStatus, discover};
 use puck_lock::{LockFile, abandoned_warnings};
 use puck_manifest::{
-    PackageRequirement, Manifest, add_requirement_preserving, remove_requirement_preserving,
+    Manifest, PackageRequirement, add_requirement_preserving, remove_requirement_preserving,
     sort_packages_enabled,
 };
 use puck_plugins::{
     PestPluginDumpStatus, PhpstanExtensionInstallStatus, refuse_message, run_pest_plugin_dump,
     run_phpstan_extension_installer, unsupported_allowed_plugins,
 };
-use puck_registry::{load_p2_optional, P2Loader};
+use puck_registry::{P2Loader, load_p2_optional};
 use puck_resolver::{
     UpdateAllowTransitive, expand_update_unlock, load_path_packages, resolve_lock_document,
 };
@@ -177,7 +176,6 @@ enum StoreCommands {
     /// Garbage-collect unreferenced store entries
     Gc,
 }
-
 
 fn run_doctor(working_dir: Option<PathBuf>, json: bool) -> Result<ExitCode, String> {
     let root = working_dir.unwrap_or_else(|| std::env::current_dir().expect("cwd"));
@@ -406,8 +404,7 @@ async fn run_require(
     let mut unlock = Vec::new();
     let mut composer_text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
 
-    let root_for_path: Value =
-        serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
+    let root_for_path: Value = serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
     let path_provided: std::collections::BTreeSet<String> =
         load_path_packages(&root, &root_for_path)
             .map_err(|e| e.to_string())?
@@ -432,17 +429,11 @@ async fn run_require(
                 }
             }
         }
-        let root_json: Value =
-            serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
+        let root_json: Value = serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
         let sort = sort_packages_enabled(&root_json);
-        composer_text = add_requirement_preserving(
-            &composer_text,
-            &req.name,
-            &req.constraint,
-            dev,
-            sort,
-        )
-        .map_err(|e| e.to_string())?;
+        composer_text =
+            add_requirement_preserving(&composer_text, &req.name, &req.constraint, dev, sort)
+                .map_err(|e| e.to_string())?;
         unlock.push(req.name.clone());
         eprintln!(
             "puck: require {} {} ({})",
@@ -453,8 +444,7 @@ async fn run_require(
     }
 
     std::fs::write(&manifest_path, &composer_text).map_err(|e| e.to_string())?;
-    let root_json: Value =
-        serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
+    let root_json: Value = serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
 
     let lock_bytes = if lock_path.is_file() {
         Some(std::fs::read(&lock_path).map_err(|e| e.to_string())?)
@@ -484,7 +474,8 @@ async fn run_require(
                 }
             }
         }
-        unlock = expand_update_unlock(bytes, &root_names, &unlock, mode).map_err(|e| e.to_string())?;
+        unlock =
+            expand_update_unlock(bytes, &root_names, &unlock, mode).map_err(|e| e.to_string())?;
         eprintln!(
             "puck: unlock {} package{} ({})",
             unlock.len(),
@@ -507,7 +498,10 @@ async fn run_require(
     )
     .map_err(|e| e.to_string())?;
 
-    let lock_text = format!("{}\n", serde_json::to_string_pretty(&lock_doc).map_err(|e| e.to_string())?);
+    let lock_text = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&lock_doc).map_err(|e| e.to_string())?
+    );
     let lock_text = reindent_json_pretty_4(&lock_text);
     std::fs::write(&lock_path, &lock_text).map_err(|e| e.to_string())?;
     eprintln!(
@@ -590,8 +584,10 @@ async fn run_remove(
     )
     .map_err(|e| e.to_string())?;
 
-    let lock_text =
-        format!("{}\n", serde_json::to_string_pretty(&lock_doc).map_err(|e| e.to_string())?);
+    let lock_text = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&lock_doc).map_err(|e| e.to_string())?
+    );
     let lock_text = reindent_json_pretty_4(&lock_text);
     std::fs::write(&lock_path, &lock_text).map_err(|e| e.to_string())?;
     eprintln!(
@@ -631,9 +627,15 @@ async fn run_lock(
     let lock_bytes = std::fs::read(&lock_path).map_err(|e| e.to_string())?;
 
     // Empty unlock: keep every locked package fixed; rewrite dump from p2 / path repos.
-    let lock_doc =
-        resolve_lock_document(&composer_text, Some(&lock_bytes), &load_p2, &[], true, &root)
-            .map_err(|e| e.to_string())?;
+    let lock_doc = resolve_lock_document(
+        &composer_text,
+        Some(&lock_bytes),
+        &load_p2,
+        &[],
+        true,
+        &root,
+    )
+    .map_err(|e| e.to_string())?;
 
     write_lock_file(&lock_path, &lock_doc)?;
     eprintln!(
@@ -681,18 +683,16 @@ async fn run_update(
         packages
             .iter()
             .map(|s| {
-                PackageRequirement::parse(s)
-                    .map(|r| r.name)
-                    .or_else(|_| {
-                        let name = s.trim().to_ascii_lowercase();
-                        if name.contains('/') {
-                            Ok(name)
-                        } else {
-                            Err(format!(
-                                "invalid package name {s:?}; expected vendor/package"
-                            ))
-                        }
-                    })
+                PackageRequirement::parse(s).map(|r| r.name).or_else(|_| {
+                    let name = s.trim().to_ascii_lowercase();
+                    if name.contains('/') {
+                        Ok(name)
+                    } else {
+                        Err(format!(
+                            "invalid package name {s:?}; expected vendor/package"
+                        ))
+                    }
+                })
             })
             .collect::<Result<Vec<_>, _>>()?
     };
@@ -730,8 +730,7 @@ async fn run_update(
         let Some(bytes) = lock_bytes.as_deref() else {
             return Err("--with-dependencies requires an existing composer.lock".into());
         };
-        let root_json: Value =
-            serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
+        let root_json: Value = serde_json::from_str(&composer_text).map_err(|e| e.to_string())?;
         let mut root_names = Vec::new();
         for key in ["require", "require-dev"] {
             if let Some(map) = root_json.get(key).and_then(|v| v.as_object()) {
@@ -792,8 +791,10 @@ async fn run_update(
 }
 
 fn write_lock_file(path: &std::path::Path, lock_doc: &Value) -> Result<(), String> {
-    let lock_text =
-        format!("{}\n", serde_json::to_string_pretty(lock_doc).map_err(|e| e.to_string())?);
+    let lock_text = format!(
+        "{}\n",
+        serde_json::to_string_pretty(lock_doc).map_err(|e| e.to_string())?
+    );
     let lock_text = reindent_json_pretty_4(&lock_text);
     std::fs::write(path, &lock_text).map_err(|e| e.to_string())
 }
@@ -867,8 +868,8 @@ fn run_audit(
 }
 
 fn resolve_registry_root(registry: Option<PathBuf>) -> Result<Option<PathBuf>, String> {
-    let Some(registry_root) = registry
-        .or_else(|| std::env::var_os("PUCK_REGISTRY").map(PathBuf::from))
+    let Some(registry_root) =
+        registry.or_else(|| std::env::var_os("PUCK_REGISTRY").map(PathBuf::from))
     else {
         return Ok(None);
     };
@@ -882,10 +883,13 @@ fn resolve_registry_root(registry: Option<PathBuf>) -> Result<Option<PathBuf>, S
     Ok(Some(registry_root))
 }
 
-fn p2_loader_for(registry: Option<PathBuf>, project_dir: &std::path::Path) -> Result<P2Loader, String> {
+fn p2_loader_for(
+    registry: Option<PathBuf>,
+    project_dir: &std::path::Path,
+) -> Result<P2Loader, String> {
     let registry_root = resolve_registry_root(registry)?;
-    let mut loader =
-        P2Loader::from_env_and_registry(registry_root, Some(project_dir)).map_err(|e| e.to_string())?;
+    let mut loader = P2Loader::from_env_and_registry(registry_root, Some(project_dir))
+        .map_err(|e| e.to_string())?;
     let manifest_path = project_dir.join("composer.json");
     if manifest_path.is_file() {
         let text = std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
@@ -956,11 +960,7 @@ async fn run_install(
         .iter()
         .chain(lock.packages_dev.iter())
         .map(|p| (p.name.clone(), p.package_type().to_string()));
-    let allows = |name: &str| {
-        manifest
-            .as_ref()
-            .is_some_and(|m| m.allows_plugin(name))
-    };
+    let allows = |name: &str| manifest.as_ref().is_some_and(|m| m.allows_plugin(name));
     let unsupported = unsupported_allowed_plugins(lock_plugin_pkgs, allows);
     if !unsupported.is_empty() {
         return Err(refuse_message(&unsupported));
@@ -971,10 +971,7 @@ async fn run_install(
     let mut plan = plan_install(&lock, &installed, options).map_err(|e| e.to_string())?;
 
     // CLI `-o` wins; otherwise honour composer.json `config.optimize-autoloader`.
-    let optimize = optimize
-        || manifest
-            .as_ref()
-            .is_some_and(Manifest::optimize_autoloader);
+    let optimize = optimize || manifest.as_ref().is_some_and(Manifest::optimize_autoloader);
 
     // Warm-keep O(1): lock vs installed.json only. Skip reconcile_vendor_presence
     // (is_dir per Keep package) and install_binaries. Trust installed.json; missing
@@ -1117,8 +1114,7 @@ async fn run_install(
     let allow_phpstan_plugin = manifest
         .as_ref()
         .is_none_or(|m| m.allows_plugin("phpstan/extension-installer"));
-    match run_phpstan_extension_installer(&root, allow_phpstan_plugin).map_err(|e| e.to_string())?
-    {
+    match run_phpstan_extension_installer(&root, allow_phpstan_plugin).map_err(|e| e.to_string())? {
         PhpstanExtensionInstallStatus::Written {
             extension_count, ..
         } => {
@@ -1128,9 +1124,7 @@ async fn run_install(
     }
 
     let mut scripts_ms = 0u128;
-    if !no_scripts
-        && let Some(ref manifest) = manifest
-    {
+    if !no_scripts && let Some(ref manifest) = manifest {
         let scripts_started = Instant::now();
         let report = run_install_scripts(
             &root,
@@ -1197,7 +1191,10 @@ fn print_install_timings(
     }
     eprintln!("puck: timing  plan_ms={plan_ms}");
     eprintln!("puck: timing  fetch_ms={}", exec.fetch_ms);
-    eprintln!("puck: timing  fetch_cache_hit_ms={}", exec.fetch_cache_hit_ms);
+    eprintln!(
+        "puck: timing  fetch_cache_hit_ms={}",
+        exec.fetch_cache_hit_ms
+    );
     eprintln!("puck: timing  fetch_download_ms={}", exec.fetch_download_ms);
     eprintln!("puck: timing  link_ms={}", exec.link_ms);
     eprintln!("puck: timing  installed_meta_ms={}", exec.installed_meta_ms);

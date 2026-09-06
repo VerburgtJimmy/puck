@@ -1,7 +1,7 @@
 //! Generate Composer-shaped `vendor/composer/installed.php`.
 
-use crate::plan::{InstallAction, PlannedPackage};
 use crate::Result;
+use crate::plan::{InstallAction, PlannedPackage};
 use indexmap::IndexMap;
 use puck_lock::{LockFile, LockedPackage};
 use puck_manifest::Manifest;
@@ -50,10 +50,10 @@ impl RootPackageMeta {
             };
         };
 
-        let (pretty_version, version) = match manifest.rest.get("version").and_then(|v| v.as_str()) {
+        let (pretty_version, version) = match manifest.rest.get("version").and_then(|v| v.as_str())
+        {
             Some(raw) if !raw.is_empty() => {
-                let normalized =
-                    puck_version::normalize(raw).unwrap_or_else(|_| raw.to_owned());
+                let normalized = puck_version::normalize(raw).unwrap_or_else(|_| raw.to_owned());
                 (raw.to_owned(), normalized)
             }
             _ => (

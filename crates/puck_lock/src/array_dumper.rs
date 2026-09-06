@@ -165,7 +165,6 @@ pub fn dump_lock_package_from_p2(version: &Value) -> Value {
     Value::Object(data)
 }
 
-
 /// Dump a path-repository package into a lock package object.
 ///
 /// Unlike [`dump_lock_package_from_p2`], keeps `transport-options` and does **not**
@@ -318,10 +317,7 @@ mod tests {
         assert!(obj.contains_key("authors"));
         assert!(obj.contains_key("homepage"));
         let req = obj["require"].as_object().unwrap();
-        assert_eq!(
-            req.keys().cloned().collect::<Vec<_>>(),
-            vec!["a/a", "z/z"]
-        );
+        assert_eq!(req.keys().cloned().collect::<Vec<_>>(), vec!["a/a", "z/z"]);
         // name/version before type; notification-url after type/extra/autoload cluster
         let name_i = keys.iter().position(|k| k == "name").unwrap();
         let type_i = keys.iter().position(|k| k == "type").unwrap();

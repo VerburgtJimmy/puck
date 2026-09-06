@@ -43,18 +43,17 @@ fn install_package_bins(vendor: &Path, bin_dir: &Path, pkg: &LockedPackage) -> R
     let install_path = vendor_package_path(vendor, &pkg.name);
     for bin in pkg.bins() {
         let bin_rel = bin.trim_start_matches("./");
-        if bin_rel.is_empty() || Path::new(bin_rel).components().any(|c| {
-            matches!(c, std::path::Component::ParentDir)
-        }) {
+        if bin_rel.is_empty()
+            || Path::new(bin_rel)
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
             eprintln!("puck: skipped bin {bin} for {}: invalid path", pkg.name);
             continue;
         }
         let bin_path = install_path.join(bin_rel);
         if !bin_path.is_file() {
-            eprintln!(
-                "puck: skipped bin {bin} for {}: file not found",
-                pkg.name
-            );
+            eprintln!("puck: skipped bin {bin} for {}: file not found", pkg.name);
             continue;
         }
 

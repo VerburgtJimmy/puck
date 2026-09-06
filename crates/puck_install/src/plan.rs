@@ -261,5 +261,4 @@ mod tests {
         assert_eq!(plan.to_remove().count(), 0);
         assert_eq!(plan.kept().count(), 200);
     }
-
 }

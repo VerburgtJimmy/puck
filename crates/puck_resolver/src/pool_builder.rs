@@ -80,10 +80,7 @@ impl PoolBuilder {
         // Composer ArrayRepository: match `getName()` only, not provide/replace.
         let mut by_name: IndexMap<String, Vec<usize>> = IndexMap::new();
         for (idx, package) in repo_packages.iter().enumerate() {
-            by_name
-                .entry(package.name.clone())
-                .or_default()
-                .push(idx);
+            by_name.entry(package.name.clone()).or_default().push(idx);
         }
 
         // IndexSet: first-seen load order, not HashSet shuffle before sort.
@@ -105,11 +102,7 @@ impl PoolBuilder {
                 continue;
             };
             for idx in idxs {
-                if !is_package_acceptable(
-                    &repo_packages[idx],
-                    minimum_stability,
-                    stability_flags,
-                ) {
+                if !is_package_acceptable(&repo_packages[idx], minimum_stability, stability_flags) {
                     continue;
                 }
                 if !needed_repo.insert(idx) {
@@ -142,11 +135,7 @@ impl PoolBuilder {
             .map(|idx| repo_packages[idx].clone())
             .collect();
         // Explicit sort where Composer sorts pool candidates by name/version.
-        rest.sort_by(|a, b| {
-            a.name
-                .cmp(&b.name)
-                .then_with(|| a.version.cmp(&b.version))
-        });
+        rest.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.version.cmp(&b.version)));
         selected.extend(rest);
 
         let pool = Pool::new(selected);
@@ -179,12 +168,7 @@ mod tests {
         let mut root = Package::new("root/root", "1.0.0.0", "1.0");
         root.requires.insert(
             "a/a".into(),
-            Link::new(
-                "root/root",
-                "a/a",
-                "*",
-                parse_constraints("*").unwrap(),
-            ),
+            Link::new("root/root", "a/a", "*", parse_constraints("*").unwrap()),
         );
         let dep = Package::new("a/a", "1.0.0.0", "1.0");
         let unused = Package::new("z/z", "1.0.0.0", "1.0");
@@ -214,8 +198,7 @@ mod tests {
         let mut request = Request::new();
         request.require_name("a/a", None).unwrap();
 
-        let (pool, present) =
-            PoolBuilder::build(&[&repo], &[locked], &[], &mut request).unwrap();
+        let (pool, present) = PoolBuilder::build(&[&repo], &[locked], &[], &mut request).unwrap();
         assert_eq!(present.len(), 1);
         assert!(present.contains_key(&1));
         assert_eq!(pool.package_by_id(1).version, "1.0.0.0");
@@ -227,22 +210,12 @@ mod tests {
         let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
         package_a.requires.insert(
             "b/b".into(),
-            Link::new(
-                "a/a",
-                "b/b",
-                ">=1.0",
-                parse_constraints(">=1.0").unwrap(),
-            ),
+            Link::new("a/a", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
         );
         let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
         package_q.provides.insert(
             "b/b".into(),
-            Link::new(
-                "q/q",
-                "b/b",
-                "=1.0",
-                parse_constraints("=1.0").unwrap(),
-            ),
+            Link::new("q/q", "b/b", "=1.0", parse_constraints("=1.0").unwrap()),
         );
 
         let mut repo = ArrayRepository::new();
@@ -262,22 +235,12 @@ mod tests {
         let mut package_a = Package::new("a/a", "1.0.0.0", "1.0");
         package_a.requires.insert(
             "b/b".into(),
-            Link::new(
-                "a/a",
-                "b/b",
-                ">=1.0",
-                parse_constraints(">=1.0").unwrap(),
-            ),
+            Link::new("a/a", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
         );
         let mut package_q = Package::new("q/q", "1.0.0.0", "1.0");
         package_q.replaces.insert(
             "b/b".into(),
-            Link::new(
-                "q/q",
-                "b/b",
-                ">=1.0",
-                parse_constraints(">=1.0").unwrap(),
-            ),
+            Link::new("q/q", "b/b", ">=1.0", parse_constraints(">=1.0").unwrap()),
         );
 
         let mut repo = ArrayRepository::new();

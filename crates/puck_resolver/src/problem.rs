@@ -118,7 +118,10 @@ fn sortable_string(pool: &Pool, rule: &Rule) -> String {
         RuleReason::RootRequire { package_name, .. } => package_name,
         RuleReason::PackageRequires { target, .. } => {
             let src = rule_source_package(pool, rule);
-            format!("{}//{target}", src.map(|p| p.pretty_string()).unwrap_or_default())
+            format!(
+                "{}//{target}",
+                src.map(|p| p.pretty_string()).unwrap_or_default()
+            )
         }
         RuleReason::PackageConflict { source, .. } => source,
         RuleReason::PackageSameName { package_name } => package_name,

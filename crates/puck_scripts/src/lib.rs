@@ -258,9 +258,9 @@ fn run_php_callback(
 ) -> Result<()> {
     let Some((class, method)) = handler.split_once("::") else {
         report.skipped += 1;
-        report
-            .notes
-            .push(format!("skipped `{handler}` (not a Class::method callback)"));
+        report.notes.push(format!(
+            "skipped `{handler}` (not a Class::method callback)"
+        ));
         return Ok(());
     };
 
@@ -466,8 +466,8 @@ mod tests {
             skip_package_discover: true,
             php: None,
         };
-        let report = run_event_scripts(dir.path(), &scripts, "post-autoload-dump", &opts)
-            .expect("run");
+        let report =
+            run_event_scripts(dir.path(), &scripts, "post-autoload-dump", &opts).expect("run");
         assert!(report.skipped >= 1);
         assert!(
             report
@@ -507,11 +507,17 @@ mod tests {
         let scripts = IndexMap::from([
             (
                 "post-autoload-dump".into(),
-                json!(format!("touch {}", a.file_name().unwrap().to_string_lossy())),
+                json!(format!(
+                    "touch {}",
+                    a.file_name().unwrap().to_string_lossy()
+                )),
             ),
             (
                 "post-install-cmd".into(),
-                json!(format!("touch {}", b.file_name().unwrap().to_string_lossy())),
+                json!(format!(
+                    "touch {}",
+                    b.file_name().unwrap().to_string_lossy()
+                )),
             ),
         ]);
         let report =
@@ -542,8 +548,8 @@ mod tests {
             php: Some(fake_php),
             skip_package_discover: false,
         };
-        let report = run_event_scripts(dir.path(), &scripts, "post-autoload-dump", &opts)
-            .expect("run");
+        let report =
+            run_event_scripts(dir.path(), &scripts, "post-autoload-dump", &opts).expect("run");
         assert_eq!(report.skipped, 1);
         assert!(report.notes.iter().any(|n| n.contains("autoload.php")));
     }
