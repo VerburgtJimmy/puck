@@ -1,5 +1,6 @@
 //! HTTP download of dist archives.
 
+use crate::auth::{AuthHeader, AuthStore};
 use crate::checksum::{sha256_hex, verify_shasum};
 use crate::{Error, Result};
 use std::time::Duration;
@@ -14,10 +15,20 @@ pub struct DownloadedDist {
 
 /// Download `url` and optionally verify Composer `shasum` (SHA-1).
 pub async fn download(url: &str, shasum: Option<&str>) -> Result<DownloadedDist> {
+    let auth = AuthStore::load_from_env()?;
+    download_with_auth(url, shasum, &auth).await
+}
+
+/// Download with an explicit auth store (tests / callers that already loaded auth).
+pub async fn download_with_auth(
+    url: &str,
+    shasum: Option<&str>,
+    auth: &AuthStore,
+) -> Result<DownloadedDist> {
     let candidates = download_candidates(url);
     let mut last_err = None;
     for candidate in &candidates {
-        match download_with_retries(candidate, 3).await {
+        match download_with_retries(candidate, 3, auth).await {
             Ok(bytes) => {
                 if let Some(sum) = shasum {
                     verify_shasum(&bytes, sum, candidate)?;
@@ -64,7 +75,7 @@ fn github_api_to_codeload(url: &str) -> Option<String> {
     ))
 }
 
-async fn download_with_retries(url: &str, attempts: u32) -> Result<Vec<u8>> {
+async fn download_with_retries(url: &str, attempts: u32, auth: &AuthStore) -> Result<Vec<u8>> {
     let client = reqwest::Client::builder()
         .user_agent(concat!("puck/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(120))
@@ -76,7 +87,7 @@ async fn download_with_retries(url: &str, attempts: u32) -> Result<Vec<u8>> {
 
     let mut last_message = String::new();
     for attempt in 1..=attempts {
-        match download_once(&client, url).await {
+        match download_once(&client, url, auth).await {
             Ok(bytes) => return Ok(bytes),
             Err(err) => {
                 last_message = err.to_string();
@@ -93,8 +104,21 @@ async fn download_with_retries(url: &str, attempts: u32) -> Result<Vec<u8>> {
     })
 }
 
-async fn download_once(client: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
-    let response = client.get(url).send().await.map_err(|e| Error::Download {
+async fn download_once(client: &reqwest::Client, url: &str, auth: &AuthStore) -> Result<Vec<u8>> {
+    let mut request = client.get(url);
+    if let Some(header) = auth.authorization_for_url(url) {
+        request = match header {
+            AuthHeader::Basic { username, password } => {
+                request.basic_auth(username, Some(password))
+            }
+            AuthHeader::Bearer(token) => request.bearer_auth(token),
+            AuthHeader::GithubToken(token) => {
+                request.header(reqwest::header::AUTHORIZATION, format!("token {token}"))
+            }
+        };
+    }
+
+    let response = request.send().await.map_err(|e| Error::Download {
         url: url.to_owned(),
         message: e.to_string(),
     })?;

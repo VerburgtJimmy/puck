@@ -3,13 +3,15 @@
 #![deny(unsafe_code)]
 #![warn(clippy::unwrap_used)]
 
+mod auth;
 mod checksum;
 mod extract;
 mod fetch;
 
+pub use auth::{AuthHeader, AuthStore, composer_home_dir};
 pub use checksum::{sha1_hex, sha256_hex, verify_shasum};
 pub use extract::{ArchiveKind, extract_archive};
-pub use fetch::{DownloadedDist, download};
+pub use fetch::{DownloadedDist, download, download_with_auth};
 
 /// Errors from dist fetch / extract.
 #[derive(Debug, thiserror::Error)]
@@ -26,6 +28,8 @@ pub enum Error {
     UnsupportedArchive(String),
     #[error("extract failed: {0}")]
     Extract(String),
+    #[error("auth config: {0}")]
+    Auth(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
