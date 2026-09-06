@@ -164,7 +164,9 @@ jobs:
           print(json.dumps(manifest, indent=2))
           PY
 
+      # Attestations API is unavailable on private user-owned repos.
       - name: Attest build provenance
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
