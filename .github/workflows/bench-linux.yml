@@ -46,11 +46,15 @@ jobs:
       - name: Resource usage (laravel-skeleton)
         run: ./benches/resource-usage.sh laravel-skeleton | tee bench-out/resource-usage-skeleton.log
 
-      - name: Install timing (laravel-app)
-        run: ./benches/install-timing.sh laravel-app | tee bench-out/install-timing-laravel-app.log
+      - name: Install timing (laravel-app with require-dev)
+        env:
+          PUCK_BENCH_DEV: "1"
+        run: ./benches/install-timing.sh laravel-app with-dev | tee bench-out/install-timing-laravel-app-dev.log
 
-      - name: Resource usage (laravel-app)
-        run: ./benches/resource-usage.sh laravel-app | tee bench-out/resource-usage-laravel-app.log
+      - name: Resource usage (laravel-app with require-dev)
+        env:
+          PUCK_BENCH_DEV: "1"
+        run: ./benches/resource-usage.sh laravel-app with-dev | tee bench-out/resource-usage-laravel-app-dev.log
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
