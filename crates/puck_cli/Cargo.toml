@@ -18,6 +18,7 @@ path = "src/main.rs"
 clap.workspace = true
 puck_autoload.workspace = true
 puck_diagnostics.workspace = true
+puck_update.workspace = true
 puck_install.workspace = true
 puck_laravel.workspace = true
 puck_lock.workspace = true

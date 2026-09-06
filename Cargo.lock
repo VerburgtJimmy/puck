@@ -866,6 +866,7 @@ dependencies = [
  "puck_resolver",
  "puck_scripts",
  "puck_store",
+ "puck_update",
  "puck_version",
  "serde_json",
  "tempfile",
@@ -1022,6 +1023,21 @@ dependencies = [
  "tempfile",
  "thiserror",
  "zip",
+]
+
+[[package]]
+name = "puck_update"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "puck_version",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

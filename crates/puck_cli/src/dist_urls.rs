@@ -1,25 +1,13 @@
 //! Distribution URL constants. Keep in sync with `install.sh` and `docs/distribution.md`.
+//!
+//! Canonical definitions live in `puck_update::urls`; this module re-exports them
+//! for the CLI crate and unit tests.
 
-#![allow(dead_code)] // consumed by upgrade/notifications in a later change
-
-/// GitHub Releases manifest — source of truth for `puck upgrade` / install.
-pub const MANIFEST_URL: &str =
-    "https://github.com/VerburgtJimmy/puck/releases/latest/download/manifest.json";
-
-/// GitHub repository (`owner/name`).
-pub const REPO: &str = "VerburgtJimmy/puck";
-
-/// Optional site mirror of install.sh (never the upgrade source of truth).
-pub const INSTALL_MIRROR: &str = "https://puck.jimmyverburgt.com/install";
-
-/// Optional site mirror of stable channel JSON (never the upgrade source of truth).
-pub const STABLE_MIRROR: &str = "https://puck.jimmyverburgt.com/releases/stable.json";
-
-/// Default install root (`~/.puck` when expanded by the install script).
-pub const DEFAULT_INSTALL_ROOT_NAME: &str = ".puck";
-
-/// minisign public key file contents (untrusted comment + key line).
-pub const MINISIGN_PUBLIC_KEY: &str = include_str!("../../../dist/minisign/minisign.pub");
+#[allow(unused_imports)] // re-exported for docs / discoverability; upgrade uses puck_update directly
+pub use puck_update::{
+    DEFAULT_INSTALL_ROOT_NAME, INSTALL_MIRROR, MANIFEST_URL, MINISIGN_PUBLIC_KEY, REPO,
+    STABLE_MIRROR,
+};
 
 #[cfg(test)]
 mod tests {
