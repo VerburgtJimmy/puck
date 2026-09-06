@@ -58,6 +58,16 @@ impl InstallPlan {
             .iter()
             .filter(|p| p.action == InstallAction::Keep)
     }
+
+    /// True when every package is Keep (no install / update / remove).
+    ///
+    /// Used by warm-keep: with matching `installed.json`, puck skips
+    /// `reconcile_vendor_presence` (per-package `is_dir`) and `install_binaries`.
+    pub fn is_noop(&self) -> bool {
+        self.packages
+            .iter()
+            .all(|p| matches!(p.action, InstallAction::Keep))
+    }
 }
 
 /// Diff `lock` against `installed` and produce ordered actions.
@@ -228,4 +238,28 @@ mod tests {
         reconcile_vendor_presence(&mut plan, &tmp.path().join("vendor"));
         assert_eq!(plan.packages[0].action, InstallAction::Install);
     }
+
+    /// Warm-keep trusts installed.json: many Keep rows stay noop without walking vendor/.
+    /// (CLI skips reconcile_vendor_presence when is_noop + dump meta + vendor/ exists.)
+    #[test]
+    fn many_keep_packages_are_noop_without_reconcile() {
+        let mut packages = Vec::new();
+        for i in 0..200 {
+            packages.push(PlannedPackage {
+                name: format!("vendor/pkg-{i}"),
+                version: "1.0.0".into(),
+                is_dev: false,
+                action: InstallAction::Keep,
+                dist_url: None,
+                dist_shasum: None,
+                dist_type: None,
+            });
+        }
+        let plan = InstallPlan { packages };
+        assert!(plan.is_noop());
+        assert_eq!(plan.to_install().count(), 0);
+        assert_eq!(plan.to_remove().count(), 0);
+        assert_eq!(plan.kept().count(), 200);
+    }
+
 }
