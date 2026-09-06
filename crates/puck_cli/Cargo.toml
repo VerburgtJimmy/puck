@@ -30,3 +30,7 @@ puck_registry.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+puck_lock.workspace = true

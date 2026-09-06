@@ -147,6 +147,15 @@ enum Commands {
         #[arg(long, value_name = "DIR")]
         working_dir: Option<PathBuf>,
     },
+    /// Preflight: blockers / warnings before switching from Composer
+    Doctor {
+        /// Project directory (defaults to current directory)
+        #[arg(long, value_name = "DIR")]
+        working_dir: Option<PathBuf>,
+        /// Machine-readable findings for CI
+        #[arg(long)]
+        json: bool,
+    },
     /// Shared store utilities (M2)
     Store {
         #[command(subcommand)]
@@ -165,6 +174,19 @@ enum StoreCommands {
     Path,
     /// Garbage-collect unreferenced store entries
     Gc,
+}
+
+
+fn run_doctor(working_dir: Option<PathBuf>, json: bool) -> Result<ExitCode, String> {
+    let root = working_dir.unwrap_or_else(|| std::env::current_dir().expect("cwd"));
+    let report = puck_diagnostics::diagnose(&root).map_err(|e| e.to_string())?;
+    if json {
+        let body = puck_diagnostics::format_json(&report).map_err(|e| e.to_string())?;
+        println!("{body}");
+    } else {
+        println!("{}", puck_diagnostics::format_text(&report));
+    }
+    Ok(ExitCode::from(report.exit_code()))
 }
 
 fn main() -> ExitCode {
@@ -200,6 +222,13 @@ fn main() -> ExitCode {
                 }
             }
         }
+        Commands::Doctor { working_dir, json } => match run_doctor(working_dir, json) {
+            Ok(code) => code,
+            Err(err) => {
+                eprintln!("puck: {err}");
+                ExitCode::from(1)
+            }
+        },
         Commands::Store {
             command: StoreCommands::Path,
         } => {

@@ -6,7 +6,19 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "puck: diagnostics crate (M0 stub)"
+description = "puck: doctor / preflight diagnostics"
 
 [dependencies]
+indexmap.workspace = true
+puck_lock.workspace = true
+puck_manifest.workspace = true
+puck_php.workspace = true
+puck_plugins.workspace = true
+puck_store.workspace = true
+puck_version.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
