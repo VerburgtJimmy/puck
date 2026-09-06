@@ -18,6 +18,7 @@ members = [
     "crates/puck_resolver",
     "crates/puck_php",
     "crates/puck_diagnostics",
+    "crates/puck_update",
 ]
 default-members = ["crates/puck_cli"]
 
@@ -68,6 +69,7 @@ puck_laravel = { path = "crates/puck_laravel" }
 puck_resolver = { path = "crates/puck_resolver" }
 puck_php = { path = "crates/puck_php" }
 puck_diagnostics = { path = "crates/puck_diagnostics" }
+puck_update = { path = "crates/puck_update" }
 
 [profile.release]
 lto = true

@@ -162,6 +162,18 @@ enum Commands {
         #[command(subcommand)]
         command: StoreCommands,
     },
+    /// Upgrade the puck binary from GitHub Releases
+    Upgrade {
+        /// Install this version instead of latest (`0.1.0` or `v0.1.0`)
+        #[arg(long)]
+        version: Option<String>,
+        /// Restore `~/.puck/bin/puck.previous`
+        #[arg(long)]
+        rollback: bool,
+        /// Canary channel (not available in 0.1)
+        #[arg(long)]
+        canary: bool,
+    },
     /// Run the project's PHP binary (M5)
     Php {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -189,9 +201,72 @@ fn run_doctor(working_dir: Option<PathBuf>, json: bool) -> Result<ExitCode, Stri
     Ok(ExitCode::from(report.exit_code()))
 }
 
+fn current_pkg_version() -> &'static str {
+    // clap embeds `0.1.0 (<sha> <date>)`; compare / UA use the bare crate version.
+    env!("CARGO_PKG_VERSION")
+}
+
+fn should_skip_update_notify(command: &Commands) -> bool {
+    match command {
+        Commands::Doctor { json: true, .. } => true,
+        Commands::Upgrade { .. } => true,
+        _ => false,
+    }
+}
+
+fn maybe_notify_after_command(skip: bool) {
+    if skip {
+        return;
+    }
+    puck_update::maybe_notify_update(puck_update::NotifyOptions {
+        current_version: current_pkg_version().to_owned(),
+        manifest_url: None,
+        cache_path: None,
+        force_tty: None,
+        ignore_env_disable: false,
+    });
+}
+
+fn run_upgrade(version: Option<String>, rollback: bool, canary: bool) -> Result<(), String> {
+    if canary {
+        return Err(puck_update::Error::CanaryUnavailable.to_string());
+    }
+    if rollback && version.is_some() {
+        return Err("use either --version or --rollback, not both".into());
+    }
+    if rollback {
+        let path = puck_update::rollback_exe(None).map_err(|e| e.to_string())?;
+        eprintln!("puck: rolled back to {}", path.display());
+        return Ok(());
+    }
+    let outcome = puck_update::upgrade(puck_update::UpgradeOptions {
+        version,
+        manifest_url: None,
+        current_version: current_pkg_version().to_owned(),
+        current_exe: None,
+        work_dir: None,
+    })
+    .map_err(|e| e.to_string())?;
+    if let Some(warn) = &outcome.minisign_skipped_warning {
+        eprintln!("puck: warning: {warn}");
+    }
+    eprintln!(
+        "puck: upgraded {} -> {} ({}) at {}",
+        outcome.from_version,
+        outcome.to_version,
+        outcome.target,
+        outcome.path.display()
+    );
+    if outcome.minisign_verified {
+        eprintln!("puck: minisign signature verified");
+    }
+    Ok(())
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    match cli.command {
+    let skip_notify = should_skip_update_notify(&cli.command);
+    let code = match cli.command {
         Commands::Install {
             no_dev,
             optimize,
@@ -371,11 +446,24 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
+        Commands::Upgrade {
+            version,
+            rollback,
+            canary,
+        } => match run_upgrade(version, rollback, canary) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("puck: {err}");
+                ExitCode::from(1)
+            }
+        },
         Commands::Php { .. } => {
             eprintln!("puck: this command is not implemented yet");
             ExitCode::from(2)
         }
-    }
+    };
+    maybe_notify_after_command(skip_notify);
+    code
 }
 
 async fn run_require(
