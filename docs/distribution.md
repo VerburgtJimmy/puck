@@ -92,11 +92,31 @@ and Linux including uninstall and re-install.
 
 ## 6. CI and containers
 
-- GitHub Action `setup-puck` (under this account for 0.1): pin version, verify,
-  cache `~/.puck/store` on lock hash.
-- Docker: static musl binary image on GHCR for this account; multi-arch;
-  document BuildKit cache mount for the store.
-- GitLab / generic: `install.sh` + `PUCK_VERSION` + cache path docs.
+### `setup-puck` (composite action in this repo)
+
+For 0.1 the action lives at [`.github/actions/setup-puck`](../.github/actions/setup-puck/action.yml)
+so consumers can pin:
+
+```yaml
+- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.0
+  # or @master
+  with:
+    version: latest   # or v0.1.0
+    cache: true       # caches ~/.puck/store on composer.lock hash
+```
+
+It downloads via `install.sh` (SHA-256 always; minisign when available), adds
+`~/.puck/bin` to `PATH`, and optionally caches `~/.puck/store`.
+
+### Docker
+
+See [`dist/docker/README.md`](../dist/docker/README.md) and the root
+[`Dockerfile`](../Dockerfile) (musl binary → `scratch`). Optional GHCR push is
+documented there as a release.yml stub until the first public tag.
+
+### GitLab / generic
+
+`install.sh` + `PUCK_VERSION` + cache `~/.puck/store` on the lockfile hash.
 
 ## 7. Versioning
 
@@ -139,3 +159,16 @@ STABLE_MIRROR=https://puck.jimmyverburgt.com/releases/stable.json
 REPO=VerburgtJimmy/puck
 DEFAULT_INSTALL_ROOT=~/.puck
 ```
+
+## Release checklist (signing)
+
+The publish job in [`.github/workflows/release.yml`](../.github/workflows/release.yml)
+reads `secrets.MINISIGN_SECRET_KEY` (full minisign secret key file contents),
+writes it to a temp file, and runs `minisign -Sm SHA256SUMS -s …`. If the secret
+is unset, the release still publishes with SHA-256 + attestation but without
+`SHA256SUMS.minisig`.
+
+When ready for the first public binaries: **tag `v0.1.0` from the release
+workflow** (push tag `v0.1.0` to `master` after this branch is green). Do not
+attach hand-built binaries. Confirm the Actions secret `MINISIGN_SECRET_KEY` is
+present before tagging.
