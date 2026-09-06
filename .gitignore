@@ -32,3 +32,6 @@ composer.phar
 # CI / local bench output
 /bench-out/
 .tmp-rss*/
+
+# Local secrets (minisign private key, never commit)
+.secrets/
