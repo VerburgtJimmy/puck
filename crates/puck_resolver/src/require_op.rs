@@ -8,7 +8,7 @@
 use crate::request::UpdateAllowTransitive;
 use crate::metadata::{find_p2_version_value, packages_from_lock_json};
 use crate::package::Package;
-use crate::path_repo::{load_path_packages, PathPackage};
+use crate::path_repo::{load_path_packages, path_package_names, PathPackage};
 use crate::platform::is_platform_package;
 use crate::pool_builder::{ArrayRepository, PoolBuilder};
 use crate::request::Request;
@@ -171,20 +171,31 @@ pub fn resolve_lock_document(
     let prod_requires = root_requires_from_json(&root, false);
     let all_requires = root_requires_from_json(&root, include_dev);
 
-    let mut prod_repo = array_repository_from_p2_constraints(load_p2, &prod_requires, stability)?;
-    merge_path_packages(&mut prod_repo, &path_packages);
+    let path_names = path_package_names(&path_packages);
+    let path_repo = path_array_repository(&path_packages);
+
+    let prod_repo = array_repository_from_p2_constraints(
+        load_p2,
+        &prod_requires,
+        stability,
+        &path_names,
+    )?;
     let prod_names = solve_names(
-        &prod_repo,
+        &pool_repos(&path_repo, &prod_repo),
         &prod_requires,
         &fixed_prod,
         stability,
         &stability_flags,
     )?;
 
-    let mut all_repo = array_repository_from_p2_constraints(load_p2, &all_requires, stability)?;
-    merge_path_packages(&mut all_repo, &path_packages);
+    let all_repo = array_repository_from_p2_constraints(
+        load_p2,
+        &all_requires,
+        stability,
+        &path_names,
+    )?;
     let installed = solve_packages(
-        &all_repo,
+        &pool_repos(&path_repo, &all_repo),
         &all_requires,
         &fixed_all,
         stability,
@@ -239,9 +250,23 @@ pub fn resolve_lock_document(
     .map_err(|e| Error::Message(e.to_string()))
 }
 
-fn merge_path_packages(repo: &mut ArrayRepository, path_packages: &[PathPackage]) {
+fn path_array_repository(path_packages: &[PathPackage]) -> ArrayRepository {
+    let mut repo = ArrayRepository::new();
     for path_pkg in path_packages {
         repo.add_package(path_pkg.package.clone());
+    }
+    repo
+}
+
+/// Prefer path repository packages over Packagist (earlier repo / lower pool id).
+fn pool_repos<'a>(
+    path_repo: &'a ArrayRepository,
+    p2_repo: &'a ArrayRepository,
+) -> Vec<&'a ArrayRepository> {
+    if path_repo.packages().is_empty() {
+        vec![p2_repo]
+    } else {
+        vec![path_repo, p2_repo]
     }
 }
 
@@ -283,20 +308,20 @@ fn platform_reqs_from_root(root: &Value, dev: bool) -> Map<String, Value> {
 }
 
 fn solve_names(
-    repo: &ArrayRepository,
+    repos: &[&ArrayRepository],
     requires: &[(String, String)],
     fixed: &[Package],
     minimum_stability: Stability,
     stability_flags: &IndexMap<String, Stability>,
 ) -> Result<BTreeSet<String>> {
-    Ok(solve_packages(repo, requires, fixed, minimum_stability, stability_flags)?
+    Ok(solve_packages(repos, requires, fixed, minimum_stability, stability_flags)?
         .into_iter()
         .map(|(n, _)| n)
         .collect())
 }
 
 fn solve_packages(
-    repo: &ArrayRepository,
+    repos: &[&ArrayRepository],
     requires: &[(String, String)],
     fixed: &[Package],
     minimum_stability: Stability,
@@ -309,7 +334,7 @@ fn solve_packages(
             .map_err(Error::Message)?;
     }
     let (mut pool, present) = PoolBuilder::build_with_stability(
-        &[repo],
+        repos,
         &[],
         fixed,
         &mut request,
@@ -555,5 +580,117 @@ mod tests {
         let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/hello").unwrap();
         assert_eq!(pkg["dist"]["type"], "path");
         assert_eq!(pkg["dist"]["url"], "packages/acme-hello");
+    }
+
+    /// Dual-source same name+version: path repo wins; lock uses dist.type=path.
+    #[test]
+    fn prefer_path_over_packagist_same_version() {
+        let dir = std::env::temp_dir().join(format!(
+            "puck-prefer-path-same-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let pkg_dir = dir.join("local-pkg");
+        std::fs::create_dir_all(&pkg_dir).unwrap();
+        std::fs::write(
+            pkg_dir.join("composer.json"),
+            r#"{"name":"acme/dual","version":"1.0.0","type":"library"}"#,
+        )
+        .unwrap();
+        let composer = r#"{
+            "require": { "acme/dual": "*" },
+            "repositories": [{ "type": "path", "url": "local-pkg" }]
+        }"#;
+        std::fs::write(dir.join("composer.json"), composer).unwrap();
+
+        let p2 = serde_json::json!({
+            "packages": {
+                "acme/dual": [{
+                    "name": "acme/dual",
+                    "version": "1.0.0",
+                    "version_normalized": "1.0.0.0",
+                    "dist": {
+                        "type": "zip",
+                        "url": "https://example.test/acme-dual-1.0.0.zip",
+                        "reference": "deadbeef"
+                    }
+                }]
+            }
+        });
+        let get = move |name: &str| -> std::result::Result<Option<Vec<u8>>, String> {
+            if name == "acme/dual" {
+                Ok(Some(serde_json::to_vec(&p2).unwrap()))
+            } else {
+                Ok(None)
+            }
+        };
+
+        let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
+            .expect("resolve dual-source same version");
+        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/dual").unwrap();
+        assert_eq!(pkg["version"], "1.0.0");
+        assert_eq!(pkg["dist"]["type"], "path");
+        assert_eq!(pkg["dist"]["url"], "local-pkg");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Path owns the name even when Packagist offers a higher stable version.
+    #[test]
+    fn prefer_path_over_packagist_higher_packagist_version() {
+        let dir = std::env::temp_dir().join(format!(
+            "puck-prefer-path-higher-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let pkg_dir = dir.join("local-pkg");
+        std::fs::create_dir_all(&pkg_dir).unwrap();
+        // No version → VersionGuesser fallback `dev-main`.
+        std::fs::write(
+            pkg_dir.join("composer.json"),
+            r#"{"name":"acme/dual","type":"library"}"#,
+        )
+        .unwrap();
+        let composer = r#"{
+            "minimum-stability": "dev",
+            "require": { "acme/dual": "*" },
+            "repositories": [{ "type": "path", "url": "local-pkg" }]
+        }"#;
+        std::fs::write(dir.join("composer.json"), composer).unwrap();
+
+        let p2 = serde_json::json!({
+            "packages": {
+                "acme/dual": [{
+                    "name": "acme/dual",
+                    "version": "2.0.0",
+                    "version_normalized": "2.0.0.0",
+                    "dist": {
+                        "type": "zip",
+                        "url": "https://example.test/acme-dual-2.0.0.zip",
+                        "reference": "cafebabe"
+                    }
+                }]
+            }
+        });
+        let get = move |name: &str| -> std::result::Result<Option<Vec<u8>>, String> {
+            if name == "acme/dual" {
+                Ok(Some(serde_json::to_vec(&p2).unwrap()))
+            } else {
+                Ok(None)
+            }
+        };
+
+        let doc = resolve_lock_document(composer, None, &get, &[], true, &dir)
+            .expect("resolve path wins over higher Packagist");
+        let pkg = doc["packages"].as_array().unwrap().iter().find(|p| p["name"] == "acme/dual").unwrap();
+        assert_eq!(pkg["version"], "dev-main");
+        assert_eq!(pkg["dist"]["type"], "path");
+        assert_eq!(pkg["dist"]["url"], "local-pkg");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

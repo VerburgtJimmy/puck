@@ -25,19 +25,23 @@ pub type P2Getter<'a> = dyn Fn(&str) -> std::result::Result<Option<Vec<u8>>, Str
 
 /// Build an [`ArrayRepository`] from p2 metadata using root requires as the
 /// seed, filtering versions by accumulated constraints.
+///
+/// Names in `skip_names` (e.g. path repository packages) are never loaded from
+/// p2, so a path `dev-main` cannot lose to a higher Packagist semver.
 pub fn array_repository_from_p2_constraints(
     load_p2: &P2Getter<'_>,
     root_requires: &[(String, String)],
     minimum_stability: Stability,
+    skip_names: &IndexSet<String>,
 ) -> Result<ArrayRepository> {
     let mut to_load: IndexMap<String, ConstraintExpr> = IndexMap::new();
     let mut queue: VecDeque<String> = VecDeque::new();
     for (name, constraint) in root_requires {
-        if is_platform_package(name) {
+        if is_platform_package(name) || skip_names.contains(name) {
             continue;
         }
         let expr = parse_constraints(constraint)?;
-        mark_for_loading(&mut to_load, &mut queue, name, expr);
+        mark_for_loading(&mut to_load, &mut queue, name, expr, skip_names);
     }
 
     let mut loaded_constraint: IndexMap<String, ConstraintExpr> = IndexMap::new();
@@ -45,6 +49,10 @@ pub fn array_repository_from_p2_constraints(
     let mut repo = ArrayRepository::new();
 
     while let Some(name) = queue.pop_front() {
+        if skip_names.contains(&name) {
+            let _ = to_load.swap_remove(&name);
+            continue;
+        }
         let Some(constraint) = to_load.swap_remove(&name) else {
             continue;
         };
@@ -80,6 +88,7 @@ pub fn array_repository_from_p2_constraints(
                     &mut queue,
                     &link.target,
                     link.constraint.clone(),
+                    skip_names,
                 );
             }
             repo.add_package(package);
@@ -111,8 +120,12 @@ fn mark_for_loading(
     queue: &mut VecDeque<String>,
     name: &str,
     constraint: ConstraintExpr,
+    skip_names: &IndexSet<String>,
 ) {
     let name = name.to_ascii_lowercase();
+    if skip_names.contains(&name) {
+        return;
+    }
     if let Some(existing) = to_load.get_mut(&name) {
         *existing = or_constraints(existing.clone(), constraint);
         return;
@@ -201,6 +214,7 @@ mod tests {
             &get,
             &[("laravel/framework".into(), "^13.17".into())],
             Stability::Stable,
+            &IndexSet::new(),
         )
         .unwrap();
         let frameworks: Vec<_> = repo

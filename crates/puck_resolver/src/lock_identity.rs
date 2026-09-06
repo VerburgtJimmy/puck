@@ -14,6 +14,7 @@ use crate::request::Request;
 use crate::solver::Solver;
 use crate::transaction::Operation;
 use crate::vcr_pool::{array_repository_from_p2_constraints, p2_dir_getter};
+use indexmap::IndexSet;
 use puck_lock::{build_lock_document, LockWriteInput, PLUGIN_API_VERSION};
 use puck_version::{parse_constraints, Stability};
 use serde_json::Value;
@@ -119,7 +120,7 @@ fn laravel_skeleton_no_dev_solve_matches_constraint_filtered_vcr() {
     let dir = skeleton_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, false);
-    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable)
+    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
         .expect("constraint-filtered vcr pool");
     assert_solve_matches_lock(&dir, repo.packages().to_vec(), false, "constraint-filtered vcr");
 }
@@ -130,7 +131,7 @@ fn laravel_app_no_dev_solve_matches_constraint_filtered_vcr() {
     let dir = app_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, false);
-    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable)
+    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
         .expect("constraint-filtered vcr pool");
     assert_solve_matches_lock(&dir, repo.packages().to_vec(), false, "constraint-filtered vcr");
 }
@@ -141,7 +142,7 @@ fn laravel_skeleton_with_dev_solve_matches_constraint_filtered_vcr() {
     let dir = skeleton_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, true);
-    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable)
+    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
         .expect("constraint-filtered vcr pool");
     assert_solve_matches_lock(&dir, repo.packages().to_vec(), true, "constraint-filtered vcr");
 }
@@ -152,7 +153,7 @@ fn laravel_app_with_dev_solve_matches_constraint_filtered_vcr() {
     let dir = app_dir();
     let json_bytes = fs::read(dir.join("composer.json")).expect("composer.json");
     let requires = load_root_requires(&json_bytes, true);
-    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable)
+    let repo = array_repository_from_p2_constraints(&get, &requires, Stability::Stable, &IndexSet::new())
         .expect("constraint-filtered vcr pool");
     assert_solve_matches_lock(&dir, repo.packages().to_vec(), true, "constraint-filtered vcr");
 }
@@ -180,13 +181,13 @@ fn assert_written_lock_matches_fixture(dir: &PathBuf, include_dev: bool) {
 
     let prod_requires = load_root_requires(json_bytes, false);
     let prod_repo =
-        array_repository_from_p2_constraints(&get, &prod_requires, Stability::Stable)
+        array_repository_from_p2_constraints(&get, &prod_requires, Stability::Stable, &IndexSet::new())
             .expect("prod vcr pool");
     let prod_names = solve_install_names(&prod_repo, &prod_requires);
     let prod_name_set: BTreeSet<String> = prod_names.into_iter().map(|(n, _)| n).collect();
 
     let all_requires = load_root_requires(json_bytes, include_dev);
-    let all_repo = array_repository_from_p2_constraints(&get, &all_requires, Stability::Stable)
+    let all_repo = array_repository_from_p2_constraints(&get, &all_requires, Stability::Stable, &IndexSet::new())
         .expect("full vcr pool");
     let installed = solve_install_packages(&all_repo, &all_requires);
 
