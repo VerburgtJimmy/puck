@@ -41,10 +41,16 @@ jobs:
         run: ./benches/binary-size.sh | tee bench-out/binary-size.log
 
       - name: Install timing (laravel-skeleton)
-        run: ./benches/install-timing.sh laravel-skeleton | tee bench-out/install-timing.log
+        run: ./benches/install-timing.sh laravel-skeleton | tee bench-out/install-timing-skeleton.log
 
       - name: Resource usage (laravel-skeleton)
-        run: ./benches/resource-usage.sh laravel-skeleton | tee bench-out/resource-usage.log
+        run: ./benches/resource-usage.sh laravel-skeleton | tee bench-out/resource-usage-skeleton.log
+
+      - name: Install timing (laravel-app)
+        run: ./benches/install-timing.sh laravel-app | tee bench-out/install-timing-laravel-app.log
+
+      - name: Resource usage (laravel-app)
+        run: ./benches/resource-usage.sh laravel-app | tee bench-out/resource-usage-laravel-app.log
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
