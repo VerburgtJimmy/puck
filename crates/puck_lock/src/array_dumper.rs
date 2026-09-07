@@ -51,22 +51,22 @@ pub fn dump_lock_package_from_p2(version: &Value) -> Value {
     insert_string(&mut data, "version", src.get("version"));
     // version_normalized is dumped by ArrayDumper then stripped by Locker.
 
-    if let Some(v) = src.get("target-dir") {
-        if !is_empty_value(v) {
-            data.insert("target-dir".into(), v.clone());
-        }
+    if let Some(v) = src.get("target-dir")
+        && !is_empty_value(v)
+    {
+        data.insert("target-dir".into(), v.clone());
     }
 
     if let Some(source) = src.get("source").and_then(|v| v.as_object()) {
         let mut out = Map::new();
         // ArrayDumper order: type, url, reference, mirrors
         for key in ["type", "url", "reference", "mirrors"] {
-            if let Some(v) = source.get(key) {
-                if !is_empty_value(v) || key == "reference" {
-                    // reference may be present even when empty string? skip empty
-                    if !is_empty_value(v) {
-                        out.insert(key.into(), v.clone());
-                    }
+            if let Some(v) = source.get(key)
+                && (!is_empty_value(v) || key == "reference")
+            {
+                // reference may be present even when empty string? skip empty
+                if !is_empty_value(v) {
+                    out.insert(key.into(), v.clone());
                 }
             }
         }
@@ -101,12 +101,12 @@ pub fn dump_lock_package_from_p2(version: &Value) -> Value {
         }
     }
 
-    if let Some(Value::Object(suggest)) = src.get("suggest") {
-        if !suggest.is_empty() {
-            let mut sorted = suggest.clone();
-            sort_json_object(&mut sorted);
-            data.insert("suggest".into(), Value::Object(sorted));
-        }
+    if let Some(Value::Object(suggest)) = src.get("suggest")
+        && !suggest.is_empty()
+    {
+        let mut sorted = suggest.clone();
+        sort_json_object(&mut sorted);
+        data.insert("suggest".into(), Value::Object(sorted));
     }
 
     // time is set during dump then moved to the end by Locker.
@@ -129,33 +129,33 @@ pub fn dump_lock_package_from_p2(version: &Value) -> Value {
         Value::String(PACKAGIST_NOTIFICATION_URL.into()),
     );
 
-    if let Some(archive) = src.get("archive") {
-        if !is_empty_value(archive) {
-            data.insert("archive".into(), archive.clone());
-        }
+    if let Some(archive) = src.get("archive")
+        && !is_empty_value(archive)
+    {
+        data.insert("archive".into(), archive.clone());
     }
 
     for key in COMPLETE_KEYS {
         if *key == "keywords" {
-            if let Some(Value::Array(keywords)) = src.get("keywords") {
-                if !keywords.is_empty() {
-                    let mut sorted = keywords.clone();
-                    sorted.sort_by(|a, b| match (a.as_str(), b.as_str()) {
-                        (Some(a), Some(b)) => a.cmp(b),
-                        _ => std::cmp::Ordering::Equal,
-                    });
-                    data.insert("keywords".into(), Value::Array(sorted));
-                }
+            if let Some(Value::Array(keywords)) = src.get("keywords")
+                && !keywords.is_empty()
+            {
+                let mut sorted = keywords.clone();
+                sorted.sort_by(|a, b| match (a.as_str(), b.as_str()) {
+                    (Some(a), Some(b)) => a.cmp(b),
+                    _ => std::cmp::Ordering::Equal,
+                });
+                data.insert("keywords".into(), Value::Array(sorted));
             }
             continue;
         }
         copy_if_present(&mut data, src, key);
     }
 
-    if let Some(abandoned) = src.get("abandoned") {
-        if abandoned.as_bool() == Some(true) || abandoned.as_str().is_some() {
-            data.insert("abandoned".into(), abandoned.clone());
-        }
+    if let Some(abandoned) = src.get("abandoned")
+        && (abandoned.as_bool() == Some(true) || abandoned.as_str().is_some())
+    {
+        data.insert("abandoned".into(), abandoned.clone());
     }
 
     if let Some(time) = time {
@@ -179,19 +179,19 @@ pub fn dump_lock_package_from_path(version: &Value) -> Value {
     insert_string(&mut data, "name", src.get("name"));
     insert_string(&mut data, "version", src.get("version"));
 
-    if let Some(v) = src.get("target-dir") {
-        if !is_empty_value(v) {
-            data.insert("target-dir".into(), v.clone());
-        }
+    if let Some(v) = src.get("target-dir")
+        && !is_empty_value(v)
+    {
+        data.insert("target-dir".into(), v.clone());
     }
 
     if let Some(dist) = src.get("dist").and_then(|v| v.as_object()) {
         let mut out = Map::new();
         for key in ["type", "url", "reference", "shasum", "mirrors"] {
-            if let Some(v) = dist.get(key) {
-                if key == "shasum" || !is_empty_value(v) {
-                    out.insert(key.into(), v.clone());
-                }
+            if let Some(v) = dist.get(key)
+                && (key == "shasum" || !is_empty_value(v))
+            {
+                out.insert(key.into(), v.clone());
             }
         }
         if !out.is_empty() {
@@ -210,12 +210,12 @@ pub fn dump_lock_package_from_path(version: &Value) -> Value {
         }
     }
 
-    if let Some(Value::Object(suggest)) = src.get("suggest") {
-        if !suggest.is_empty() {
-            let mut sorted = suggest.clone();
-            sort_json_object(&mut sorted);
-            data.insert("suggest".into(), Value::Object(sorted));
-        }
+    if let Some(Value::Object(suggest)) = src.get("suggest")
+        && !suggest.is_empty()
+    {
+        let mut sorted = suggest.clone();
+        sort_json_object(&mut sorted);
+        data.insert("suggest".into(), Value::Object(sorted));
     }
 
     for key in PACKAGE_KEYS {
@@ -227,43 +227,43 @@ pub fn dump_lock_package_from_path(version: &Value) -> Value {
 
     for key in COMPLETE_KEYS {
         if *key == "keywords" {
-            if let Some(Value::Array(keywords)) = src.get("keywords") {
-                if !keywords.is_empty() {
-                    let mut sorted = keywords.clone();
-                    sorted.sort_by(|a, b| match (a.as_str(), b.as_str()) {
-                        (Some(a), Some(b)) => a.cmp(b),
-                        _ => std::cmp::Ordering::Equal,
-                    });
-                    data.insert("keywords".into(), Value::Array(sorted));
-                }
+            if let Some(Value::Array(keywords)) = src.get("keywords")
+                && !keywords.is_empty()
+            {
+                let mut sorted = keywords.clone();
+                sorted.sort_by(|a, b| match (a.as_str(), b.as_str()) {
+                    (Some(a), Some(b)) => a.cmp(b),
+                    _ => std::cmp::Ordering::Equal,
+                });
+                data.insert("keywords".into(), Value::Array(sorted));
             }
             continue;
         }
         copy_if_present(&mut data, src, key);
     }
 
-    if let Some(to) = src.get("transport-options") {
-        if !is_empty_value(to) {
-            data.insert("transport-options".into(), to.clone());
-        }
+    if let Some(to) = src.get("transport-options")
+        && !is_empty_value(to)
+    {
+        data.insert("transport-options".into(), to.clone());
     }
 
     Value::Object(data)
 }
 
 fn insert_string(data: &mut Map<String, Value>, key: &str, value: Option<&Value>) {
-    if let Some(Value::String(s)) = value {
-        if !s.is_empty() {
-            data.insert(key.into(), Value::String(s.clone()));
-        }
+    if let Some(Value::String(s)) = value
+        && !s.is_empty()
+    {
+        data.insert(key.into(), Value::String(s.clone()));
     }
 }
 
 fn copy_if_present(data: &mut Map<String, Value>, src: &Map<String, Value>, key: &str) {
-    if let Some(value) = src.get(key) {
-        if !is_empty_value(value) {
-            data.insert(key.into(), value.clone());
-        }
+    if let Some(value) = src.get(key)
+        && !is_empty_value(value)
+    {
+        data.insert(key.into(), value.clone());
     }
 }
 

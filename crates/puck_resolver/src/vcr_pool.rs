@@ -56,10 +56,10 @@ pub fn array_repository_from_p2_constraints(
         let Some(constraint) = to_load.swap_remove(&name) else {
             continue;
         };
-        if let Some(prev) = loaded_constraint.get(&name) {
-            if constraint_implies(prev, &constraint) {
-                continue;
-            }
+        if let Some(prev) = loaded_constraint.get(&name)
+            && constraint_implies(prev, &constraint)
+        {
+            continue;
         }
 
         let bytes = match load_p2(&name) {

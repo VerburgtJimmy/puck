@@ -207,11 +207,10 @@ fn current_pkg_version() -> &'static str {
 }
 
 fn should_skip_update_notify(command: &Commands) -> bool {
-    match command {
-        Commands::Doctor { json: true, .. } => true,
-        Commands::Upgrade { .. } => true,
-        _ => false,
-    }
+    matches!(
+        command,
+        Commands::Doctor { json: true, .. } | Commands::Upgrade { .. }
+    )
 }
 
 fn maybe_notify_after_command(skip: bool) {

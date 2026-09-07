@@ -178,7 +178,7 @@ impl JsonManipulator {
             return Ok(());
         }
         let before = self.contents[..close]
-            .trim_end_matches(|c: char| c == ' ' || c == '\t')
+            .trim_end_matches([' ', '\t'])
             .trim_end_matches('\n')
             .trim_end_matches('\r')
             .to_string();
@@ -580,7 +580,7 @@ fn append_package_to_object_text(
 ) -> Result<String> {
     // Match Composer: if object has content, insert `, newline indent indent "pkg": "c" ` before trailing `}`.
     let trimmed = links_text.trim();
-    if trimmed == "{}" || trimmed == &format!("{{{newline}}}") {
+    if trimmed == "{}" || trimmed == format!("{{{newline}}}") {
         return Ok(format!(
             "{{{}{}{}{}: {}{}{}{}",
             newline,

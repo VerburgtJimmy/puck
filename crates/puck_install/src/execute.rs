@@ -53,8 +53,7 @@ fn extract_concurrency() -> usize {
     std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(DEFAULT_HTTP_PARALLEL)
-        .min(8)
-        .max(1)
+        .clamp(1, 8)
 }
 
 /// Link concurrency: hardlinks are metadata-heavy; prefer at least 8, up to CPUs.

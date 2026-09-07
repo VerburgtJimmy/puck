@@ -7,7 +7,7 @@
 //! Port target: https://github.com/composer/semver (pinned fixtures: 3.4.3).
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod compare;
 mod constraint;

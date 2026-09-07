@@ -1,7 +1,7 @@
 //! puck doctor: preflight blockers, warnings, and info for switching from Composer.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 use indexmap::IndexMap;
 use puck_lock::{LockFile, PLUGIN_API_VERSION, abandoned_warnings, content_hash};
@@ -156,20 +156,20 @@ pub fn unsupported_repositories(repositories: &Value) -> Vec<(String, String)> {
     match repositories {
         Value::Array(items) => {
             for (i, item) in items.iter().enumerate() {
-                if let Some(t) = repo_type(item) {
-                    if is_unsupported_repo_type(&t) {
-                        let label = repo_label(item).unwrap_or_else(|| format!("#{i}"));
-                        out.push((label, t));
-                    }
+                if let Some(t) = repo_type(item)
+                    && is_unsupported_repo_type(&t)
+                {
+                    let label = repo_label(item).unwrap_or_else(|| format!("#{i}"));
+                    out.push((label, t));
                 }
             }
         }
         Value::Object(map) => {
             for (name, item) in map {
-                if let Some(t) = repo_type(item) {
-                    if is_unsupported_repo_type(&t) {
-                        out.push((name.clone(), t));
-                    }
+                if let Some(t) = repo_type(item)
+                    && is_unsupported_repo_type(&t)
+                {
+                    out.push((name.clone(), t));
                 }
             }
         }

@@ -1,7 +1,7 @@
 //! Install planning: diff a lock file against the current vendor state.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod bins;
 mod execute;

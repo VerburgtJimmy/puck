@@ -4,7 +4,7 @@
 //! Reference: composer/composer @ `85ae025` (see `fixtures/composer-DependencyResolver/COMPOSER_COMMIT.txt`).
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod decisions;
 mod link;

@@ -3,7 +3,7 @@
 //! Install/link paths never call PHP; this crate is only for script execution.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 use std::env;
 use std::path::{Path, PathBuf};

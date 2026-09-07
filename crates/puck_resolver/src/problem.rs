@@ -172,8 +172,6 @@ fn rule_pretty_string(rule: &Rule, pool: &mut Pool, request: &Request) -> String
             let p1 = pool.literal_to_package(literals[1]);
             let (conflicter, conflict_target) = if p0.name == source {
                 (p0, p1)
-            } else if p1.name == source {
-                (p1, p0)
             } else {
                 (p1, p0)
             };

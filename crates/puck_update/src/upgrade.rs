@@ -61,12 +61,12 @@ pub fn upgrade(opts: UpgradeOptions) -> Result<UpgradeOutcome> {
 
     let client = http_client(UPGRADE_TIMEOUT, &opts.current_version, target)?;
     let manifest = fetch_manifest(&client, &manifest_url)?;
-    if let Some(channel) = &manifest.channel {
-        if channel != "stable" {
-            return Err(Error::Manifest(format!(
-                "refusing non-stable channel `{channel}` in 0.1"
-            )));
-        }
+    if let Some(channel) = &manifest.channel
+        && channel != "stable"
+    {
+        return Err(Error::Manifest(format!(
+            "refusing non-stable channel `{channel}` in 0.1"
+        )));
     }
 
     let artifact = manifest.artifact_for(target)?;

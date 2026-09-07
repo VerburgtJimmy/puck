@@ -4,7 +4,7 @@
 //! `ArrayLoader::configureObject` (Composer 2.8.x).
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod edit;
 mod json_manipulator;

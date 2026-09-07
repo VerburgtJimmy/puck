@@ -20,14 +20,12 @@ pub struct Pool {
 impl Pool {
     pub fn new(mut packages: Vec<Package>) -> Self {
         let mut pool = Self::default();
-        let mut id: PackageId = 1;
-        for mut package in packages.drain(..) {
+        for (id, mut package) in (1_u32..).zip(packages.drain(..)) {
             package.id = id;
             for name in package.names(true) {
                 pool.package_by_name.entry(name).or_default().push(id);
             }
             pool.packages.push(package);
-            id += 1;
         }
         pool
     }
@@ -120,15 +118,15 @@ impl Pool {
             });
         }
 
-        if let Some(link) = candidate.provides.get(&name) {
-            if constraint_matches(constraint, &link.constraint) {
-                return Ok(true);
-            }
+        if let Some(link) = candidate.provides.get(&name)
+            && constraint_matches(constraint, &link.constraint)
+        {
+            return Ok(true);
         }
-        if let Some(link) = candidate.replaces.get(&name) {
-            if constraint_matches(constraint, &link.constraint) {
-                return Ok(true);
-            }
+        if let Some(link) = candidate.replaces.get(&name)
+            && constraint_matches(constraint, &link.constraint)
+        {
+            return Ok(true);
         }
         Ok(false)
     }

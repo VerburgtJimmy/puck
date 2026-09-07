@@ -12,7 +12,7 @@
 //! `@php artisan package:discover` handler so installs without `artisan` still succeed.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 use indexmap::IndexMap;
 use serde_json::Value;

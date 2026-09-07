@@ -18,7 +18,7 @@ use puck_version::{Stability, parse_constraints};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn skeleton_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/laravel-skeleton")
@@ -195,7 +195,7 @@ fn laravel_app_with_dev_lock_document_matches_m3_lock_gate() {
     assert_written_lock_matches_fixture(&app_dir(), true);
 }
 
-fn assert_written_lock_matches_fixture(dir: &PathBuf, include_dev: bool) {
+fn assert_written_lock_matches_fixture(dir: &Path, include_dev: bool) {
     let get = p2_dir_getter(p2_dir());
     let lock_bytes = fs::read(dir.join("composer.lock")).expect("lock");
     let json_text = fs::read_to_string(dir.join("composer.json")).expect("composer.json");
@@ -376,7 +376,7 @@ fn assert_critical_package_fields(got: &[Value], want: &[Value], label: &str) {
 }
 
 fn assert_solve_matches_lock(
-    dir: &PathBuf,
+    dir: &Path,
     pool_packages: Vec<Package>,
     include_dev: bool,
     source: &str,

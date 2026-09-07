@@ -1,7 +1,7 @@
 //! Dist archive download, checksum verification, and extraction.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod auth;
 mod checksum;

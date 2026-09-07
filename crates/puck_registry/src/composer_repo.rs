@@ -78,11 +78,12 @@ fn apply_repo_entry(
     packagist_enabled: &mut bool,
 ) {
     // Object-keyed disable: "repositories": { "packagist.org": false }
-    if let Some(name) = keyed_name {
-        if entry.as_bool() == Some(false) && is_packagist_disable_name(name) {
-            *packagist_enabled = false;
-            return;
-        }
+    if let Some(name) = keyed_name
+        && entry.as_bool() == Some(false)
+        && is_packagist_disable_name(name)
+    {
+        *packagist_enabled = false;
+        return;
     }
 
     let Some(obj) = entry.as_object() else {
@@ -90,13 +91,12 @@ fn apply_repo_entry(
     };
 
     // Anonymous disable: { "packagist.org": false } or { "packagist": false }
-    if obj.len() == 1 {
-        if let Some((key, Value::Bool(false))) = obj.iter().next() {
-            if is_packagist_disable_name(key) {
-                *packagist_enabled = false;
-                return;
-            }
-        }
+    if obj.len() == 1
+        && let Some((key, Value::Bool(false))) = obj.iter().next()
+        && is_packagist_disable_name(key)
+    {
+        *packagist_enabled = false;
+        return;
     }
 
     let typ = obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -181,10 +181,9 @@ pub fn canonicalize_metadata_url(repo_base: &str, metadata_url: &str) -> String 
 fn origin_of(url: &str) -> Option<String> {
     let (scheme, rest) = if let Some(r) = url.strip_prefix("https://") {
         ("https", r)
-    } else if let Some(r) = url.strip_prefix("http://") {
-        ("http", r)
     } else {
-        return None;
+        let r = url.strip_prefix("http://")?;
+        ("http", r)
     };
     let host_port = rest.split('/').next().unwrap_or("");
     if host_port.is_empty() {

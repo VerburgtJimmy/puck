@@ -26,12 +26,11 @@ pub fn default_cache_dir() -> PathBuf {
 /// Whether `exe` lives under `~/.puck/bin` (or a custom root's `bin`).
 pub fn is_under_puck_bin(exe: &Path) -> bool {
     let bin = default_bin_dir();
-    if let Ok(canon_exe) = exe.canonicalize() {
-        if let Ok(canon_bin) = bin.canonicalize() {
-            if canon_exe.parent() == Some(canon_bin.as_path()) {
-                return true;
-            }
-        }
+    if let Ok(canon_exe) = exe.canonicalize()
+        && let Ok(canon_bin) = bin.canonicalize()
+        && canon_exe.parent() == Some(canon_bin.as_path())
+    {
+        return true;
     }
     exe.parent() == Some(bin.as_path())
 }

@@ -252,16 +252,16 @@ fn build_generated_config(
         let phpstan_extra = pkg.extra.get("phpstan").cloned().filter(|v| !v.is_null());
 
         let mut phpstan_constraint_str = None;
-        if let Some(raw) = pkg.require.get("phpstan/phpstan") {
-            if let Some(s) = constraint_into_string(raw) {
-                // Skip unbounded (* / zero lower / +inf upper) like upstream.
-                if constraint_is_bounded(raw) {
-                    constraint_strings.push(s.clone());
-                    phpstan_constraint_str = Some(s);
-                } else {
-                    // Upstream `continue`s the whole package when unbounded.
-                    continue;
-                }
+        if let Some(raw) = pkg.require.get("phpstan/phpstan")
+            && let Some(s) = constraint_into_string(raw)
+        {
+            // Skip unbounded (* / zero lower / +inf upper) like upstream.
+            if constraint_is_bounded(raw) {
+                constraint_strings.push(s.clone());
+                phpstan_constraint_str = Some(s);
+            } else {
+                // Upstream `continue`s the whole package when unbounded.
+                continue;
             }
         }
 
@@ -286,14 +286,7 @@ fn build_generated_config(
     let phpstan_version_constraint = match constraint_strings.as_slice() {
         [] => None,
         [one] => Some(one.clone()),
-        many => {
-            // Best-effort: if all equal, use that; otherwise keep first (document gap).
-            if many.windows(2).all(|w| w[0] == w[1]) {
-                Some(many[0].clone())
-            } else {
-                Some(many[0].clone())
-            }
-        }
+        many => Some(many[0].clone()),
     };
 
     let contents = GENERATED_TEMPLATE
@@ -343,9 +336,7 @@ fn relative_path(from_dir: &Path, to: &Path) -> String {
         i += 1;
     }
     let mut parts = Vec::new();
-    for _ in i..from.len() {
-        parts.push("..");
-    }
+    parts.extend(std::iter::repeat_n("..", from.len().saturating_sub(i)));
     for c in &to_c[i..] {
         parts.push(c.to_str().unwrap_or(""));
     }

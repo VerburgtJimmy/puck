@@ -5,7 +5,7 @@
 //! Files autoload identifiers use `md5("{package}:{path}")`, matching Composer.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod classmap;
 mod collect;

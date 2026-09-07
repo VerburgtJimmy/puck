@@ -4,7 +4,7 @@
 //! `content-hash` matching `Composer\Package\Locker::getContentHash`.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod array_dumper;
 mod content_hash;

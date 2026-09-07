@@ -1,7 +1,7 @@
 //! Self-upgrade, rollback, and update notifications for the puck CLI.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod error;
 mod fetch;

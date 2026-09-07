@@ -1,7 +1,7 @@
 //! puck_platform - platform.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

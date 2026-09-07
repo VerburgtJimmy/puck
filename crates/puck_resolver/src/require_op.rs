@@ -26,11 +26,11 @@ use std::path::Path;
 /// Expand a partial-update package list using lock `require` edges.
 ///
 /// Mirrors Composer `-w` / `-W`:
-/// - [`UpdateAllowTransitive::OnlyListed`]: return `listed` unchanged
-/// - [`UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire`]: unlock
+/// - `UpdateAllowTransitive::OnlyListed`: return `listed` unchanged
+/// - `UpdateAllowTransitive::ListedWithTransitiveDepsNoRootRequire`: unlock
 ///   transitive requires of listed packages, but stop at (and do not unlock)
 ///   root requirements
-/// - [`UpdateAllowTransitive::ListedWithTransitiveDeps`]: unlock the full
+/// - `UpdateAllowTransitive::ListedWithTransitiveDeps`: unlock the full
 ///   transitive require closure, including root requirements
 pub fn expand_update_unlock(
     lock_bytes: &[u8],
@@ -365,11 +365,12 @@ fn apply_pool_plan_entry(
     packagist_enabled: &mut bool,
     remote_placed: &mut bool,
 ) -> Result<()> {
-    if let Some(key) = object_key {
-        if is_packagist_repo_name(key) && entry.as_bool() == Some(false) {
-            *packagist_enabled = false;
-            return Ok(());
-        }
+    if let Some(key) = object_key
+        && is_packagist_repo_name(key)
+        && entry.as_bool() == Some(false)
+    {
+        *packagist_enabled = false;
+        return Ok(());
     }
     if is_packagist_disable_entry(entry) {
         *packagist_enabled = false;
@@ -427,10 +428,11 @@ fn is_packagist_disable_entry(entry: &Value) -> bool {
     };
     // Anonymous: { "packagist.org": false } or { "packagist": false }
     for key in ["packagist.org", "packagist"] {
-        if let Some(v) = obj.get(key) {
-            if obj.len() == 1 && v.as_bool() == Some(false) {
-                return true;
-            }
+        if let Some(v) = obj.get(key)
+            && obj.len() == 1
+            && v.as_bool() == Some(false)
+        {
+            return true;
         }
     }
     false

@@ -254,11 +254,7 @@ impl<'a> Solver<'a> {
         level += 1;
         self.decisions.decide(self.pool, literal, level, rule)?;
 
-        loop {
-            let Some(conflict) = self.propagate(level)? else {
-                break;
-            };
-
+        while let Some(conflict) = self.propagate(level)? {
             if level == 1 {
                 self.analyze_unsolvable(&conflict);
                 return Ok(0);
@@ -284,7 +280,6 @@ impl<'a> Solver<'a> {
             self.decisions
                 .decide(self.pool, learn_literal, level, new_rule)?;
         }
-
         Ok(level)
     }
 
@@ -519,11 +514,11 @@ impl<'a> Solver<'a> {
         let mut system_level = level + 1;
 
         loop {
-            if level == 1 {
-                if let Some(conflict) = self.propagate(level)? {
-                    self.analyze_unsolvable(&conflict);
-                    return Ok(());
-                }
+            if level == 1
+                && let Some(conflict) = self.propagate(level)?
+            {
+                self.analyze_unsolvable(&conflict);
+                return Ok(());
             }
 
             if level < system_level {

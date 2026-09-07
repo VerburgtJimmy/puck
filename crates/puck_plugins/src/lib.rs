@@ -4,7 +4,7 @@
 //! metadata, so puck does not need to host PHP Composer plugins for those.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod native;
 mod refusal;

@@ -2,7 +2,7 @@
 //!
 //! `link` uses a thin FFI shim for clonefile(2) on macOS (documented unsafe).
 
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod gc;
 mod index;

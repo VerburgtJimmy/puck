@@ -3,7 +3,7 @@
 //! Mirrors `Illuminate\Foundation\PackageManifest::build` without booting PHP.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;

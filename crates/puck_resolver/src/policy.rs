@@ -81,18 +81,18 @@ impl DefaultPolicy {
             if self.replaces(b, a) {
                 return std::cmp::Ordering::Less; // use a
             }
-            if let Some(required) = required_package {
-                if let Some(pos) = required.find('/') {
-                    let required_vendor = &required[..pos];
-                    let a_same = a.name.starts_with(required_vendor);
-                    let b_same = b.name.starts_with(required_vendor);
-                    if a_same != b_same {
-                        return if a_same {
-                            std::cmp::Ordering::Less
-                        } else {
-                            std::cmp::Ordering::Greater
-                        };
-                    }
+            if let Some(required) = required_package
+                && let Some(pos) = required.find('/')
+            {
+                let required_vendor = &required[..pos];
+                let a_same = a.name.starts_with(required_vendor);
+                let b_same = b.name.starts_with(required_vendor);
+                if a_same != b_same {
+                    return if a_same {
+                        std::cmp::Ordering::Less
+                    } else {
+                        std::cmp::Ordering::Greater
+                    };
                 }
             }
         }

@@ -150,10 +150,10 @@ impl AuthStore {
         let host = host_from_url(url)?;
         let host_key = normalize_host(&host);
 
-        if is_github_download_host(&host_key) {
-            if let Some(token) = &self.github_oauth {
-                return Some(AuthHeader::GithubToken(token.clone()));
-            }
+        if is_github_download_host(&host_key)
+            && let Some(token) = &self.github_oauth
+        {
+            return Some(AuthHeader::GithubToken(token.clone()));
         }
 
         if let Some(token) = self.bearer.get(&host_key) {

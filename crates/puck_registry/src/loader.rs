@@ -34,6 +34,7 @@ pub struct P2Loader {
     auth: AuthStore,
     cache: RefCell<HashMap<String, Vec<u8>>>,
     /// Optional override for HTTP (unit tests); receives full URL.
+    #[allow(clippy::type_complexity)]
     http_get: Option<Box<dyn Fn(&str) -> Result<Vec<u8>>>>,
     /// User-listed composer repository base URLs (order = precedence).
     composer_urls: Vec<String>,
@@ -246,10 +247,10 @@ impl P2Loader {
         }
 
         let bytes = self.fetch_packagist_http(package)?;
-        if self.mode == ReplayMode::Record {
-            if let Some(root) = &self.vcr_root {
-                self.write_recording(root, package, &bytes)?;
-            }
+        if self.mode == ReplayMode::Record
+            && let Some(root) = &self.vcr_root
+        {
+            self.write_recording(root, package, &bytes)?;
         }
         Ok(bytes)
     }
@@ -274,7 +275,7 @@ impl P2Loader {
                 Err(err) => Err(err),
             };
         }
-        http_get(&url, &self.auth, miss_key)
+        http_get(url, &self.auth, miss_key)
     }
 
     fn write_recording(&self, root: &Path, package: &str, bytes: &[u8]) -> Result<()> {

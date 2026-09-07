@@ -71,17 +71,17 @@ impl PathPackage {
                 "support",
                 "funding",
             ] {
-                if let Some(v) = obj.get(key) {
-                    if !is_empty_value(v) {
-                        data.insert(key.into(), v.clone());
-                    }
+                if let Some(v) = obj.get(key)
+                    && !is_empty_value(v)
+                {
+                    data.insert(key.into(), v.clone());
                 }
             }
             for link_type in ["require", "conflict", "provide", "replace", "require-dev"] {
-                if let Some(Value::Object(map)) = obj.get(link_type) {
-                    if !map.is_empty() {
-                        data.insert(link_type.into(), Value::Object(map.clone()));
-                    }
+                if let Some(Value::Object(map)) = obj.get(link_type)
+                    && !map.is_empty()
+                {
+                    data.insert(link_type.into(), Value::Object(map.clone()));
                 }
             }
         }

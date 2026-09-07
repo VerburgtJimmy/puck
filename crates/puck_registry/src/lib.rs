@@ -1,7 +1,7 @@
 //! Packagist / Satis client with optional VCR-style replay and live p2 / composer-repo fetch.
 
 #![deny(unsafe_code)]
-#![warn(clippy::unwrap_used)]
+#![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 mod audit;
 mod composer_repo;
