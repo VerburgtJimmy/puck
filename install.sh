@@ -20,7 +20,7 @@ INSTALL_MIRROR="https://puck.jimmyverburgt.com/install"
 STABLE_MIRROR="https://puck.jimmyverburgt.com/releases/stable.json"
 REPO="${PUCK_REPO:-VerburgtJimmy/puck}"
 DEFAULT_INSTALL_ROOT="${HOME}/.puck"
-MINISIGN_PUBKEY="RWT5lObG8rA1ZuBXvOCGdlfqQ4FdAK0l9VdFTH2J3zPVaC8jlo+DvmHa"
+MINISIGN_PUBKEY="RWRNlu02PTyL13V6QL9fxE4Ho6fcGHI/5fu6HdGzQ1mlKghwOWDg/6ft"
 
 VERBOSE=0
 MODIFY_PATH=1
