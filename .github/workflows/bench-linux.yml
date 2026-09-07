@@ -41,6 +41,8 @@ jobs:
         run: ./benches/binary-size.sh | tee bench-out/binary-size.log
 
       - name: Install timing (laravel-skeleton)
+        env:
+          PUCK_TIMINGS: "1"
         run: ./benches/install-timing.sh laravel-skeleton | tee bench-out/install-timing-skeleton.log
 
       - name: Resource usage (laravel-skeleton)
@@ -49,6 +51,7 @@ jobs:
       - name: Install timing (laravel-app with require-dev)
         env:
           PUCK_BENCH_DEV: "1"
+          PUCK_TIMINGS: "1"
         run: ./benches/install-timing.sh laravel-app with-dev | tee bench-out/install-timing-laravel-app-dev.log
 
       - name: Resource usage (laravel-app with require-dev)
@@ -56,7 +59,15 @@ jobs:
           PUCK_BENCH_DEV: "1"
         run: ./benches/resource-usage.sh laravel-app with-dev | tee bench-out/resource-usage-laravel-app-dev.log
 
+      - name: Cold/warm gate vs Composer
+        run: |
+          chmod +x benches/cold-gate.sh
+          ./benches/cold-gate.sh \
+            bench-out/install-timing-skeleton.log \
+            bench-out/install-timing-laravel-app-dev.log
+
       - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: linux-benches

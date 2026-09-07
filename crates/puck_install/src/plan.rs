@@ -6,11 +6,14 @@ use indexmap::IndexMap;
 use puck_lock::{LockFile, LockedPackage};
 use std::path::{Path, PathBuf};
 
-/// Options that affect which packages are planned.
+/// Options that affect which packages are planned / how fetch runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct InstallOptions {
     pub no_dev: bool,
     pub offline: bool,
+    /// Override download concurrency. When `None`, use `config.max-parallel-http`,
+    /// else `PUCK_MAX_PARALLEL`, else 12 (Composer default).
+    pub http_parallel: Option<usize>,
 }
 
 /// What to do with a single package.
@@ -183,7 +186,7 @@ mod tests {
             &InstalledState::default(),
             InstallOptions {
                 no_dev: true,
-                offline: false,
+                ..InstallOptions::default()
             },
         )
         .expect("plan");
@@ -210,7 +213,7 @@ mod tests {
             &installed,
             InstallOptions {
                 no_dev: true,
-                offline: false,
+                ..InstallOptions::default()
             },
         )
         .expect("plan");
