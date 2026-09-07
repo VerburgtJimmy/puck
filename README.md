@@ -8,34 +8,33 @@ Reads the same `composer.json` / `composer.lock` as Composer, writes a compatibl
 
 ## Status
 
-**v0.1.0** — macOS and Linux. `install`, `require`, `remove`, `update` / `lock`, Tier 1 adapters for Pest and phpstan/extension-installer, `puck doctor` preflight. Run `puck doctor` before switching a project.
+**v0.1.1** — macOS and Linux. `install`, `require`, `remove`, `update` / `lock`, Tier 1 adapters for Pest and phpstan/extension-installer, `puck doctor` preflight. Run `puck doctor` before switching a project.
 
 ## Benchmarks (Linux CI)
 
-Lead with **warm-wipe** (vendor wiped, cache/store warm) — the honest CI number. **Warm-keep** is a no-op when nothing changed. **Cold** is a caveat row, not a headline.
+Lead with **warm-wipe** (vendor wiped, cache/store warm) — the honest CI number. **Warm-keep** is a no-op when nothing changed. **Cold** is included for honesty (empty vendor); it is network-heavy and not the headline.
 
-Same Linux CI run ([34110233674](https://github.com/VerburgtJimmy/puck/actions/runs/34110233674)). Scripts: [`benches/`](benches/).
+Same Linux CI run ([34119187733](https://github.com/VerburgtJimmy/puck/actions/runs/34119187733)). Scripts: [`benches/`](benches/).
 
 ### laravel-skeleton `--no-dev`
 
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
-| warm (wipe vendor, cache/store warm) | 2138 | **329** |
-| warm (vendor present) | 952 | **23** |
-| cold (empty vendor) | 4714 | 5608 |
+| warm (wipe vendor, cache/store warm) | 1736 | **344** |
+| warm (vendor present) | 914 | **24** |
+| cold (empty vendor) | 6662 | **1850** |
 
 ### laravel-app with require-dev
 
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
-| warm (wipe vendor, cache/store warm) | 3893 | **522** |
-| warm (vendor present) | 1491 | **24** |
-| cold (empty vendor) | 7799 | 4192 |
+| warm (wipe vendor, cache/store warm) | 2843 | **497** |
+| warm (vendor present) | 1428 | **26** |
+| cold (empty vendor) | 4311 | **1547** |
 
 Warm-wipe on laravel-app with-dev is dominated by the optimized classmap dump, which scales with require-dev. Warm-keep stays ~O(1) in package count (lock hash + `installed.json` + `vendor/` check).
 
-puck currently downloads and extracts sequentially; that hurts most on small graphs (skeleton cold above) while larger installs amortize differently. Pipelining is tracked in [#2](https://github.com/VerburgtJimmy/puck/issues/2).
-
+Cold installs pipeline download (default concurrency 12) with extract (`min(CPUs, 8)` workers) and link packages as they land.
 ## Compatibility
 
 What blocks switching today (same checks as `puck doctor`):
@@ -56,10 +55,10 @@ Warnings (abandoned packages, etc.) do not block. Run `puck doctor` or `puck doc
 ### curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash
 ```
 
-Pinned to the `v0.1.0` tag so the script matches that release. Mirror (when ready): `https://puck.jimmyverburgt.com/install`. Upgrade/manifest source of truth remains GitHub Releases — see [`docs/distribution.md`](docs/distribution.md) and [`docs/install.md`](docs/install.md).
+Pinned to the `v0.1.1` tag so the script matches that release. Mirror (when ready): `https://puck.jimmyverburgt.com/install`. Upgrade/manifest source of truth remains GitHub Releases — see [`docs/distribution.md`](docs/distribution.md) and [`docs/install.md`](docs/install.md).
 
 Installs into `~/.puck/bin`. minisign public key: [`dist/minisign/minisign.pub`](dist/minisign/minisign.pub).
 
@@ -99,7 +98,7 @@ puck store path              # print the global store path
 puck store gc                # garbage-collect unused store entries
 ```
 
-Set `PUCK_TIMINGS=1` to print phase timings on stderr (`plan_ms`, `link_ms`, `dump_ms`, …).
+Set `PUCK_TIMINGS=1` to print phase timings on stderr (`plan_ms`, `download_ms`, `extract_ms`, `overlap_ms`, `link_ms`, `dump_ms`, …).
 
 ## Roadmap
 
