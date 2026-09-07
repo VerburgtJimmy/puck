@@ -12,7 +12,9 @@ Reads the same `composer.json` / `composer.lock` as Composer, writes a compatibl
 
 ## Benchmarks (Linux CI)
 
-Lead with **warm-wipe** (vendor wiped, cache/store warm) — the honest CI number. **Warm-keep** is a no-op when nothing changed. Cold install is network-bound; do not use it as the headline.
+Lead with **warm-wipe** (vendor wiped, cache/store warm) — the honest CI number. **Warm-keep** is a no-op when nothing changed.
+
+**Cold** (empty vendor, cold caches) is included for honesty, not as a headline. It is mostly network and Packagist variability; puck can win or lose a given run and it is a weak comparison.
 
 Same Linux CI run ([34110233674](https://github.com/VerburgtJimmy/puck/actions/runs/34110233674)). Scripts: [`benches/`](benches/).
 
@@ -21,6 +23,7 @@ Same Linux CI run ([34110233674](https://github.com/VerburgtJimmy/puck/actions/r
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
 | warm (wipe vendor, cache/store warm) | 2138 | **329** |
+| cold (empty vendor) | 4714 | 5608 |
 | warm (vendor present) | 952 | **23** |
 
 ### laravel-app with require-dev
@@ -28,6 +31,7 @@ Same Linux CI run ([34110233674](https://github.com/VerburgtJimmy/puck/actions/r
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
 | warm (wipe vendor, cache/store warm) | 3893 | **522** |
+| cold (empty vendor) | 7799 | 4192 |
 | warm (vendor present) | 1491 | **24** |
 
 Warm-wipe on laravel-app with-dev is dominated by the optimized classmap dump, which scales with require-dev. Warm-keep stays ~O(1) in package count (lock hash + `installed.json` + `vendor/` check).
