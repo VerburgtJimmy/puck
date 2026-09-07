@@ -191,6 +191,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Keep Formula/puck.rb on master in sync so
+      # `brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck`
+      # installs the tagged release.
+      - name: Update Homebrew formula on master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          WORK="$(mktemp -d)"
+          git clone --depth 1 --branch master \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$WORK"
+          cd "$WORK"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ruby dist/homebrew/generate-formula.rb "$VERSION" \
+            "${GITHUB_WORKSPACE}/release/SHA256SUMS" Formula/puck.rb
+          if git diff --quiet -- Formula/puck.rb; then
+            echo "Formula/puck.rb already matches ${TAG}"
+            exit 0
+          fi
+          git add Formula/puck.rb
+          git commit -m "dist: update Homebrew formula for ${TAG}"
+          git push origin HEAD:master
+
 # When ready for the first public binaries: push tag v0.1.0 (workflow builds,
 # signs with secrets.MINISIGN_SECRET_KEY, uploads manifest.json). Optional GHCR
 # docker push is documented in dist/docker/README.md — not enabled here yet.

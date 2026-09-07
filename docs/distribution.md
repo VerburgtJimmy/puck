@@ -69,8 +69,11 @@ and Linux including uninstall and re-install.
 
 ## 3. Homebrew
 
-- Tap: formula generated from `manifest.json` by the release workflow; stub in
-  `dist/homebrew/puck.rb` is a template only.
+- Tap (0.1): the main repo — `brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck`
+  then `brew install puck`. Live formula is [`Formula/puck.rb`](../Formula/puck.rb),
+  regenerated from `SHA256SUMS` on each release (`dist/homebrew/generate-formula.rb`
+  pushes an update to `master`). `dist/homebrew/puck.rb` is a template only.
+- Optional later: split to `VerburgtJimmy/homebrew-tap`.
 - Core: later, after usage.
 - `puck upgrade` refuses to self-update a Homebrew-managed binary.
 
