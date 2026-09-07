@@ -141,6 +141,22 @@ fn extract_tar_bytes(bytes: &[u8], gzip: bool, dest: &Path) -> Result<()> {
         .map_err(|e| Error::Extract(e.to_string()))?
     {
         let mut entry = entry.map_err(|e| Error::Extract(e.to_string()))?;
+        // Symlinks / hardlinks let a later entry write through a planted link
+        // (e.g. `pkg/link -> /tmp/evil` then `pkg/link/x`). Refuse them. Zip
+        // never creates symlinks today; keep that property if zip symlink
+        // support is added later (refuse write-through-symlinked-parent).
+        match entry.header().entry_type() {
+            tar::EntryType::Symlink | tar::EntryType::Link => {
+                let name = entry
+                    .path()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|_| "<unknown>".into());
+                return Err(Error::Extract(format!(
+                    "archive entry `{name}` is a symlink/hardlink; puck refuses link entries in dist archives"
+                )));
+            }
+            _ => {}
+        }
         let path = entry
             .path()
             .map_err(|e| Error::Extract(e.to_string()))?
@@ -201,6 +217,76 @@ mod tests {
         assert_eq!(
             fs::read_to_string(dir.path().join("hello.txt")).expect("read"),
             "hi"
+        );
+    }
+
+    #[test]
+    fn extracts_tar_stripping_root() {
+        let mut buf = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut buf);
+            let mut header = tar::Header::new_gnu();
+            header.set_path("pkg-root/hello.txt").expect("path");
+            header.set_size(2);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder.append(&header, b"hi".as_slice()).expect("append");
+            builder.finish().expect("finish");
+        }
+        let dir = tempdir().expect("temp");
+        extract_archive(&buf, ArchiveKind::Tar, dir.path()).expect("extract");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("hello.txt")).expect("read"),
+            "hi"
+        );
+    }
+
+    /// PoC: symlink entry pointing outside dest, then a file under that link.
+    /// Without the Symlink/Link refusal this writes outside `dest`.
+    #[test]
+    fn refuses_tar_symlink_escape() {
+        let outside = tempdir().expect("outside");
+        let escape_target = outside.path().join("pwned.txt");
+
+        let mut buf = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut buf);
+
+            let mut link = tar::Header::new_gnu();
+            link.set_entry_type(tar::EntryType::Symlink);
+            link.set_size(0);
+            link.set_path("pkg/link").expect("link path");
+            link.set_link_name(&escape_target).expect("link target");
+            link.set_cksum();
+            builder
+                .append(&link, std::io::empty())
+                .expect("append symlink");
+
+            let mut file = tar::Header::new_gnu();
+            file.set_path("pkg/link/hello.txt").expect("file path");
+            file.set_size(5);
+            file.set_mode(0o644);
+            file.set_cksum();
+            builder
+                .append(&file, b"pwned".as_slice())
+                .expect("append file");
+            builder.finish().expect("finish");
+        }
+
+        let dest = tempdir().expect("dest");
+        let err = extract_archive(&buf, ArchiveKind::Tar, dest.path()).expect_err("must refuse");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("symlink") || msg.contains("hardlink"),
+            "unexpected error: {msg}"
+        );
+        assert!(
+            !escape_target.exists(),
+            "escape target must not be written"
+        );
+        assert!(
+            !dest.path().join("link").exists(),
+            "symlink must not be planted in dest"
         );
     }
 }
