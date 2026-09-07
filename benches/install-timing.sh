@@ -73,7 +73,12 @@ elapsed_ms() {
 time_cmd_ms() {
   local start
   start="$(python3 -c 'import time; print(time.time())')"
-  "$@" >/dev/null 2>&1
+  # Keep stderr when PUCK_TIMINGS is set so phase lines are captured in CI logs.
+  if [[ -n "${PUCK_TIMINGS:-}" ]]; then
+    "$@" >/dev/null
+  else
+    "$@" >/dev/null 2>&1
+  fi
   elapsed_ms "$start"
 }
 
