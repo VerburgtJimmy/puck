@@ -27,7 +27,7 @@ version = "0.1.1"
 edition = "2024"
 rust-version = "1.96"
 license = "MIT"
-repository = "https://github.com/jimmyverburgt/puck"
+repository = "https://github.com/VerburgtJimmy/puck"
 authors = ["Jimmy Verburgt"]
 
 [workspace.dependencies]

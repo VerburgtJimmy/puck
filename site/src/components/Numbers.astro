@@ -55,7 +55,8 @@ const maxMs = Math.max(...tables.flatMap((t) => t.rows.flatMap((r) => [r.compose
 
     <p class="numbers__foot">
       Warm-wipe: optimized classmap dump scales with require-dev. Cold: downloads still dominate;
-      puck pipelines download with extract (overlap on skeleton cold was 17611 ms of summed work).
+      <code>overlap_ms</code> is summed download+extract work minus wall clock (mostly HTTP concurrency;
+      skeleton cold was 17611 ms).
     </p>
   </div>
 </section>

@@ -21,12 +21,17 @@ puck store gc                # garbage-collect unused store entries</code></pre>
     Set <code>PUCK_TIMINGS=1</code> to print phase timings on stderr
     (<code>plan_ms</code>, <code>download_ms</code>, <code>extract_ms</code>,{' '}
     <code>overlap_ms</code>, <code>link_ms</code>, <code>dump_ms</code>, ...).
+    <code>download_ms</code> is a sum across concurrent fetches;
+    <code>overlap_ms</code> is <code>(download_ms + extract_ms) − wall</code> (mostly HTTP concurrency).
   </p>
 
   <h2>What stays the same</h2>
   <ul>
     <li><code>composer.json</code> / <code>composer.lock</code>: same format Composer reads</li>
-    <li><code>vendor/</code>: real directory (hardlink / reflink / copy from the store)</li>
+    <li>
+      <code>vendor/</code>: real directory (hardlink / reflink / copy from the store). Shared
+      inodes mean edits under <code>vendor/</code> can change the store — do not hand-edit.
+    </li>
     <li>You can run Composer again on the same project after puck</li>
   </ul>
 </Docs>

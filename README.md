@@ -34,7 +34,7 @@ Same Linux CI run ([34124132162](https://github.com/VerburgtJimmy/puck/actions/r
 
 Warm-wipe on laravel-app with-dev is dominated by the optimized classmap dump, which scales with require-dev. Warm-keep stays ~O(1) in package count (lock hash + `installed.json` + `vendor/` check).
 
-Cold installs pipeline download (default concurrency 12) with extract (`min(CPUs, 8)` workers) and link packages as they land. Same-run cold phase timings (`PUCK_TIMINGS=1`): skeleton `download_ms=18892` (sum) / `extract_ms=456` / `overlap_ms=17611` / `fetch_ms=1763`; app-with-dev `download_ms=13642` / `extract_ms=499` / `overlap_ms=12783` / `fetch_ms=1370`.
+Cold installs run downloads (default concurrency 12) and extracts (`min(CPUs, 8)` workers) in parallel and link packages as they land. Same-run cold phase timings (`PUCK_TIMINGS=1`): skeleton `download_ms=18892` (sum across concurrent fetches) / `extract_ms=456` / `overlap_ms=17611` (summed download+extract work minus wall clock; mostly HTTP concurrency) / `fetch_ms=1763`; app-with-dev `download_ms=13642` / `extract_ms=499` / `overlap_ms=12783` / `fetch_ms=1370`.
 ## Compatibility
 
 What blocks switching today (same checks as `puck doctor`):
@@ -58,7 +58,10 @@ Warnings (abandoned packages, etc.) do not block. Run `puck doctor` or `puck doc
 curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash
 ```
 
-Pinned to the `v0.1.1` tag so the script matches that release. Mirror (when ready): `https://puck.jimmyverburgt.com/install`. Upgrade/manifest source of truth remains GitHub Releases — see [`docs/distribution.md`](docs/distribution.md) and [`docs/install.md`](docs/install.md).
+Pinned to the `v0.1.1` tag so the script matches that release. Site mirror:
+`https://puck.jimmyverburgt.com/install` (same script; never the source of truth
+for upgrades — GitHub Releases `manifest.json` is). Resolving `latest` without
+`PUCK_VERSION` requires `python3` to parse the manifest.
 
 Installs into `~/.puck/bin`. minisign public key: [`dist/minisign/minisign.pub`](dist/minisign/minisign.pub).
 

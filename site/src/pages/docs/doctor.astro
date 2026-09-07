@@ -14,20 +14,21 @@ puck doctor --json</code></pre>
   <h2>What it checks</h2>
   <ul>
     <li>Unsupported Composer plugins (Tier 3 refusal)</li>
-    <li>Repository types beyond Composer + path (0.2)</li>
+    <li>Repository types beyond Composer + path (not in 0.1)</li>
     <li>Abandoned packages and platform hints (warnings)</li>
     <li>Store path info</li>
   </ul>
 
   <h2>Example</h2>
   <pre><code>$ puck doctor
-project: acme/app
-
-blocker  unsupported plugin  foo/bar-installer
-warning  abandoned package   old/lib
-warning  platform php        ^8.2 (host 8.4.23)
-info     store               ~/.puck/store
-
-1 blocker</code></pre>
-  <p>Warnings do not block. Fix blockers, or stay on Composer for that project.</p>
+warning: script `Composer\Config::disableProcessTimeout` is a Class::method callback puck skips or runs differently
+info: PHP /usr/bin/php (8.4.23) (from PATH)
+info: store ~/.puck/store — warm (index non-empty)
+info: optimize-autoloader=true
+ready to switch</code></pre>
+  <p>
+    Findings are <code>severity: message</code> lines, then a summary. Blockers
+    (for example an allowed plugin with no native adapter) exit non-zero.
+    Warnings do not block. Fix blockers, or stay on Composer for that project.
+  </p>
 </Docs>

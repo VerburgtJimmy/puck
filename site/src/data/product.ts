@@ -27,9 +27,9 @@ export const COMPAT = [
   { area: 'Composer + path repos', status: 'Supported' },
   { area: 'install / require / remove / update', status: 'Supported' },
   { area: 'Pest + phpstan Tier 1 adapters', status: 'Supported' },
-  { area: 'vcs / artifact / package repos', status: '0.2' },
-  { area: 'Windows', status: '0.2' },
-  { area: 'Broader plugin host', status: '0.2' },
+  { area: 'vcs / artifact / package repos', status: 'Not in 0.1' },
+  { area: 'Windows', status: 'Not in 0.1' },
+  { area: 'Broader plugin host', status: 'Not in 0.1' },
   { area: 'Replace Composer entirely', status: 'Not planned' },
 ] as const;
 

@@ -13,14 +13,11 @@ import { COMPAT } from '../data/product';
     <div class="compat__grid">
       <div class="term term--mini" aria-label="Sample puck doctor output">
         <pre><code>$ puck doctor
-project: acme/app
-
-blocker  unsupported plugin  foo/bar-installer
-warning  abandoned package   old/lib
-warning  platform php        ^8.2 (host 8.4.23)
-info     store               ~/.puck/store
-
-1 blocker</code></pre>
+warning: script `Composer\Config::disableProcessTimeout` is a Class::method callback puck skips or runs differently
+info: PHP /usr/bin/php (8.4.23) (from PATH)
+info: store ~/.puck/store — warm (index non-empty)
+info: optimize-autoloader=true
+ready to switch</code></pre>
       </div>
 
       <table class="compat__table">
@@ -103,7 +100,7 @@ info     store               ~/.puck/store
     }
   }
 
-  .compat__table td[data-status='0.2'] {
+  .compat__table td[data-status='Not in 0.1'] {
     color: var(--ink-muted);
   }
 
