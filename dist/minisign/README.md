@@ -1,21 +1,23 @@
 # minisign keys for puck releases
 
 Release artifacts are signed with [minisign](https://jedisct1.github.io/minisign/).
-`install.sh` and `puck upgrade` verify `SHA256SUMS.minisig` when `minisign` is available.
+`install.sh` and `puck upgrade` **always** verify SHA-256 of the artifact against
+`SHA256SUMS`. They verify `SHA256SUMS.minisig` when the `minisign` tool is on
+`PATH`; otherwise they warn and continue with checksum-only trust.
 
 ## Public key (committed)
 
 File: [`minisign.pub`](minisign.pub)
 
 ```
-untrusted comment: minisign public key 6635B0F2C6E694F9
-RWT5lObG8rA1ZuBXvOCGdlfqQ4FdAK0l9VdFTH2J3zPVaC8jlo+DvmHa
+untrusted comment: minisign public key D78B3C3D36ED964D
+RWRNlu02PTyL13V6QL9fxE4Ho6fcGHI/5fu6HdGzQ1mlKghwOWDg/6ft
 ```
 
 Inline (same key):
 
 ```
-RWT5lObG8rA1ZuBXvOCGdlfqQ4FdAK0l9VdFTH2J3zPVaC8jlo+DvmHa
+RWRNlu02PTyL13V6QL9fxE4Ho6fcGHI/5fu6HdGzQ1mlKghwOWDg/6ft
 ```
 
 ## Generate a new keypair (maintainers)

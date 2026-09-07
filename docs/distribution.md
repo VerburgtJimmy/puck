@@ -36,7 +36,7 @@ Built in GitHub Actions from the tag, never from a laptop.
 Do **not** build glibc Linux binaries. Do **not** build Windows until Windows
 support exists.
 
-Version string embedded at build: `puck 0.1.0 (<gitsha> <date>)`.
+Version string embedded at build: `puck 0.1.1 (<gitsha> <date>)`.
 `puck --version` prints exactly that.
 
 **Channels:** `stable` only in 0.1. Canary is a **0.2** feature after
@@ -64,8 +64,9 @@ Behaviour, in order:
 8. Print version, path, PATH note, next step: `puck doctor`.
 9. `install.sh --uninstall` removes the binary and PATH block; reports store left behind.
 
-Idempotent. Quiet success except summary. Verbose with `-v`. CI-tested on macOS
-and Linux including uninstall and re-install.
+Idempotent. Quiet success except summary. Verbose with `-v`. Manual smoke on
+macOS and Linux (including uninstall and re-install) before tagging; automated
+CI coverage for `install.sh` is not in place yet.
 
 ## 3. Homebrew
 
@@ -82,8 +83,9 @@ and Linux including uninstall and re-install.
 - Reads
   `https://github.com/VerburgtJimmy/puck/releases/latest/download/manifest.json`
   (or a pinned version URL). Channel: `stable` only in 0.1.
-- Verifies sha256 + minisign (key compiled in). Atomic replace. Keeps
-  `~/.puck/bin/puck.previous` for `--rollback`.
+- Verifies sha256 always; verifies minisign when the `minisign` tool is on
+  `PATH` (public key compiled in / committed under `dist/minisign/`). Atomic
+  replace. Keeps `~/.puck/bin/puck.previous` for `--rollback`.
 - Never automatic. Never in CI. Never touches the store or projects.
 
 ## 5. Update notifications
@@ -101,15 +103,16 @@ For 0.1 the action lives at [`.github/actions/setup-puck`](../.github/actions/se
 so consumers can pin:
 
 ```yaml
-- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.0
-  # or @master
+- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.1
   with:
-    version: latest   # or v0.1.0
+    version: latest   # or v0.1.1
     cache: true       # caches ~/.puck/store on composer.lock hash
 ```
 
-It downloads via `install.sh` (SHA-256 always; minisign when available), adds
-`~/.puck/bin` to `PATH`, and optionally caches `~/.puck/store`.
+It runs the `install.sh` checked out with that action tag (no network fetch of
+`master`), so script and action version match by construction. Install verifies
+SHA-256 always and minisign when available, adds `~/.puck/bin` to `PATH`, and
+optionally caches `~/.puck/store`.
 
 ### Docker
 
