@@ -14,27 +14,27 @@ Reads the same `composer.json` / `composer.lock` as Composer, writes a compatibl
 
 Lead with **warm-wipe** (vendor wiped, cache/store warm) — the honest CI number. **Warm-keep** is a no-op when nothing changed. **Cold** is included for honesty (empty vendor); it is network-heavy and not the headline.
 
-Same Linux CI run ([34119187733](https://github.com/VerburgtJimmy/puck/actions/runs/34119187733)). Scripts: [`benches/`](benches/).
+Same Linux CI run ([34124132162](https://github.com/VerburgtJimmy/puck/actions/runs/34124132162)). Scripts: [`benches/`](benches/).
 
 ### laravel-skeleton `--no-dev`
 
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
-| warm (wipe vendor, cache/store warm) | 1736 | **344** |
-| warm (vendor present) | 914 | **24** |
-| cold (empty vendor) | 6662 | **1850** |
+| warm (wipe vendor, cache/store warm) | 1662 | **327** |
+| warm (vendor present) | 908 | **24** |
+| cold (empty vendor) | 4094 | **2029** |
 
 ### laravel-app with require-dev
 
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
-| warm (wipe vendor, cache/store warm) | 2843 | **497** |
-| warm (vendor present) | 1428 | **26** |
-| cold (empty vendor) | 4311 | **1547** |
+| warm (wipe vendor, cache/store warm) | 2814 | **504** |
+| warm (vendor present) | 1380 | **25** |
+| cold (empty vendor) | 4422 | **1778** |
 
 Warm-wipe on laravel-app with-dev is dominated by the optimized classmap dump, which scales with require-dev. Warm-keep stays ~O(1) in package count (lock hash + `installed.json` + `vendor/` check).
 
-Cold installs pipeline download (default concurrency 12) with extract (`min(CPUs, 8)` workers) and link packages as they land.
+Cold installs pipeline download (default concurrency 12) with extract (`min(CPUs, 8)` workers) and link packages as they land. Same-run cold phase timings (`PUCK_TIMINGS=1`): skeleton `download_ms=18892` (sum) / `extract_ms=456` / `overlap_ms=17611` / `fetch_ms=1763`; app-with-dev `download_ms=13642` / `extract_ms=499` / `overlap_ms=12783` / `fetch_ms=1370`.
 ## Compatibility
 
 What blocks switching today (same checks as `puck doctor`):

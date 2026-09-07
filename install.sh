@@ -321,7 +321,9 @@ do_install() {
   local base_url="https://github.com/${REPO}/releases/download/${VERSION}"
   local tmp
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  # Expand path now: a local `tmp` is gone by EXIT, and `set -u` would fail.
+  # shellcheck disable=SC2064
+  trap "rm -rf $(printf '%q' "$tmp")" EXIT
 
   log "puck install: ${VERSION} (${target}) -> ${BIN_PATH}"
 
