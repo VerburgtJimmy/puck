@@ -7,28 +7,28 @@
 class Puck < Formula
   desc "Native PHP package installer (Composer-compatible vendor/)"
   homepage "https://github.com/VerburgtJimmy/puck"
-  version "0.1.0"
+  version "0.1.1"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/VerburgtJimmy/puck/releases/download/v0.1.0/puck-aarch64-apple-darwin.tar.gz"
-      sha256 "c992c9480355c92d1a1b1720bf1c764c04ffce75ba7963cc6f623c0002ce436d"
+      url "https://github.com/VerburgtJimmy/puck/releases/download/v0.1.1/puck-aarch64-apple-darwin.tar.gz"
+      sha256 "998a6b111dcc235e1819c4b7bb09dd3d04c63380e20ddb7f9ac7d72d38f34ede"
     end
     on_intel do
-      url "https://github.com/VerburgtJimmy/puck/releases/download/v0.1.0/puck-x86_64-apple-darwin.tar.gz"
-      sha256 "5c71bb5315b816cf0beeda41186c3c1fb33d08aa4bef212f6a10790e698dbcb8"
+      url "https://github.com/VerburgtJimmy/puck/releases/download/v0.1.1/puck-x86_64-apple-darwin.tar.gz"
+      sha256 "12c8cc1263790641f14743a7f4046093b8778de9a1c9b73ab8df2214499789d0"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/VerburgtJimmy/puck/releases/download/v0.1.0/puck-aarch64-unknown-linux-musl.tar.gz"
-      sha256 "de4c7b146ad33fb1637271e243007b09115d68df7bd401b667831c4b0f067895"
+      url "https://github.com/VerburgtJimmy/puck/releases/download/v0.1.1/puck-aarch64-unknown-linux-musl.tar.gz"
+      sha256 "422080170f1b06fb7fd82328d4fc0b2c594953bf3a2909497fc728a9bef9d20c"
     end
     on_intel do
-      url "https://github.com/VerburgtJimmy/puck/releases/download/v0.1.0/puck-x86_64-unknown-linux-musl.tar.gz"
-      sha256 "9559877e7639f618a628d7c693cc13d4ef9537fa55ac91b8f3d8399277d1b451"
+      url "https://github.com/VerburgtJimmy/puck/releases/download/v0.1.1/puck-x86_64-unknown-linux-musl.tar.gz"
+      sha256 "3f5c190d7de6e90a9c44890d50ee40d5759f85d1cf8074081c59f14646c77740"
     end
   end
 
