@@ -3,7 +3,8 @@
 //! Canonical definitions live in `puck_update::urls`; this module re-exports them
 //! for the CLI crate and unit tests.
 
-#[allow(unused_imports)] // re-exported for docs / discoverability; upgrade uses puck_update directly
+#[allow(unused_imports)]
+// re-exported for docs / discoverability; upgrade uses puck_update directly
 pub use puck_update::{
     DEFAULT_INSTALL_ROOT_NAME, INSTALL_MIRROR, MANIFEST_URL, MINISIGN_PUBLIC_KEY, REPO,
     STABLE_MIRROR,

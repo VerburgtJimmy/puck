@@ -75,10 +75,7 @@ fn maybe_notify_update_inner(opts: NotifyOptions) -> Result<(), ()> {
     let _ = write_cache(&cache_path, &cache);
 
     let target = detect_target().map_err(|_| ())?;
-    let url = opts
-        .manifest_url
-        .as_deref()
-        .unwrap_or(MANIFEST_URL);
+    let url = opts.manifest_url.as_deref().unwrap_or(MANIFEST_URL);
     let client = http_client(CHECK_TIMEOUT, &opts.current_version, target).map_err(|_| ())?;
     let manifest = fetch_manifest(&client, url).map_err(|_| ())?;
 
@@ -88,9 +85,7 @@ fn maybe_notify_update_inner(opts: NotifyOptions) -> Result<(), ()> {
     let current = strip_v(&opts.current_version);
     let latest = strip_v(&manifest.version);
     if version_compare(latest, current, Operator::Gt) {
-        eprintln!(
-            "puck: update available: {current} -> {latest} (run `puck upgrade`)"
-        );
+        eprintln!("puck: update available: {current} -> {latest} (run `puck upgrade`)");
     }
     Ok(())
 }
@@ -108,8 +103,7 @@ fn write_cache(path: &PathBuf, cache: &CacheFile) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let body = serde_json::to_string_pretty(cache)
-        .unwrap_or_else(|_| "{\"checked_at\":0}".into());
+    let body = serde_json::to_string_pretty(cache).unwrap_or_else(|_| "{\"checked_at\":0}".into());
     std::fs::write(path, body)
 }
 

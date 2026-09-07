@@ -125,9 +125,8 @@ pub fn upgrade(opts: UpgradeOptions) -> Result<UpgradeOutcome> {
                 match verify_minisign_optional(&sums_path, &sig_path)? {
                     true => minisign_verified = true,
                     false => {
-                        minisign_skipped_warning = Some(
-                            "minisign not installed; verified sha256 only".into(),
-                        );
+                        minisign_skipped_warning =
+                            Some("minisign not installed; verified sha256 only".into());
                     }
                 }
             }
@@ -198,10 +197,7 @@ fn extract_puck_binary(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf> 
             .path()
             .map_err(|e| Error::Archive(e.to_string()))?
             .to_path_buf();
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if name == "puck" || name == "puck.exe" {
             let mut bytes = Vec::new();
             entry
@@ -220,4 +216,3 @@ fn extract_puck_binary(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf> 
     }
     Ok(out)
 }
-

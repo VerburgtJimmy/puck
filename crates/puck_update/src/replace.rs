@@ -164,7 +164,10 @@ mod tests {
     fn rollback_missing_errors() {
         let dir = tempfile::tempdir().unwrap();
         let current = dir.path().join("puck");
-        std::fs::File::create(&current).unwrap().write_all(b"x").unwrap();
+        std::fs::File::create(&current)
+            .unwrap()
+            .write_all(b"x")
+            .unwrap();
         let err = rollback(&current).unwrap_err();
         assert!(matches!(err, Error::NoPrevious(_)));
     }

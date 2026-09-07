@@ -87,7 +87,11 @@ mod tests {
         let manifest_bytes = serde_json::to_vec_pretty(&manifest).expect("json");
         let sums = format!("{sha}  puck-{target}.tar.gz\n");
         let routes = Arc::new(vec![
-            ("/manifest.json".to_string(), manifest_bytes, "application/json"),
+            (
+                "/manifest.json".to_string(),
+                manifest_bytes,
+                "application/json",
+            ),
             (archive_path.clone(), tarball.clone(), "application/gzip"),
             ("/SHA256SUMS".to_string(), sums.into_bytes(), "text/plain"),
         ]);
@@ -212,5 +216,4 @@ mod tests {
             "abc"
         );
     }
-
 }

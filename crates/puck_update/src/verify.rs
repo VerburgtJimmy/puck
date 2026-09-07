@@ -106,7 +106,6 @@ fn hex_encode(bytes: &[u8]) -> String {
     out
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
