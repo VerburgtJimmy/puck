@@ -1,0 +1,25 @@
+name: brew-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - Formula/puck.rb
+      - dist/homebrew/**
+      - .github/workflows/brew-smoke.yml
+
+jobs:
+  install:
+    runs-on: macos-latest
+    steps:
+      - name: Tap and install (README path)
+        run: |
+          set -euo pipefail
+          brew untap VerburgtJimmy/puck 2>/dev/null || true
+          brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck
+          brew trust VerburgtJimmy/puck || true
+          brew install puck
+          puck --version
+          brew test puck
+          brew uninstall puck
+          brew untap VerburgtJimmy/puck

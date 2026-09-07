@@ -27,4 +27,4 @@ Public key: [`minisign/minisign.pub`](minisign/minisign.pub). See [`minisign/REA
 
 - curl: [`../install.sh`](../install.sh) → `~/.puck/bin`
 - docs: [`../docs/install.md`](../docs/install.md)
-- Homebrew formula: **template only** — [`homebrew/puck.rb`](homebrew/puck.rb) and [`../Formula/puck.rb`](../Formula/puck.rb)
+- Homebrew: live [`../Formula/puck.rb`](../Formula/puck.rb); generator [`homebrew/generate-formula.rb`](homebrew/generate-formula.rb); template [`homebrew/puck.rb`](homebrew/puck.rb)

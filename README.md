@@ -1,4 +1,4 @@
-# puck
+# puck — native tooling for PHP and Laravel, starting with the install.
 
 Composer-compatible installer for PHP. Faster on CI, drop-in with a preflight.
 
@@ -12,9 +12,7 @@ Reads the same `composer.json` / `composer.lock` as Composer, writes a compatibl
 
 ## Benchmarks (Linux CI)
 
-Lead with **warm-wipe** (vendor wiped, cache/store warm) — the honest CI number. **Warm-keep** is a no-op when nothing changed.
-
-**Cold** (empty vendor, cold caches) is included for honesty, not as a headline. It is mostly network and Packagist variability; puck can win or lose a given run and it is a weak comparison.
+Lead with **warm-wipe** (vendor wiped, cache/store warm) — the honest CI number. **Warm-keep** is a no-op when nothing changed. **Cold** is a caveat row, not a headline.
 
 Same Linux CI run ([34110233674](https://github.com/VerburgtJimmy/puck/actions/runs/34110233674)). Scripts: [`benches/`](benches/).
 
@@ -23,18 +21,20 @@ Same Linux CI run ([34110233674](https://github.com/VerburgtJimmy/puck/actions/r
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
 | warm (wipe vendor, cache/store warm) | 2138 | **329** |
-| cold (empty vendor) | 4714 | 5608 |
 | warm (vendor present) | 952 | **23** |
+| cold (empty vendor) | 4714 | 5608 |
 
 ### laravel-app with require-dev
 
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
 | warm (wipe vendor, cache/store warm) | 3893 | **522** |
-| cold (empty vendor) | 7799 | 4192 |
 | warm (vendor present) | 1491 | **24** |
+| cold (empty vendor) | 7799 | 4192 |
 
 Warm-wipe on laravel-app with-dev is dominated by the optimized classmap dump, which scales with require-dev. Warm-keep stays ~O(1) in package count (lock hash + `installed.json` + `vendor/` check).
+
+puck currently downloads and extracts sequentially; that hurts most on small graphs (skeleton cold above) while larger installs amortize differently. Pipelining is tracked in [#2](https://github.com/VerburgtJimmy/puck/issues/2).
 
 ## Compatibility
 
@@ -56,12 +56,12 @@ Warnings (abandoned packages, etc.) do not block. Run `puck doctor` or `puck doc
 ### curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.0/install.sh | bash
 ```
 
-Installs into `~/.puck/bin`. Mirror (when ready): `https://puck.jimmyverburgt.com/install`. Upgrade/manifest source of truth remains GitHub Releases — see [`docs/distribution.md`](docs/distribution.md) and [`docs/install.md`](docs/install.md).
+Pinned to the `v0.1.0` tag so the script matches that release. Mirror (when ready): `https://puck.jimmyverburgt.com/install`. Upgrade/manifest source of truth remains GitHub Releases — see [`docs/distribution.md`](docs/distribution.md) and [`docs/install.md`](docs/install.md).
 
-minisign public key: [`dist/minisign/minisign.pub`](dist/minisign/minisign.pub).
+Installs into `~/.puck/bin`. minisign public key: [`dist/minisign/minisign.pub`](dist/minisign/minisign.pub).
 
 ### Homebrew
 
@@ -70,7 +70,7 @@ brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck
 brew install puck
 ```
 
-Formula stub (template): [`dist/homebrew/puck.rb`](dist/homebrew/puck.rb).
+Formula: [`Formula/puck.rb`](Formula/puck.rb) (regenerated from each release `SHA256SUMS`).
 
 ### From source
 
@@ -103,6 +103,18 @@ Set `PUCK_TIMINGS=1` to print phase timings on stderr (`plan_ms`, `link_ms`, `du
 
 ## Roadmap
 
+puck grows in layers. Each layer is usable on its own, and nothing above a layer ships until the layer below is trusted.
+
+| Layer | Status |
+|---|---|
+| Packages | 0.1 shipped |
+| PHP | Planned |
+| Processes | Planned |
+| Runtime | Planned |
+| Artifacts | Planned |
+
+The runtime layer embeds the official PHP engine directly, the way FrankenPHP does, with puck's own server and worker model around it. puck will not replace the engine itself.
+
 **0.1 (now):** install path, Composer + path repos with auth, doctor preflight, Pest + phpstan Tier 1, Tier 3 refusal for other plugins.
 
 **0.2:** VCS / artifact / package repositories, filter-list / audit polish, more Tier 1 adapters, canary channel after parity stays green on `master`, Apple notarization.
@@ -115,6 +127,8 @@ Set `PUCK_TIMINGS=1` to print phase timings on stderr (`plan_ms`, `link_ms`, `du
 | Package cache | Per-project / Composer cache | Shared content-addressable store (`~/.puck/store`) |
 | `vendor/` | Written directly | Linked from the store (hardlink / reflink / copy) |
 | Lock file | `composer.lock` | Same format; Composer can still read what puck writes |
+| Offline install | Composer cache / `--offline` | `puck install --offline` (warm store only) |
+| Self-update | `composer self-update` | `puck upgrade` (GitHub Releases manifest + minisign) |
 | Laravel discovery | `artisan package:discover` | Generated natively; that Composer script is skipped when `packages.php` was written |
 | Event scripts | `post-autoload-dump` / `post-install-cmd` via PHP | `puck_scripts` after install (skip with `--no-scripts`) |
 
@@ -130,7 +144,7 @@ crates/
   ...
 fixtures/            Pinned projects for parity tests
 benches/             Install timing scripts
-dist/                install.sh notes, Homebrew formula
+dist/                install.sh notes, Homebrew formula generator
 docs/                Install + distribution docs
 ```
 

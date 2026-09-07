@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# TEMPLATE ONLY — release workflow should regenerate sha256/urls from manifest.json.
+# TEMPLATE ONLY — release workflow regenerates Formula/puck.rb via
+# dist/homebrew/generate-formula.rb from SHA256SUMS. Do not install from this file.
 # brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck
 # brew install puck
 
