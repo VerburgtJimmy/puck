@@ -1,38 +1,36 @@
 # puck
 
-Native PHP package installer. Reads the same `composer.json` / `composer.lock` as Composer, writes a compatible `vendor/` tree, and aims for byte-identical output (autoload files, `installed.json`, `installed.php`) without running PHP on the install path.
+Composer-compatible installer for PHP. Faster on CI, drop-in with a preflight.
 
-puck is not a full Composer replacement yet. Keep Composer installed; puck reads and writes the same files and you can switch back at any time.
+Reads the same `composer.json` / `composer.lock` as Composer, writes a compatible `vendor/` tree, and aims for byte-identical output (autoload files, `installed.json`, `installed.php`) without running PHP on the install path.
+
+**Keep Composer installed;** puck reads and writes the same files and you can switch back at any time.
 
 ## Status
 
-**v0.1.0** — `puck install`, `require`, `remove`, `update` / `lock` on macOS and Linux, with Tier 1 native adapters for Pest and phpstan/extension-installer. Run `puck doctor` before switching a project.
+**v0.1.0** — macOS and Linux. `install`, `require`, `remove`, `update` / `lock`, Tier 1 adapters for Pest and phpstan/extension-installer, `puck doctor` preflight. Run `puck doctor` before switching a project.
 
 ## Benchmarks (Linux CI)
 
-Lead with **warm-wipe** (vendor wiped, cache/store warm). Warm-keep is a no-op demo. Do not lead with cold.
+Lead with **warm-wipe** (vendor wiped, cache/store warm) — the honest CI number. **Warm-keep** is a no-op when nothing changed. Cold install is network-bound; do not use it as the headline.
+
+Same Linux CI run ([34110233674](https://github.com/VerburgtJimmy/puck/actions/runs/34110233674)). Scripts: [`benches/`](benches/).
 
 ### laravel-skeleton `--no-dev`
 
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
-| cold (empty vendor) | 4864 | 5805 |
-| warm (vendor present) | 756 | 20 |
-| warm (wipe vendor, cache/store warm) | 1618 | 226 |
+| warm (wipe vendor, cache/store warm) | 2138 | **329** |
+| warm (vendor present) | 952 | **23** |
 
 ### laravel-app with require-dev
 
 | scenario | composer (ms) | puck (ms) |
 |---|---:|---:|
-| cold (empty vendor) | 4692 | 1854 |
-| warm (vendor present) | 1534 | 91 |
-| warm (wipe vendor, cache/store warm) | 3623 | 528 |
+| warm (wipe vendor, cache/store warm) | 3893 | **522** |
+| warm (vendor present) | 1491 | **24** |
 
-Warm-wipe on laravel-app with-dev is dominated by the optimized classmap dump, which scales with require-dev.
-
-Warm-keep 91 ms (Linux CI above) predates the O(1) keep path (skip vendor walk + bin rewrite). Local remeasure after the fix: ~4 ms on macOS with-dev; expect Linux warm-keep closer to skeleton (~20–40 ms) once re-benched.
-
-Methodology and more runs: [`benches/`](benches/) (`install-timing.sh`, `resource-usage.sh`, CI workflow).
+Warm-wipe on laravel-app with-dev is dominated by the optimized classmap dump, which scales with require-dev. Warm-keep stays ~O(1) in package count (lock hash + `installed.json` + `vendor/` check).
 
 ## Compatibility
 
@@ -92,19 +90,18 @@ puck dump-autoload -o        # regenerate optimized autoload
 puck require vendor/package
 puck remove vendor/package
 puck update                  # refresh lock + install
+puck upgrade                 # self-update from GitHub Releases
 puck store path              # print the global store path
 puck store gc                # garbage-collect unused store entries
 ```
 
 Set `PUCK_TIMINGS=1` to print phase timings on stderr (`plan_ms`, `link_ms`, `dump_ms`, …).
 
-## What 0.1 does not do yet
+## Roadmap
 
-- VCS / artifact / package repositories
-- Windows
-- Filter-list / malware locked-package checks
-- Broader plugin coverage (Tier 2 PHP plugin host; more Tier 1 adapters)
-- `self-update` polish
+**0.1 (now):** install path, Composer + path repos with auth, doctor preflight, Pest + phpstan Tier 1, Tier 3 refusal for other plugins.
+
+**0.2:** VCS / artifact / package repositories, filter-list / audit polish, more Tier 1 adapters, canary channel after parity stays green on `master`, Apple notarization.
 
 ## How it differs
 
@@ -130,7 +127,7 @@ crates/
 fixtures/            Pinned projects for parity tests
 benches/             Install timing scripts
 dist/                install.sh notes, Homebrew formula
-docs/                Install docs
+docs/                Install + distribution docs
 ```
 
 ## Development
