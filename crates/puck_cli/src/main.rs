@@ -1055,7 +1055,11 @@ async fn run_install(
     }
 
     let installed = read_installed(root.join("vendor/composer")).map_err(|e| e.to_string())?;
-    let options = InstallOptions { no_dev, offline };
+    let options = InstallOptions {
+        no_dev,
+        offline,
+        http_parallel: None,
+    };
     let mut plan = plan_install(&lock, &installed, options).map_err(|e| e.to_string())?;
 
     // CLI `-o` wins; otherwise honour composer.json `config.optimize-autoloader`.
@@ -1284,6 +1288,9 @@ fn print_install_timings(
         exec.fetch_cache_hit_ms
     );
     eprintln!("puck: timing  fetch_download_ms={}", exec.fetch_download_ms);
+    eprintln!("puck: timing  download_ms={}", exec.download_ms);
+    eprintln!("puck: timing  extract_ms={}", exec.extract_ms);
+    eprintln!("puck: timing  overlap_ms={}", exec.overlap_ms);
     eprintln!("puck: timing  link_ms={}", exec.link_ms);
     eprintln!("puck: timing  installed_meta_ms={}", exec.installed_meta_ms);
     eprintln!("puck: timing  dump_ms={dump_ms}");

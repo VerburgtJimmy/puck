@@ -3,7 +3,7 @@
 use crate::installed_php::{RootPackageMeta, build_installed_php};
 use crate::plan::{InstallAction, InstallOptions, InstallPlan, PlannedPackage};
 use crate::{Error, Result};
-use puck_dist::{ArchiveKind, download};
+use puck_dist::{ArchiveKind, AuthStore, download_with_client, http_client};
 use puck_lock::{LockFile, LockedPackage};
 use puck_manifest::Manifest;
 use puck_store::{Store, link_tree, lookup, put_archive, remember};
@@ -12,31 +12,76 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
-const DEFAULT_FETCH_CONCURRENCY: usize = 8;
+/// Composer default `max-parallel-http`.
+const DEFAULT_HTTP_PARALLEL: usize = 12;
 
-/// Link concurrency: hardlinks are metadata-heavy; prefer CPU count (min 8)
-/// so warm-wipe can saturate APFS better than the fetch default alone.
+/// Download concurrency: `options.http_parallel`, else `config.max-parallel-http`,
+/// else `PUCK_MAX_PARALLEL`, else 12.
+pub fn resolve_http_parallel(options: InstallOptions, manifest: Option<&Manifest>) -> usize {
+    if let Some(n) = options.http_parallel {
+        return n.max(1);
+    }
+    if let Some(m) = manifest
+        && let Some(n) = config_max_parallel_http(m)
+    {
+        return n.max(1);
+    }
+    if let Ok(raw) = std::env::var("PUCK_MAX_PARALLEL")
+        && let Ok(n) = raw.trim().parse::<usize>()
+    {
+        return n.max(1);
+    }
+    DEFAULT_HTTP_PARALLEL
+}
+
+fn config_max_parallel_http(manifest: &Manifest) -> Option<usize> {
+    let v = manifest.config.get("max-parallel-http")?;
+    match v {
+        Value::Number(n) => n.as_u64().map(|u| u as usize),
+        Value::String(s) => s.trim().parse().ok(),
+        _ => None,
+    }
+}
+
+/// Extract worker pool size: `min(CPUs, 8)`.
+fn extract_concurrency() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(DEFAULT_HTTP_PARALLEL)
+        .min(8)
+        .max(1)
+}
+
+/// Link concurrency: hardlinks are metadata-heavy; prefer at least 8, up to CPUs.
 fn link_concurrency() -> usize {
     std::thread::available_parallelism()
         .map(|n| n.get())
-        .unwrap_or(DEFAULT_FETCH_CONCURRENCY)
-        .max(DEFAULT_FETCH_CONCURRENCY)
+        .unwrap_or(DEFAULT_HTTP_PARALLEL)
+        .max(8)
 }
 
 /// Wall-clock phase timings from [`execute_install`] (milliseconds).
 #[derive(Debug, Clone, Default)]
 pub struct ExecuteTimings {
-    /// Store lookup / download / extract (parallel wall clock).
+    /// Store lookup / download / extract / link pipeline (parallel wall clock).
     pub fetch_ms: u128,
-    /// Sum of per-package cache-hit lookup times (may exceed [`Self::fetch_ms`] under concurrency).
+    /// Sum of per-package cache-hit lookup times (may exceed wall under concurrency).
     pub fetch_cache_hit_ms: u128,
-    /// Sum of per-package download+extract times (may exceed [`Self::fetch_ms`] under concurrency).
+    /// Sum of per-package download+extract times (legacy; prefer [`Self::download_ms`] /
+    /// [`Self::extract_ms`]).
     pub fetch_download_ms: u128,
-    /// Vendor hardlink/copy phase.
+    /// Sum of per-package HTTP download durations.
+    pub download_ms: u128,
+    /// Sum of per-package extract durations.
+    pub extract_ms: u128,
+    /// `download_ms + extract_ms - download_extract_wall` (pipelining benefit).
+    pub overlap_ms: u128,
+    /// Vendor hardlink/copy wall clock (first link start → last link end).
     pub link_ms: u128,
     /// `installed.json` / `installed.php` + bins.
     pub installed_meta_ms: u128,
@@ -74,7 +119,6 @@ pub async fn execute_install(
         to_install.iter().copied().partition(|p| is_path_dist(p));
 
     // Path dist: symlink or mirror from project-relative url (no store fetch).
-    let link_started = Instant::now();
     for pkg in &path_pkgs {
         let Some(locked) = lock_by_name.get(&pkg.name) else {
             return Err(Error::Message(format!(
@@ -86,44 +130,11 @@ pub async fn execute_install(
         eprintln!("puck: {} {}", action_word(pkg.action), pkg.name);
     }
 
-    // Fetch + extract archives into the store in parallel.
-    let fetch_started = Instant::now();
-    let (fetched, fetch_cache_hit_ms, fetch_download_ms) =
-        fetch_into_store(&archive_pkgs, store, options.offline).await?;
-    let fetch_ms = fetch_started.elapsed().as_millis();
-
-    // Link into vendor/ in parallel. Hardlinks are mostly metadata; serial
-    // linking was ~70% of warm-wipe wall time. Use at least fetch concurrency,
-    // scaled up to available parallelism when the host has more cores.
-    let link_sema = Arc::new(Semaphore::new(link_concurrency()));
-    let mut link_set = JoinSet::new();
-    for pkg in &archive_pkgs {
-        let Some(sha) = fetched.get(&pkg.name) else {
-            return Err(Error::Message(format!(
-                "missing store entry after fetch for {}",
-                pkg.name
-            )));
-        };
-        let name = pkg.name.clone();
-        let action = pkg.action;
-        let store_dir = store.package_dir(sha);
-        let target = vendor_package_path(&vendor, &name);
-        let permit = link_sema
-            .clone()
-            .acquire_owned()
-            .await
-            .map_err(|e| Error::Message(format!("link concurrency: {e}")))?;
-        link_set.spawn_blocking(move || {
-            let _permit = permit;
-            link_one_package(&store_dir, &target)?;
-            Ok::<_, Error>((name, action))
-        });
-    }
-    while let Some(joined) = link_set.join_next().await {
-        let (name, action) = joined.map_err(|e| Error::Message(format!("link task: {e}")))??;
-        eprintln!("puck: {} {name}", action_word(action));
-    }
-    let link_ms = link_started.elapsed().as_millis();
+    let http_parallel = resolve_http_parallel(options, manifest);
+    let pipeline_started = Instant::now();
+    let archive_timings =
+        install_archives(&archive_pkgs, store, &vendor, options.offline, http_parallel).await?;
+    let fetch_ms = pipeline_started.elapsed().as_millis();
 
     let meta_started = Instant::now();
     write_installed_json(&vendor, lock, plan, &lock_by_name, manifest, options)?;
@@ -132,11 +143,303 @@ pub async fn execute_install(
 
     Ok(ExecuteTimings {
         fetch_ms,
-        fetch_cache_hit_ms,
-        fetch_download_ms,
-        link_ms,
+        fetch_cache_hit_ms: archive_timings.cache_hit_ms,
+        fetch_download_ms: archive_timings.download_ms + archive_timings.extract_ms,
+        download_ms: archive_timings.download_ms,
+        extract_ms: archive_timings.extract_ms,
+        overlap_ms: archive_timings.overlap_ms,
+        link_ms: archive_timings.link_ms,
         installed_meta_ms,
     })
+}
+
+struct ArchiveTimings {
+    cache_hit_ms: u128,
+    download_ms: u128,
+    extract_ms: u128,
+    overlap_ms: u128,
+    link_ms: u128,
+}
+
+/// Per-package pipeline: lookup → (download ‖ extract pool) → link-as-you-go.
+async fn install_archives(
+    packages: &[&PlannedPackage],
+    store: &Store,
+    vendor: &Path,
+    offline: bool,
+    http_parallel: usize,
+) -> Result<ArchiveTimings> {
+    if packages.is_empty() {
+        return Ok(ArchiveTimings {
+            cache_hit_ms: 0,
+            download_ms: 0,
+            extract_ms: 0,
+            overlap_ms: 0,
+            link_ms: 0,
+        });
+    }
+
+    let download_sema = Arc::new(Semaphore::new(http_parallel));
+    let extract_sema = Arc::new(Semaphore::new(extract_concurrency()));
+    let link_sema = Arc::new(Semaphore::new(link_concurrency()));
+    let client = Arc::new(http_client().map_err(|e| Error::Message(e.to_string()))?);
+    let auth = Arc::new(AuthStore::load_from_env().map_err(|e| Error::Message(e.to_string()))?);
+
+    let download_sum_ns = Arc::new(AtomicU64::new(0));
+    let extract_sum_ns = Arc::new(AtomicU64::new(0));
+    let cache_hit_sum_ns = Arc::new(AtomicU64::new(0));
+    let link_sum_ns = Arc::new(AtomicU64::new(0));
+    let de_first_ns = Arc::new(AtomicU64::new(u64::MAX));
+    let de_last_ns = Arc::new(AtomicU64::new(0));
+    let link_first_ns = Arc::new(AtomicU64::new(u64::MAX));
+    let link_last_ns = Arc::new(AtomicU64::new(0));
+    let epoch = Instant::now();
+
+    let mut set = JoinSet::new();
+    for pkg in packages {
+        let name = pkg.name.clone();
+        let action = pkg.action;
+        let url = pkg.dist_url.clone();
+        let shasum = pkg.dist_shasum.clone();
+        let dist_type = pkg.dist_type.clone();
+        let store = store.clone();
+        let vendor = vendor.to_path_buf();
+        let download_sema = download_sema.clone();
+        let extract_sema = extract_sema.clone();
+        let link_sema = link_sema.clone();
+        let client = client.clone();
+        let auth = auth.clone();
+        let download_sum_ns = download_sum_ns.clone();
+        let extract_sum_ns = extract_sum_ns.clone();
+        let cache_hit_sum_ns = cache_hit_sum_ns.clone();
+        let link_sum_ns = link_sum_ns.clone();
+        let de_first_ns = de_first_ns.clone();
+        let de_last_ns = de_last_ns.clone();
+        let link_first_ns = link_first_ns.clone();
+        let link_last_ns = link_last_ns.clone();
+
+        set.spawn(async move {
+            pipeline_one(PipelineOne {
+                store: &store,
+                vendor: &vendor,
+                name: &name,
+                action,
+                url: url.as_deref(),
+                shasum: shasum.as_deref(),
+                dist_type: dist_type.as_deref(),
+                offline,
+                download_sema: &download_sema,
+                extract_sema: &extract_sema,
+                link_sema: &link_sema,
+                client: &client,
+                auth: &auth,
+                epoch,
+                download_sum_ns: &download_sum_ns,
+                extract_sum_ns: &extract_sum_ns,
+                cache_hit_sum_ns: &cache_hit_sum_ns,
+                link_sum_ns: &link_sum_ns,
+                de_first_ns: &de_first_ns,
+                de_last_ns: &de_last_ns,
+                link_first_ns: &link_first_ns,
+                link_last_ns: &link_last_ns,
+            })
+            .await
+        });
+    }
+
+    while let Some(joined) = set.join_next().await {
+        let (name, action) = joined.map_err(|e| Error::Message(format!("archive task: {e}")))??;
+        eprintln!("puck: {} {name}", action_word(action));
+    }
+
+    let download_ms = Duration::from_nanos(download_sum_ns.load(Ordering::Relaxed)).as_millis();
+    let extract_ms = Duration::from_nanos(extract_sum_ns.load(Ordering::Relaxed)).as_millis();
+    let cache_hit_ms = Duration::from_nanos(cache_hit_sum_ns.load(Ordering::Relaxed)).as_millis();
+
+    let de_first = de_first_ns.load(Ordering::Relaxed);
+    let de_last = de_last_ns.load(Ordering::Relaxed);
+    let de_wall_ms = if de_first == u64::MAX || de_last < de_first {
+        0
+    } else {
+        Duration::from_nanos(de_last - de_first).as_millis()
+    };
+    let overlap_ms = (download_ms + extract_ms).saturating_sub(de_wall_ms);
+
+    let link_first = link_first_ns.load(Ordering::Relaxed);
+    let link_last = link_last_ns.load(Ordering::Relaxed);
+    let link_ms = if link_first == u64::MAX || link_last < link_first {
+        Duration::from_nanos(link_sum_ns.load(Ordering::Relaxed)).as_millis()
+    } else {
+        Duration::from_nanos(link_last - link_first).as_millis()
+    };
+
+    Ok(ArchiveTimings {
+        cache_hit_ms,
+        download_ms,
+        extract_ms,
+        overlap_ms,
+        link_ms,
+    })
+}
+
+struct PipelineOne<'a> {
+    store: &'a Store,
+    vendor: &'a Path,
+    name: &'a str,
+    action: InstallAction,
+    url: Option<&'a str>,
+    shasum: Option<&'a str>,
+    dist_type: Option<&'a str>,
+    offline: bool,
+    download_sema: &'a Arc<Semaphore>,
+    extract_sema: &'a Arc<Semaphore>,
+    link_sema: &'a Arc<Semaphore>,
+    client: &'a reqwest::Client,
+    auth: &'a AuthStore,
+    epoch: Instant,
+    download_sum_ns: &'a AtomicU64,
+    extract_sum_ns: &'a AtomicU64,
+    cache_hit_sum_ns: &'a AtomicU64,
+    link_sum_ns: &'a AtomicU64,
+    de_first_ns: &'a AtomicU64,
+    de_last_ns: &'a AtomicU64,
+    link_first_ns: &'a AtomicU64,
+    link_last_ns: &'a AtomicU64,
+}
+
+fn mark_window(first: &AtomicU64, last: &AtomicU64, epoch: Instant, start: Instant, end: Instant) {
+    let start_ns = start.duration_since(epoch).as_nanos() as u64;
+    let end_ns = end.duration_since(epoch).as_nanos() as u64;
+    first.fetch_min(start_ns, Ordering::Relaxed);
+    last.fetch_max(end_ns, Ordering::Relaxed);
+}
+
+async fn pipeline_one(p: PipelineOne<'_>) -> Result<(String, InstallAction)> {
+    if p.dist_type
+        .is_some_and(|t| t.eq_ignore_ascii_case("path"))
+    {
+        return Err(Error::Message(format!(
+            "path package {} must be linked from dist.url (internal: skipped store fetch)",
+            p.name
+        )));
+    }
+
+    let url = p.url.ok_or_else(|| {
+        Error::Message(format!(
+            "package {} has no dist url (source installs not implemented yet)",
+            p.name
+        ))
+    })?;
+
+    // Store index short-circuit BEFORE any network / download permit.
+    let lookup_started = Instant::now();
+    if let Some(sha) =
+        lookup(p.store, p.shasum, Some(url)).map_err(|e| Error::Message(e.to_string()))?
+    {
+        p.cache_hit_sum_ns.fetch_add(
+            lookup_started.elapsed().as_nanos() as u64,
+            Ordering::Relaxed,
+        );
+        eprintln!("puck: cache hit {}", p.name);
+        link_package_now(&p, &sha).await?;
+        return Ok((p.name.to_owned(), p.action));
+    }
+
+    if p.offline {
+        return Err(Error::Message(format!(
+            "offline install: {} is not in the warm store (no sha1/url index hit)",
+            p.name
+        )));
+    }
+
+    // Download under HTTP concurrency; release permit before extract.
+    let dl_permit = p
+        .download_sema
+        .acquire()
+        .await
+        .map_err(|e| Error::Message(format!("download concurrency: {e}")))?;
+    eprintln!("puck: downloading {}", p.name);
+    let dl_started = Instant::now();
+    let downloaded = download_with_client(p.client, url, p.shasum, p.auth)
+        .await
+        .map_err(|e| Error::Message(e.to_string()))?;
+    let dl_ended = Instant::now();
+    drop(dl_permit);
+    p.download_sum_ns.fetch_add(
+        dl_ended.duration_since(dl_started).as_nanos() as u64,
+        Ordering::Relaxed,
+    );
+    mark_window(p.de_first_ns, p.de_last_ns, p.epoch, dl_started, dl_ended);
+
+    let kind = ArchiveKind::from_type_and_url(p.dist_type, url)
+        .map_err(|e| Error::Message(e.to_string()))?;
+    let sha256 = downloaded.sha256.clone();
+    let bytes = downloaded.bytes;
+    let shasum = p.shasum.map(str::to_owned);
+    let url_owned = url.to_owned();
+    let store = p.store.clone();
+
+    let ex_permit = p
+        .extract_sema
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|e| Error::Message(format!("extract concurrency: {e}")))?;
+    let ex_started = Instant::now();
+    let sha = tokio::task::spawn_blocking(move || {
+        let _permit = ex_permit;
+        put_archive(&store, &sha256, &bytes, kind).map_err(|e| Error::Message(e.to_string()))?;
+        remember(
+            &store,
+            &sha256,
+            shasum.as_deref(),
+            Some(url_owned.as_str()),
+        )
+        .map_err(|e| Error::Message(e.to_string()))?;
+        Ok::<_, Error>(sha256)
+    })
+    .await
+    .map_err(|e| Error::Message(format!("extract task: {e}")))??;
+    let ex_ended = Instant::now();
+    p.extract_sum_ns.fetch_add(
+        ex_ended.duration_since(ex_started).as_nanos() as u64,
+        Ordering::Relaxed,
+    );
+    mark_window(p.de_first_ns, p.de_last_ns, p.epoch, ex_started, ex_ended);
+
+    link_package_now(&p, &sha).await?;
+    Ok((p.name.to_owned(), p.action))
+}
+
+async fn link_package_now(p: &PipelineOne<'_>, sha: &str) -> Result<()> {
+    let store_dir = p.store.package_dir(sha);
+    let target = vendor_package_path(p.vendor, p.name);
+    let link_permit = p
+        .link_sema
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|e| Error::Message(format!("link concurrency: {e}")))?;
+    let link_started = Instant::now();
+    tokio::task::spawn_blocking(move || {
+        let _permit = link_permit;
+        link_one_package(&store_dir, &target)
+    })
+    .await
+    .map_err(|e| Error::Message(format!("link task: {e}")))??;
+    let link_ended = Instant::now();
+    p.link_sum_ns.fetch_add(
+        link_ended.duration_since(link_started).as_nanos() as u64,
+        Ordering::Relaxed,
+    );
+    mark_window(
+        p.link_first_ns,
+        p.link_last_ns,
+        p.epoch,
+        link_started,
+        link_ended,
+    );
+    Ok(())
 }
 
 fn action_word(action: InstallAction) -> &'static str {
@@ -369,110 +672,6 @@ fn remove_vendor_path(target: &Path) -> Result<()> {
     Ok(())
 }
 
-enum FetchKind {
-    CacheHit,
-    Download,
-}
-
-async fn fetch_into_store(
-    packages: &[&PlannedPackage],
-    store: &Store,
-    offline: bool,
-) -> Result<(HashMap<String, String>, u128, u128)> {
-    let semaphore = Arc::new(Semaphore::new(DEFAULT_FETCH_CONCURRENCY));
-    let mut set = JoinSet::new();
-
-    for pkg in packages {
-        let name = pkg.name.clone();
-        let url = pkg.dist_url.clone();
-        let shasum = pkg.dist_shasum.clone();
-        let dist_type = pkg.dist_type.clone();
-        let store = store.clone();
-        let permit = semaphore
-            .clone()
-            .acquire_owned()
-            .await
-            .map_err(|e| Error::Message(format!("concurrency permit: {e}")))?;
-
-        set.spawn(async move {
-            let _permit = permit;
-            let started = Instant::now();
-            let result = fetch_one(
-                &store,
-                &name,
-                url.as_deref(),
-                shasum.as_deref(),
-                dist_type.as_deref(),
-                offline,
-            )
-            .await;
-            let elapsed = started.elapsed();
-            (name, result, elapsed)
-        });
-    }
-
-    let mut out = HashMap::new();
-    let mut cache_hit = Duration::ZERO;
-    let mut download = Duration::ZERO;
-    while let Some(joined) = set.join_next().await {
-        let (name, result, elapsed) =
-            joined.map_err(|e| Error::Message(format!("fetch task: {e}")))?;
-        let (sha, kind) = result?;
-        match kind {
-            FetchKind::CacheHit => cache_hit += elapsed,
-            FetchKind::Download => download += elapsed,
-        }
-        out.insert(name, sha);
-    }
-    Ok((out, cache_hit.as_millis(), download.as_millis()))
-}
-
-async fn fetch_one(
-    store: &Store,
-    name: &str,
-    url: Option<&str>,
-    shasum: Option<&str>,
-    dist_type: Option<&str>,
-    offline: bool,
-) -> Result<(String, FetchKind)> {
-    if dist_type.is_some_and(|t| t.eq_ignore_ascii_case("path")) {
-        return Err(Error::Message(format!(
-            "path package {name} must be linked from dist.url (internal: skipped store fetch)"
-        )));
-    }
-
-    let url = url.ok_or_else(|| {
-        Error::Message(format!(
-            "package {name} has no dist url (source installs not implemented yet)"
-        ))
-    })?;
-
-    if let Some(sha) =
-        lookup(store, shasum, Some(url)).map_err(|e| Error::Message(e.to_string()))?
-    {
-        eprintln!("puck: cache hit {name}");
-        return Ok((sha, FetchKind::CacheHit));
-    }
-
-    if offline {
-        return Err(Error::Message(format!(
-            "offline install: {name} is not in the warm store (no sha1/url index hit)"
-        )));
-    }
-
-    eprintln!("puck: downloading {name}");
-    let downloaded = download(url, shasum)
-        .await
-        .map_err(|e| Error::Message(e.to_string()))?;
-    let kind = ArchiveKind::from_type_and_url(dist_type, url)
-        .map_err(|e| Error::Message(e.to_string()))?;
-    put_archive(store, &downloaded.sha256, &downloaded.bytes, kind)
-        .map_err(|e| Error::Message(e.to_string()))?;
-    remember(store, &downloaded.sha256, shasum, Some(url))
-        .map_err(|e| Error::Message(e.to_string()))?;
-    Ok((downloaded.sha256, FetchKind::Download))
-}
-
 fn write_installed_json(
     vendor: &Path,
     lock: &LockFile,
@@ -572,6 +771,36 @@ fn locked_to_installed_value(pkg: &LockedPackage) -> Value {
         map.insert(k.clone(), v.clone());
     }
     Value::Object(map)
+}
+
+#[cfg(test)]
+mod resolve_parallel_tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn options_override_wins() {
+        let forced = resolve_http_parallel(
+            InstallOptions {
+                http_parallel: Some(3),
+                ..InstallOptions::default()
+            },
+            None,
+        );
+        assert_eq!(forced, 3);
+    }
+
+    #[test]
+    fn reads_composer_config() {
+        let m = Manifest::from_str(
+            r#"{ "name": "acme/app", "config": { "max-parallel-http": 7 } }"#,
+        )
+        .expect("manifest");
+        assert_eq!(
+            resolve_http_parallel(InstallOptions::default(), Some(&m)),
+            7
+        );
+    }
 }
 
 #[cfg(test)]

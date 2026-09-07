@@ -198,6 +198,9 @@ echo
 echo "$TABLE"
 echo
 
+# Machine-readable lines for CI gates (cold must not lose; warm must stay ahead).
+echo "GATE fixture=${FIXTURE_NAME} mode=${DEV_MODE} cold_composer_ms=${COLD_COMPOSER_MS} cold_puck_ms=${COLD_PUCK_MS} warm_wipe_composer_ms=${WARM_COMPOSER_CACHE_MS} warm_wipe_puck_ms=${WARM_PUCK_WIPE_MS} warm_keep_composer_ms=${WARM_COMPOSER_PRESENT_MS} warm_keep_puck_ms=${WARM_PUCK_PRESENT_MS}"
+
 resolve_notes_doc() {
   local doc="$NOTES_DOC"
   local parent

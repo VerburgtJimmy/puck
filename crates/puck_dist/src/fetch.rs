@@ -13,10 +13,23 @@ pub struct DownloadedDist {
     pub sha256: String,
 }
 
+/// Shared reqwest client for an install session (TLS handshake reuse).
+pub fn http_client() -> Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent(concat!("puck/", env!("CARGO_PKG_VERSION")))
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|e| Error::Download {
+            url: String::new(),
+            message: e.to_string(),
+        })
+}
+
 /// Download `url` and optionally verify Composer `shasum` (SHA-1).
 pub async fn download(url: &str, shasum: Option<&str>) -> Result<DownloadedDist> {
+    let client = http_client()?;
     let auth = AuthStore::load_from_env()?;
-    download_with_auth(url, shasum, &auth).await
+    download_with_client(&client, url, shasum, &auth).await
 }
 
 /// Download with an explicit auth store (tests / callers that already loaded auth).
@@ -25,10 +38,21 @@ pub async fn download_with_auth(
     shasum: Option<&str>,
     auth: &AuthStore,
 ) -> Result<DownloadedDist> {
+    let client = http_client()?;
+    download_with_client(&client, url, shasum, auth).await
+}
+
+/// Download using a shared client and auth store (install pipeline).
+pub async fn download_with_client(
+    client: &reqwest::Client,
+    url: &str,
+    shasum: Option<&str>,
+    auth: &AuthStore,
+) -> Result<DownloadedDist> {
     let candidates = download_candidates(url);
     let mut last_err = None;
     for candidate in &candidates {
-        match download_with_retries(candidate, 3, auth).await {
+        match download_with_retries(client, candidate, 3, auth).await {
             Ok(bytes) => {
                 if let Some(sum) = shasum {
                     verify_shasum(&bytes, sum, candidate)?;
@@ -75,19 +99,15 @@ fn github_api_to_codeload(url: &str) -> Option<String> {
     ))
 }
 
-async fn download_with_retries(url: &str, attempts: u32, auth: &AuthStore) -> Result<Vec<u8>> {
-    let client = reqwest::Client::builder()
-        .user_agent(concat!("puck/", env!("CARGO_PKG_VERSION")))
-        .timeout(Duration::from_secs(120))
-        .build()
-        .map_err(|e| Error::Download {
-            url: url.to_owned(),
-            message: e.to_string(),
-        })?;
-
+async fn download_with_retries(
+    client: &reqwest::Client,
+    url: &str,
+    attempts: u32,
+    auth: &AuthStore,
+) -> Result<Vec<u8>> {
     let mut last_message = String::new();
     for attempt in 1..=attempts {
-        match download_once(&client, url, auth).await {
+        match download_once(client, url, auth).await {
             Ok(bytes) => return Ok(bytes),
             Err(err) => {
                 last_message = err.to_string();

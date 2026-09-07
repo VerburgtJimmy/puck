@@ -32,6 +32,7 @@ pub const KNOWN_CONFIG_KEYS: &[&str] = &[
     "preferred-install",
     "platform",
     "audit",
+    "max-parallel-http",
 ];
 
 const LARAVEL_COMPOSER_SCRIPTS: &str = "Illuminate\\Foundation\\ComposerScripts";

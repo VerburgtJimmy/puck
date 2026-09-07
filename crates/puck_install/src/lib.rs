@@ -10,7 +10,7 @@ mod installed_php;
 mod plan;
 
 pub use bins::install_binaries;
-pub use execute::{ExecuteTimings, execute_install};
+pub use execute::{ExecuteTimings, execute_install, resolve_http_parallel};
 pub use installed::{InstalledPackage, InstalledState, read_installed};
 pub use installed_php::RootPackageMeta;
 pub use plan::{
