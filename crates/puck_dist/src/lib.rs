@@ -11,9 +11,7 @@ mod fetch;
 pub use auth::{AuthHeader, AuthStore, composer_home_dir};
 pub use checksum::{sha1_hex, sha256_hex, verify_shasum};
 pub use extract::{ArchiveKind, extract_archive};
-pub use fetch::{
-    DownloadedDist, download, download_with_auth, download_with_client, http_client,
-};
+pub use fetch::{DownloadedDist, download, download_with_auth, download_with_client, http_client};
 
 /// Errors from dist fetch / extract.
 #[derive(Debug, thiserror::Error)]

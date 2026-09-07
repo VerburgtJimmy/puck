@@ -132,8 +132,14 @@ pub async fn execute_install(
 
     let http_parallel = resolve_http_parallel(options, manifest);
     let pipeline_started = Instant::now();
-    let archive_timings =
-        install_archives(&archive_pkgs, store, &vendor, options.offline, http_parallel).await?;
+    let archive_timings = install_archives(
+        &archive_pkgs,
+        store,
+        &vendor,
+        options.offline,
+        http_parallel,
+    )
+    .await?;
     let fetch_ms = pipeline_started.elapsed().as_millis();
 
     let meta_started = Instant::now();
@@ -315,9 +321,7 @@ fn mark_window(first: &AtomicU64, last: &AtomicU64, epoch: Instant, start: Insta
 }
 
 async fn pipeline_one(p: PipelineOne<'_>) -> Result<(String, InstallAction)> {
-    if p.dist_type
-        .is_some_and(|t| t.eq_ignore_ascii_case("path"))
-    {
+    if p.dist_type.is_some_and(|t| t.eq_ignore_ascii_case("path")) {
         return Err(Error::Message(format!(
             "path package {} must be linked from dist.url (internal: skipped store fetch)",
             p.name
@@ -389,13 +393,8 @@ async fn pipeline_one(p: PipelineOne<'_>) -> Result<(String, InstallAction)> {
     let sha = tokio::task::spawn_blocking(move || {
         let _permit = ex_permit;
         put_archive(&store, &sha256, &bytes, kind).map_err(|e| Error::Message(e.to_string()))?;
-        remember(
-            &store,
-            &sha256,
-            shasum.as_deref(),
-            Some(url_owned.as_str()),
-        )
-        .map_err(|e| Error::Message(e.to_string()))?;
+        remember(&store, &sha256, shasum.as_deref(), Some(url_owned.as_str()))
+            .map_err(|e| Error::Message(e.to_string()))?;
         Ok::<_, Error>(sha256)
     })
     .await
@@ -792,10 +791,9 @@ mod resolve_parallel_tests {
 
     #[test]
     fn reads_composer_config() {
-        let m = Manifest::from_str(
-            r#"{ "name": "acme/app", "config": { "max-parallel-http": 7 } }"#,
-        )
-        .expect("manifest");
+        let m =
+            Manifest::from_str(r#"{ "name": "acme/app", "config": { "max-parallel-http": 7 } }"#)
+                .expect("manifest");
         assert_eq!(
             resolve_http_parallel(InstallOptions::default(), Some(&m)),
             7

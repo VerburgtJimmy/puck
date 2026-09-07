@@ -9,7 +9,7 @@ See [`distribution.md`](distribution.md) for release artifacts, signing, and upg
 ## curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash
 ```
 
 Pinned to the release tag so the script matches that release. Site mirror (when deployed): `https://puck.jimmyverburgt.com/install` — never the source of truth for upgrades; the GitHub Releases `manifest.json` is.
@@ -18,10 +18,10 @@ Installs into `~/.puck/bin` and appends a PATH block to your shell rc unless `--
 
 ```bash
 # pin a different binary version (script still from the tag above, or swap the tag)
-curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.0/install.sh | bash -s -- v0.1.0
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash -s -- v0.1.1
 
 # uninstall binary + PATH block (store left behind)
-curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.0/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash -s -- --uninstall
 ```
 
 | Variable / flag | Default | Meaning |
