@@ -12,7 +12,10 @@ See [`distribution.md`](distribution.md) for release artifacts, signing, and upg
 curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash
 ```
 
-Pinned to the release tag so the script matches that release. Site mirror (when deployed): `https://puck.jimmyverburgt.com/install` — never the source of truth for upgrades; the GitHub Releases `manifest.json` is.
+Pinned to the release tag so the script matches that release. Site mirror:
+`https://puck.jimmyverburgt.com/install` — never the source of truth for upgrades;
+the GitHub Releases `manifest.json` is. Resolving `latest` without pinning
+`PUCK_VERSION` requires `python3` on PATH (to parse the manifest).
 
 Installs into `~/.puck/bin` and appends a PATH block to your shell rc unless `--no-modify-path`.
 
@@ -67,13 +70,14 @@ puck install         # same lock/vendor files as Composer
 ## GitHub Actions
 
 ```yaml
-- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.0
+- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.1
   with:
     version: latest
     cache: true
 ```
 
-See [`distribution.md`](distribution.md) for Docker and upgrade policy.
+The action runs the `install.sh` from the same tagged checkout (not a live
+`master` fetch). See [`distribution.md`](distribution.md) for Docker and upgrade policy.
 
 ## Upgrade
 

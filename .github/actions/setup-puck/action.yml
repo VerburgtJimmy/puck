@@ -33,6 +33,6 @@ runs:
           # install.sh accepts v-prefixed or bare versions
           export PUCK_VERSION
         fi
-        curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/master/install.sh | bash -s -- --no-modify-path
+        bash "${GITHUB_ACTION_PATH}/../../../install.sh" --no-modify-path
         echo "$HOME/.puck/bin" >> "$GITHUB_PATH"
         "$HOME/.puck/bin/puck" --version
