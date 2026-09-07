@@ -1,0 +1,562 @@
+---
+/**
+ * B - Laravel-influenced isometric store scene.
+ * Glass blocks = packages in ~/.puck/store; cables link into project vendor/.
+ */
+---
+
+<header class="hb">
+  <div class="hb__floor" aria-hidden="true"></div>
+  <nav class="hb__nav wrap">
+    <a href="/prototype/hero?variant=B">puck</a>
+    <span>Concept B</span>
+  </nav>
+
+  <div class="hb__layout wrap">
+    <div class="hb__copy">
+      <p class="hb__kicker">laravel-skeleton · --no-dev · warm wipe · Linux CI</p>
+      <h1>Same lock.<br />A shorter wait.</h1>
+      <p class="hb__lede">
+        Each archive extracts once into a content-addressed store. Projects mostly pay the link.
+        {' '}<code>vendor/</code> stays a real directory PHP and Docker already understand.
+      </p>
+      <div class="hb__stats">
+        <div class="hb__stat hb__stat--win">
+          <strong>327<span>ms</span></strong>
+          <em>puck</em>
+        </div>
+        <div class="hb__stat">
+          <strong>1662<span>ms</span></strong>
+          <em>composer</em>
+        </div>
+      </div>
+      <p class="hb__cite">
+        Same CI run{' '}
+        <a href="https://github.com/VerburgtJimmy/puck/actions/runs/34124132162">34124132162</a>
+        · vendor wiped, store warm
+      </p>
+      <div class="hb__actions">
+        <a class="hb__btn" href="/#numbers">See the numbers</a>
+        <a class="hb__ghost" href="/#install">Install</a>
+      </div>
+    </div>
+
+    <div class="hb__stage" aria-hidden="true">
+      <!-- isometric scene -->
+      <div class="iso">
+        <div class="iso__shelf">
+          <div class="iso__shelf-top"></div>
+          <div class="iso__shelf-front">
+            <span>~/.puck/store</span>
+          </div>
+        </div>
+
+        <div class="iso__stack">
+          <div class="iso__block iso__block--glass iso__block--1">
+            <span class="iso__glow"></span>
+            <span class="iso__label">laravel/framework</span>
+            <span class="iso__hash">sha…</span>
+          </div>
+          <div class="iso__block iso__block--amber iso__block--2">
+            <span class="iso__label">nesbot/carbon</span>
+            <span class="iso__hash">sha…</span>
+          </div>
+          <div class="iso__block iso__block--glass iso__block--3">
+            <span class="iso__glow"></span>
+            <span class="iso__label">symfony/http-foundation</span>
+            <span class="iso__hash">sha…</span>
+          </div>
+          <div class="iso__block iso__block--glass iso__block--4">
+            <span class="iso__label">illuminate/support</span>
+            <span class="iso__hash">sha…</span>
+          </div>
+        </div>
+
+        <svg class="iso__cables" viewBox="0 0 280 220" fill="none">
+          <path class="iso__cable iso__cable--a" d="M12 48 C 90 48, 130 36, 268 42" />
+          <path class="iso__cable iso__cable--b" d="M12 96 C 95 100, 140 88, 268 102" />
+          <path class="iso__cable iso__cable--c" d="M12 150 C 100 160, 150 170, 268 168" />
+          <circle class="iso__node" cx="268" cy="42" r="5" />
+          <circle class="iso__node" cx="268" cy="102" r="5" />
+          <circle class="iso__node" cx="268" cy="168" r="5" />
+          <circle class="iso__node iso__node--src" cx="12" cy="48" r="4" />
+          <circle class="iso__node iso__node--src" cx="12" cy="96" r="4" />
+          <circle class="iso__node iso__node--src" cx="12" cy="150" r="4" />
+        </svg>
+
+        <div class="iso__project">
+          <div class="iso__project-bar">
+            <span class="iso__dot"></span>
+            <span class="iso__dot"></span>
+            <span class="iso__dot"></span>
+            <code>skeleton/vendor</code>
+          </div>
+          <ul>
+            <li><b>linked from store</b></li>
+            <li>laravel/framework <em>→ store</em></li>
+            <li>nesbot/carbon <em>→ store</em></li>
+            <li>symfony/http-foundation <em>→ store</em></li>
+          </ul>
+          <p class="iso__project-note">hardlink · reflink · copy</p>
+        </div>
+
+        <div class="iso__chip iso__chip--1">extract once</div>
+        <div class="iso__chip iso__chip--2">link cheap</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<style>
+  .hb {
+    position: relative;
+    min-height: 100svh;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  .hb__floor {
+    position: absolute;
+    right: -5%;
+    top: 8%;
+    width: min(58vw, 42rem);
+    height: 70%;
+    background-image:
+      linear-gradient(rgba(26, 29, 36, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26, 29, 36, 0.045) 1px, transparent 1px);
+    background-size: 32px 32px;
+    transform: perspective(1000px) rotateX(60deg) rotateZ(-10deg);
+    transform-origin: 60% 20%;
+    mask-image: radial-gradient(ellipse 65% 55% at 55% 35%, #000 15%, transparent 72%);
+    opacity: 0.9;
+  }
+
+  .hb__nav {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    padding-block: 1.1rem;
+    font-weight: 600;
+  }
+  .hb__nav a {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    text-decoration: none;
+  }
+  .hb__nav span {
+    color: var(--ink-faint);
+    font-size: 0.8125rem;
+  }
+
+  .hb__layout {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+    min-height: calc(100svh - 4rem);
+    padding-bottom: 3.5rem;
+  }
+
+  @media (min-width: 960px) {
+    .hb__layout {
+      grid-template-columns: 0.95fr 1.15fr;
+      gap: 1.5rem;
+    }
+  }
+
+  .hb__kicker {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    margin: 0 0 0.85rem;
+  }
+
+  .hb h1 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "WONK" 1;
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin: 0 0 1rem;
+  }
+
+  .hb__lede {
+    color: var(--ink-muted);
+    max-width: 28rem;
+    margin: 0 0 1.5rem;
+  }
+  .hb__lede code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  .hb__stats {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .hb__stat {
+    min-width: 7.5rem;
+    padding: 0.85rem 1rem;
+    border-radius: 0.85rem;
+    border: 1px solid var(--line);
+    background: #fafbfc;
+  }
+  .hb__stat--win {
+    border-color: rgba(232, 163, 23, 0.35);
+    background: rgba(232, 163, 23, 0.08);
+  }
+  .hb__stat strong {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 1.35rem;
+    letter-spacing: -0.02em;
+  }
+  .hb__stat strong span {
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    margin-left: 0.15rem;
+  }
+  .hb__stat em {
+    font-style: normal;
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+  }
+
+  .hb__cite {
+    margin: 0 0 1.35rem;
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+  }
+  .hb__cite a {
+    color: var(--ink-muted);
+  }
+
+  .hb__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .hb__btn {
+    display: inline-flex;
+    background: var(--ink);
+    color: #fff;
+    padding: 0.8rem 1.3rem;
+    border-radius: 999px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .hb__ghost {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    padding: 0.8rem 1.3rem;
+    border-radius: 999px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  /* -- isometric stage -- */
+  .hb__stage {
+    position: relative;
+    min-height: 26rem;
+  }
+
+  .iso {
+    position: relative;
+    width: 100%;
+    min-height: 26rem;
+  }
+
+  .iso__shelf {
+    position: absolute;
+    left: 4%;
+    top: 8%;
+    width: 48%;
+    z-index: 1;
+    transform: rotateX(8deg) rotateZ(-4deg);
+    transform-style: preserve-3d;
+  }
+
+  .iso__shelf-top {
+    height: 0.55rem;
+    border-radius: 0.4rem 0.4rem 0 0;
+    background: linear-gradient(90deg, #e8eef6, #f8fafc);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+  }
+
+  .iso__shelf-front {
+    padding: 0.55rem 0.85rem;
+    border-radius: 0 0 0.5rem 0.5rem;
+    background: linear-gradient(180deg, #f4f7fb, #e4ebf4);
+    border: 1px solid var(--line);
+    border-top: none;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--ink-muted);
+    box-shadow: 0 16px 28px rgba(26, 29, 36, 0.08);
+  }
+
+  .iso__stack {
+    position: absolute;
+    left: 8%;
+    top: 18%;
+    width: min(100%, 17.5rem);
+    display: grid;
+    gap: 0.45rem;
+    z-index: 2;
+    transform: rotateX(14deg) rotateZ(-7deg);
+    transform-style: preserve-3d;
+  }
+
+  .iso__block {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1rem;
+    border-radius: 0.7rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    overflow: hidden;
+    box-shadow:
+      0 12px 24px rgba(26, 29, 36, 0.1),
+      0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+
+  .iso__block--1 {
+    transform: translateX(0);
+  }
+  .iso__block--2 {
+    transform: translateX(10px);
+  }
+  .iso__block--3 {
+    transform: translateX(4px);
+  }
+  .iso__block--4 {
+    transform: translateX(14px);
+  }
+
+  .iso__block--glass {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(205, 220, 240, 0.42));
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    color: var(--ink);
+    backdrop-filter: blur(8px);
+  }
+
+  .iso__block--amber {
+    background: linear-gradient(160deg, #f5c518, #ff8a2a);
+    color: #1a1d24;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+  }
+
+  .iso__block--ink {
+    background: #1a1d24;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .iso__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .iso__hash {
+    font-weight: 500;
+    opacity: 0.55;
+    font-size: 0.65rem;
+  }
+
+  .iso__block--amber .iso__hash {
+    opacity: 0.7;
+  }
+
+  .iso__glow {
+    position: absolute;
+    inset: -30% 15% auto;
+    height: 80%;
+    background: radial-gradient(circle, rgba(255, 200, 60, 0.55), transparent 70%);
+    animation: iso-glow 3.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .iso__cables {
+    position: absolute;
+    left: 42%;
+    top: 22%;
+    width: 38%;
+    height: 55%;
+    z-index: 3;
+    overflow: visible;
+  }
+
+  .iso__cable {
+    stroke-width: 2;
+    stroke-dasharray: 5 6;
+    opacity: 0.75;
+    animation: iso-dash 1.4s linear infinite;
+  }
+  .iso__cable--a {
+    stroke: #7eb6ff;
+  }
+  .iso__cable--b {
+    stroke: #e8a317;
+  }
+  .iso__cable--c {
+    stroke: #1a1d24;
+    opacity: 0.35;
+  }
+
+  .iso__node {
+    fill: #fff;
+    stroke: #7eb6ff;
+    stroke-width: 2;
+  }
+  .iso__node--src {
+    fill: #e8a317;
+    stroke: #fff;
+  }
+
+  .iso__project {
+    position: absolute;
+    right: 2%;
+    top: 28%;
+    width: min(42%, 14.5rem);
+    z-index: 4;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 0.95rem;
+    box-shadow: 0 20px 40px rgba(26, 29, 36, 0.1);
+    overflow: hidden;
+  }
+
+  .iso__project-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.55rem 0.75rem;
+    background: #f4f6f9;
+    border-bottom: 1px solid var(--line);
+  }
+  .iso__dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: #d0d5dd;
+  }
+  .iso__dot:nth-child(1) {
+    background: #ff5f57;
+  }
+  .iso__dot:nth-child(2) {
+    background: #febc2e;
+  }
+  .iso__dot:nth-child(3) {
+    background: #28c840;
+  }
+  .iso__project-bar code {
+    margin-left: 0.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--ink-muted);
+  }
+
+  .iso__project ul {
+    list-style: none;
+    margin: 0;
+    padding: 0.75rem 0.85rem;
+    display: grid;
+    gap: 0.35rem;
+  }
+  .iso__project li {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--ink-muted);
+    display: flex;
+    justify-content: space-between;
+    gap: 0.35rem;
+  }
+  .iso__project b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .iso__project em {
+    font-style: normal;
+    color: var(--ink-faint);
+  }
+
+  .iso__project-note {
+    margin: 0;
+    padding: 0.55rem 0.85rem 0.75rem;
+    font-size: 0.65rem;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--line);
+    font-family: var(--font-mono);
+  }
+
+  .iso__chip {
+    position: absolute;
+    z-index: 5;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid var(--line);
+    box-shadow: 0 8px 18px rgba(26, 29, 36, 0.08);
+  }
+  .iso__chip--1 {
+    left: 6%;
+    bottom: 14%;
+  }
+  .iso__chip--2 {
+    right: 18%;
+    bottom: 10%;
+  }
+
+  @keyframes iso-glow {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes iso-dash {
+    to {
+      stroke-dashoffset: -22;
+    }
+  }
+
+  @media (max-width: 959px) {
+    .hb__stage {
+      min-height: 22rem;
+    }
+    .iso__cables {
+      display: none;
+    }
+    .iso__project {
+      right: 0;
+      top: auto;
+      bottom: 0;
+      width: 55%;
+    }
+    .iso__stack {
+      width: 55%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .iso__glow,
+    .iso__cable {
+      animation: none !important;
+    }
+  }
+</style>

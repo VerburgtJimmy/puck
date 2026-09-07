@@ -1,0 +1,129 @@
+---
+import GlassCloud from '../GlassCloud.astro';
+---
+
+<!-- A - Frosted glass cloud, yellow trapped inside. No sun. -->
+<header class="ha">
+  <div class="ha__wash" aria-hidden="true"></div>
+  <div class="ha__cloud" aria-hidden="true">
+    <GlassCloud />
+  </div>
+  <nav class="ha__nav wrap">
+    <a href="/prototype/hero?variant=A">puck</a>
+    <span>Concept A</span>
+  </nav>
+  <div class="ha__copy wrap">
+    <h1>puck</h1>
+    <p class="ha__title">Install once.<br />Link forever.</p>
+    <p class="ha__lede">
+      Composer-compatible for PHP and Laravel. Same lock file. Packages settle into a shared
+      store so the next project barely waits.
+    </p>
+    <div class="ha__actions">
+      <a class="ha__btn" href="/#install">Install puck</a>
+      <a class="ha__ghost" href="/docs">Docs</a>
+    </div>
+  </div>
+</header>
+
+<style>
+  .ha {
+    position: relative;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #fff;
+  }
+  .ha__wash {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #f2f5f9 0%, #ffffff 68%);
+  }
+  .ha__cloud {
+    position: absolute;
+    right: max(-1rem, calc((100% - var(--max)) / 2));
+    top: 14%;
+    width: min(48vw, 32rem);
+    z-index: 0;
+  }
+  @media (max-width: 860px) {
+    .ha__cloud {
+      right: -12%;
+      top: 6%;
+      width: 78vw;
+      opacity: 0.8;
+    }
+  }
+  .ha__nav {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    padding-block: 1.1rem;
+    font-weight: 600;
+  }
+  .ha__nav a {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    text-decoration: none;
+  }
+  .ha__nav span {
+    color: var(--ink-faint);
+    font-size: 0.8125rem;
+  }
+  .ha__copy {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-width: min(34rem, 48%);
+    padding-bottom: 4rem;
+  }
+  @media (max-width: 860px) {
+    .ha__copy {
+      max-width: 100%;
+    }
+  }
+  .ha h1 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "WONK" 1;
+    font-size: clamp(3.5rem, 8vw, 5.5rem);
+    margin: 0 0 0.85rem;
+    letter-spacing: -0.035em;
+    line-height: 0.95;
+  }
+  .ha__title {
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 3vw, 2.1rem);
+    color: var(--ink-muted);
+    margin: 0 0 1rem;
+    line-height: 1.2;
+  }
+  .ha__lede {
+    color: var(--ink-muted);
+    margin: 0 0 1.5rem;
+    max-width: 32rem;
+  }
+  .ha__actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+  .ha__btn {
+    background: var(--accent);
+    color: var(--accent-ink);
+    padding: 0.8rem 1.3rem;
+    border-radius: 999px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .ha__ghost {
+    border: 1px solid var(--line);
+    padding: 0.8rem 1.3rem;
+    border-radius: 999px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+</style>

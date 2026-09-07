@@ -1,0 +1,113 @@
+---
+/**
+ * PROTOTYPE - hero concepts for puck.
+ * A: glass cloud. B: isometric store. C: Japanese watercolor.
+ * Switch with ?variant=A|B|C or ← →. Delete after picking a winner.
+ */
+import Base from '../../layouts/Base.astro';
+import HeroA from '../../components/prototype/HeroA.astro';
+import HeroB from '../../components/prototype/HeroB.astro';
+import HeroC from '../../components/prototype/HeroC.astro';
+---
+
+<Base title="Hero concepts - puck" description="Throwaway prototype of hero directions.">
+  <div data-proto-root>
+    <div data-proto-panel="A" hidden>
+      <HeroA />
+    </div>
+    <div data-proto-panel="B" hidden>
+      <HeroB />
+    </div>
+    <div data-proto-panel="C" hidden>
+      <HeroC />
+    </div>
+  </div>
+
+  <div class="proto-bar" data-proto-bar>
+    <button type="button" data-proto-prev aria-label="Previous concept">←</button>
+    <span data-proto-label>A - Glass cloud</span>
+    <button type="button" data-proto-next aria-label="Next concept">→</button>
+    <a class="proto-bar__home" href="/">← site</a>
+  </div>
+
+  <script>
+    const variants = [
+      { key: 'A', name: 'Glass cloud' },
+      { key: 'B', name: 'Isometric store' },
+      { key: 'C', name: 'Sky field river' },
+    ] as const;
+
+    const params = new URLSearchParams(location.search);
+    let current = (params.get('variant') || 'A').toUpperCase();
+    if (!variants.some((v) => v.key === current)) current = 'A';
+
+    const panels = document.querySelectorAll<HTMLElement>('[data-proto-panel]');
+    const label = document.querySelector('[data-proto-label]');
+
+    function show(key: string) {
+      current = key;
+      panels.forEach((p) => {
+        p.hidden = p.dataset.protoPanel !== key;
+      });
+      const meta = variants.find((v) => v.key === key)!;
+      if (label) label.textContent = `${meta.key} - ${meta.name}`;
+      const url = new URL(location.href);
+      url.searchParams.set('variant', key);
+      history.replaceState(null, '', url);
+    }
+
+    function step(delta: number) {
+      const i = variants.findIndex((v) => v.key === current);
+      const next = variants[(i + delta + variants.length) % variants.length];
+      show(next.key);
+    }
+
+    document.querySelector('[data-proto-prev]')?.addEventListener('click', () => step(-1));
+    document.querySelector('[data-proto-next]')?.addEventListener('click', () => step(1));
+    window.addEventListener('keydown', (e) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'ArrowLeft') step(-1);
+      if (e.key === 'ArrowRight') step(1);
+    });
+
+    show(current);
+  </script>
+</Base>
+
+<style>
+  .proto-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 1.25rem;
+    transform: translateX(-50%);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 999px;
+    background: #111;
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  }
+
+  .proto-bar button {
+    border: none;
+    background: rgba(255, 255, 255, 0.12);
+    color: inherit;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .proto-bar__home {
+    margin-left: 0.35rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    font-weight: 500;
+  }
+</style>

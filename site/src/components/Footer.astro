@@ -1,0 +1,103 @@
+---
+/**
+ * The page opened on a sky over a hill with a river running off it. It closes
+ * on the same two washes: the water arrives from the right, and the sky comes
+ * back upside down and much fainter as a horizon along the bottom edge.
+ */
+---
+
+<footer class="footer">
+  <div class="footer__art" aria-hidden="true">
+    <img class="footer__stream" src="/art/stream.webp" alt="" width="880" height="390" loading="lazy" />
+    <img class="footer__horizon" src="/art/sky-band.webp" alt="" width="2400" height="500" loading="lazy" />
+  </div>
+
+  <div class="wrap footer__inner">
+    <p>Made by <a href="https://jimmyverburgt.com">Jimmy Verburgt</a></p>
+    <nav class="footer__nav" aria-label="Footer">
+      <a href="https://github.com/VerburgtJimmy/puck">GitHub</a>
+      <a href="https://github.com/VerburgtJimmy/puck/releases">Changelog</a>
+      <a href="/docs">Docs</a>
+    </nav>
+    <p class="footer__note">Not affiliated with Laravel or Composer.</p>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    position: relative;
+    overflow: hidden;
+    padding: 7rem 0 3.5rem;
+    background: var(--page);
+  }
+
+  .footer__art {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* Right half only: the footer's own text never reaches past the middle, so
+     the water has the whole side to itself at any width. */
+  .footer__stream {
+    position: absolute;
+    bottom: -1rem;
+    right: -6vw;
+    width: min(52vw, 38rem);
+    height: auto;
+  }
+
+  .footer__horizon {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%) scaleY(-1);
+    width: min(100%, 96rem);
+    height: clamp(6rem, 12vw, 11rem);
+    object-fit: fill;
+    opacity: 0.42;
+  }
+
+  @media (max-width: 719px) {
+    .footer {
+      padding-top: 4rem;
+    }
+
+    .footer__stream {
+      display: none;
+    }
+  }
+
+  .footer__inner {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .footer p {
+    margin: 0;
+  }
+
+  .footer__nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.25rem;
+  }
+
+  .footer a {
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .footer a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .footer__note {
+    color: var(--ink-faint);
+    font-size: 0.875rem;
+  }
+</style>

@@ -1,0 +1,44 @@
+---
+import Base from '../layouts/Base.astro';
+import Hero from '../components/Hero.astro';
+import Terminal from '../components/Terminal.astro';
+import Numbers from '../components/Numbers.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Compatibility from '../components/Compatibility.astro';
+import Install from '../components/Install.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Base>
+  <a class="skip" href="#terminal">Skip to content</a>
+  <Hero />
+  <main>
+    <Terminal />
+    <Numbers />
+    <HowItWorks />
+    <Compatibility />
+    <Install />
+  </main>
+  <Footer />
+  <script src="../scripts/site.ts"></script>
+</Base>
+
+<style is:global>
+  .skip {
+    position: absolute;
+    left: -999px;
+    top: 0;
+    background: var(--accent);
+    color: var(--accent-ink);
+    padding: 0.5rem 1rem;
+    z-index: 100;
+  }
+  .skip:focus {
+    left: var(--gutter);
+    top: 0.75rem;
+  }
+
+  code {
+    font-family: var(--font-mono);
+  }
+</style>

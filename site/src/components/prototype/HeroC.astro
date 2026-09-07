@@ -1,0 +1,419 @@
+---
+/**
+ * C - Watercolor. A thin blue sky bleeds off the top of the page and passes
+ * behind the nav, so the middle nav links knock out in white while the brand
+ * and the GitHub link stay on open paper. Copy sits on white below it; the
+ * painted field is anchored to the bottom right and its river runs off the
+ * bottom edge into the next section.
+ *
+ * Art is baked by site/tools/make-sky.py and site/tools/make-field.py.
+ */
+---
+
+<header class="hc">
+  <div class="hc__sky" aria-hidden="true">
+    <img src="/art/sky-band.webp" alt="" width="2400" height="500" decoding="async" />
+  </div>
+
+  <nav class="hc__nav wrap" aria-label="Primary">
+    <a class="hc__brand-link" href="/prototype/hero?variant=C">puck</a>
+    <div class="hc__links">
+      <a href="#numbers">Numbers</a>
+      <a href="#how">How</a>
+      <a href="#install">Install</a>
+      <a href="/docs">Docs</a>
+    </div>
+    <a class="hc__gh" href="https://github.com/VerburgtJimmy/puck">GitHub</a>
+  </nav>
+
+  <div class="hc__layout wrap">
+    <div class="hc__copy">
+      <p class="hc__brand">puck</p>
+      <h1 class="hc__title">Same lock.<br />A shorter wait.</h1>
+      <p class="hc__lede">
+        Native tooling for PHP and Laravel, starting with the install. Composer-compatible
+        {' '}<code>composer.json</code> / lock, a shared store, one static binary. Bigger layers come next.
+      </p>
+      <div class="hc__cmd" data-copy>
+        <code>curl -fsSL https://puck.jimmyverburgt.com/install | bash</code>
+        <button type="button" class="hc__cmd-btn" data-copy-btn aria-label="Copy install command">
+          Copy
+        </button>
+      </div>
+      <div class="hc__actions">
+        <a class="hc__btn" href="/#numbers">See the numbers</a>
+        <a class="hc__link" href="/docs">Docs</a>
+      </div>
+    </div>
+
+    <figure class="hc__scene">
+      <img
+        src="/art/field-scene.webp"
+        alt="Watercolor hill with a stack of packages, one lit warm, beside a lamp. A river runs down from the hill and off the bottom of the page."
+        width="1385"
+        height="620"
+        decoding="async"
+      />
+    </figure>
+  </div>
+
+  <a class="hc__cue" href="#terminal">
+    <span>Follow it down</span>
+    <svg viewBox="0 0 12 20" aria-hidden="true"><path d="M6 1v16m0 0 4-4m-4 4-4-4" /></svg>
+  </a>
+</header>
+
+<style>
+  .hc {
+    position: relative;
+    min-height: 100svh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    color: var(--ink);
+  }
+
+  /* Sky: full-bleed, thin, bleeding off the top so it reads as sky rather than
+     as a picture of sky. The art carries its own soft edges on every side. */
+  .hc__sky {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(100%, 96rem);
+    height: clamp(10rem, 21vw, 21rem);
+    z-index: 0;
+    pointer-events: none;
+    animation: hc-wash 1.6s ease-out both;
+  }
+
+  /* Stretched rather than cropped on purpose: the wash carries its own feather
+     on all four edges, and `cover` would slice that feather off and leave a
+     hard line across the page. Squashing a sky just makes it a lower sky. */
+  .hc__sky img {
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+  }
+
+  .hc__nav {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-block: 1.15rem;
+  }
+
+  .hc__brand-link {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 36, "WONK" 1;
+    font-weight: 700;
+    font-size: 1.35rem;
+    text-decoration: none;
+    letter-spacing: -0.02em;
+  }
+
+  .hc__links {
+    display: none;
+    gap: 1.4rem;
+    margin-inline: auto;
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+
+  /* The middle of the nav sits on the deepest part of the wash. */
+  .hc__links a {
+    color: #fff;
+    text-decoration: none;
+    padding-bottom: 2px;
+    border-bottom: 1px solid transparent;
+  }
+
+  .hc__links a:hover {
+    border-bottom-color: rgba(255, 255, 255, 0.7);
+  }
+
+  @media (min-width: 720px) {
+    .hc__links {
+      display: flex;
+    }
+  }
+
+  .hc__gh {
+    margin-left: auto;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--ink-muted);
+  }
+
+  .hc__gh:hover {
+    color: var(--ink);
+  }
+
+  @media (min-width: 720px) {
+    .hc__gh {
+      margin-left: 0;
+    }
+  }
+
+  .hc__layout {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+    flex: 1;
+    align-content: center;
+    padding-bottom: 4rem;
+  }
+
+  @media (min-width: 960px) {
+    .hc__layout {
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      align-items: center;
+      gap: 1rem;
+      padding-bottom: 0;
+    }
+  }
+
+  .hc__copy {
+    position: relative;
+    z-index: 3;
+    min-width: 0;
+    max-width: 32rem;
+    animation: hc-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .hc__brand {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "WONK" 1;
+    font-weight: 700;
+    font-size: clamp(2.75rem, 6vw, 4rem);
+    letter-spacing: -0.035em;
+    line-height: 0.95;
+    margin: 0 0 0.65rem;
+  }
+
+  .hc__title {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 72, "WONK" 0;
+    font-weight: 600;
+    font-size: clamp(1.65rem, 3.2vw, 2.35rem);
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    margin: 0 0 1rem;
+    color: var(--ink-muted);
+  }
+
+  .hc__lede {
+    color: var(--ink-muted);
+    max-width: 30rem;
+    margin: 0 0 1.35rem;
+  }
+
+  .hc__lede code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  .hc__cmd {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: min(100%, 38rem);
+    padding: 0.65rem 0.7rem 0.65rem 1rem;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid var(--line);
+    box-shadow: 0 10px 30px rgba(26, 29, 36, 0.04);
+  }
+
+  .hc__cmd code {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: clamp(0.68rem, 1.7vw, 0.8rem);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .hc__cmd-btn {
+    flex: 0 0 auto;
+    border: none;
+    background: #f4f6f9;
+    color: var(--ink-muted);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    padding: 0.4rem 0.75rem;
+    border-radius: 999px;
+  }
+
+  .hc__cmd-btn:hover {
+    color: var(--ink);
+  }
+
+  .hc__actions {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    margin-top: 1.15rem;
+  }
+
+  .hc__btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: var(--ink);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .hc__btn:hover {
+    background: #2a2f3a;
+  }
+
+  .hc__link {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ink-muted);
+    text-decoration: none;
+  }
+
+  .hc__link:hover {
+    color: var(--ink);
+  }
+
+  /* The field is a piece of scenery, not a card: it sits on the floor of the
+     hero and runs past the right and bottom edges. */
+  .hc__scene {
+    margin: 0;
+    position: relative;
+    z-index: 1;
+    animation: hc-settle 1.2s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  }
+
+  /* This concept shipped as the real Hero; the scene art is now cut flush with
+     the fold for it, so feather the cut here where there is no next section. */
+  .hc__scene img {
+    width: 100%;
+    height: auto;
+    mask-image: linear-gradient(to bottom, #000 80%, transparent 100%);
+  }
+
+  @media (min-width: 960px) {
+    .hc__scene {
+      position: absolute;
+      right: calc(-1 * var(--gutter));
+      bottom: -3vh;
+      width: min(63vw, 50rem);
+      pointer-events: none;
+    }
+  }
+
+  .hc__cue {
+    position: absolute;
+    left: var(--gutter);
+    bottom: 1.75rem;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    text-decoration: none;
+  }
+
+  .hc__cue svg {
+    width: 0.6rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    animation: hc-nudge 2.6s ease-in-out infinite;
+  }
+
+  .hc__cue:hover {
+    color: var(--ink-muted);
+  }
+
+  @keyframes hc-wash {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes hc-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes hc-settle {
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes hc-nudge {
+    0%,
+    72%,
+    100% {
+      transform: translateY(0);
+    }
+    84% {
+      transform: translateY(3px);
+    }
+  }
+
+  @media (max-width: 959px) {
+    .hc__sky {
+      height: clamp(8.5rem, 26vw, 14rem);
+    }
+
+    .hc__layout {
+      padding-top: 1.5rem;
+    }
+
+    .hc__scene {
+      margin-inline: calc(-1 * var(--gutter));
+      margin-bottom: -2rem;
+    }
+
+    .hc__cue {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hc__sky,
+    .hc__copy,
+    .hc__scene,
+    .hc__cue svg {
+      animation: none !important;
+    }
+  }
+</style>

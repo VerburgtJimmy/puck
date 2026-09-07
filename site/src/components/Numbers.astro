@@ -1,0 +1,164 @@
+---
+import { BENCH_RUN, BENCHES } from '../data/product';
+
+const tables = [BENCHES.skeleton, BENCHES.app];
+const maxMs = Math.max(...tables.flatMap((t) => t.rows.flatMap((r) => [r.composer, r.puck])));
+---
+
+<section class="section numbers" id="numbers" aria-labelledby="numbers-title">
+  <div class="wrap">
+    <p class="eyebrow">Linux CI</p>
+    <h2 class="section__title" id="numbers-title">The numbers.</h2>
+    <p class="section__lede">
+      Same run for Composer and puck
+      (<a href={BENCH_RUN}>34124132162</a>). Lead with warm-wipe. Cold is network-heavy.
+      Scripts and flags live in <a href="https://github.com/VerburgtJimmy/puck/tree/master/benches"><code>benches/</code></a>.
+    </p>
+
+    <div class="numbers__grid">
+      {
+        tables.map((table) => (
+          <div class="bench">
+            <h3 class="bench__title">{table.title}</h3>
+            <p class="bench__note">{table.note}</p>
+            <ul class="bench__rows">
+              {table.rows.map((row) => (
+                <li class="bench__row" data-bars>
+                  <div class="bench__label">{row.scenario}</div>
+                  <div class="bench__tracks">
+                    <div class="bench__track">
+                      <span class="bench__who">composer</span>
+                      <span
+                        class="bench__bar bench__bar--composer"
+                        style={`--w:${(row.composer / maxMs) * 100}%`}
+                        data-bar
+                      ></span>
+                      <span class="bench__ms">{row.composer} ms</span>
+                    </div>
+                    <div class="bench__track">
+                      <span class="bench__who">puck</span>
+                      <span
+                        class="bench__bar bench__bar--puck"
+                        style={`--w:${(row.puck / maxMs) * 100}%`}
+                        data-bar
+                      ></span>
+                      <span class="bench__ms">{row.puck} ms</span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+
+    <p class="numbers__foot">
+      Warm-wipe: optimized classmap dump scales with require-dev. Cold: downloads still dominate;
+      puck pipelines download with extract (overlap on skeleton cold was 17611 ms of summed work).
+    </p>
+  </div>
+</section>
+
+<style>
+  .numbers__grid {
+    display: grid;
+    gap: 2.5rem;
+  }
+
+  @media (min-width: 900px) {
+    .numbers__grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+  }
+
+  .bench__title {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin: 0 0 0.35rem;
+  }
+
+  .bench__note {
+    margin: 0 0 1.25rem;
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+  }
+
+  .bench__rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .bench__label {
+    font-weight: 600;
+    font-size: 0.9375rem;
+    margin-bottom: 0.45rem;
+  }
+
+  .bench__tracks {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .bench__track {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr auto;
+    gap: 0.65rem;
+    align-items: center;
+  }
+
+  .bench__who {
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+  }
+
+  .bench__bar {
+    display: block;
+    height: 0.65rem;
+    border-radius: 999px;
+    width: 0;
+    transform-origin: left center;
+  }
+
+  .bench__bar.is-on {
+    width: var(--w);
+    transition: width 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .bench__bar--composer {
+    background: var(--composer-bar);
+  }
+  .bench__bar--puck {
+    background: var(--puck-bar);
+  }
+
+  .bench__ms {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    min-width: 4.5rem;
+    text-align: right;
+  }
+
+  .numbers__foot {
+    margin: 2rem 0 0;
+    max-width: 42rem;
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+  }
+
+  .numbers a {
+    color: var(--ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bench__bar {
+      width: var(--w);
+      transition: none;
+    }
+  }
+</style>

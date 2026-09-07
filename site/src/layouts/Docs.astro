@@ -1,0 +1,189 @@
+---
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'puck documentation' } = Astro.props;
+const nav = [
+  { href: '/docs', label: 'Overview' },
+  { href: '/docs/install', label: 'Install' },
+  { href: '/docs/doctor', label: 'Doctor' },
+  { href: '/docs/usage', label: 'Usage' },
+];
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+---
+
+<Base title={`${title} - puck`} description={description}>
+  <div class="docs">
+    <header class="docs__top">
+      <div class="wrap docs__top-inner">
+        <a class="docs__brand" href="/">puck</a>
+        <nav class="docs__nav" aria-label="Docs">
+          {
+            nav.map((item) => {
+              const active =
+                item.href === '/docs'
+                  ? path === '/docs'
+                  : path === item.href || path.startsWith(`${item.href}/`);
+              return (
+                <a href={item.href} class:list={{ 'is-active': active }}>
+                  {item.label}
+                </a>
+              );
+            })
+          }
+        </nav>
+        <a class="docs__gh" href="https://github.com/VerburgtJimmy/puck">GitHub</a>
+      </div>
+    </header>
+    <main class="wrap docs__main">
+      <article class="prose">
+        <slot />
+      </article>
+    </main>
+    <footer class="docs__foot wrap">
+      <a href="/">← puck home</a>
+    </footer>
+  </div>
+</Base>
+
+<style>
+  .docs {
+    min-height: 100svh;
+    background: var(--page);
+  }
+
+  .docs__top {
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--page) 80%, transparent);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .docs__top-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    padding-block: 0.9rem;
+  }
+
+  .docs__brand {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 36, "WONK" 1;
+    font-weight: 700;
+    font-size: 1.35rem;
+    text-decoration: none;
+    letter-spacing: -0.02em;
+  }
+
+  .docs__nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.85rem;
+    flex: 1;
+  }
+
+  .docs__nav a {
+    text-decoration: none;
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+
+  .docs__nav a.is-active,
+  .docs__nav a:hover {
+    color: var(--ink);
+  }
+
+  .docs__gh {
+    font-size: 0.875rem;
+    color: var(--ink-muted);
+  }
+
+  .docs__main {
+    padding-block: 2.5rem 3rem;
+  }
+
+  .docs__foot {
+    padding-bottom: 2.5rem;
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+  }
+
+  .prose :global(h1) {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "WONK" 1;
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 0 1rem;
+  }
+
+  .prose :global(h2) {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 72, "WONK" 0;
+    font-size: 1.5rem;
+    margin: 2rem 0 0.75rem;
+  }
+
+  .prose :global(p),
+  .prose :global(li) {
+    color: var(--ink-muted);
+  }
+
+  .prose :global(a) {
+    color: var(--ink);
+  }
+
+  .prose :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  .prose :global(pre) {
+    background: var(--terminal-bg);
+    color: var(--terminal-fg);
+    padding: 1rem 1.15rem;
+    border-radius: 0.85rem;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+  }
+
+  .prose :global(pre code) {
+    font-size: inherit;
+  }
+
+  .prose :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+    margin: 1rem 0;
+  }
+
+  .prose :global(th),
+  .prose :global(td) {
+    text-align: left;
+    padding: 0.55rem 0.4rem;
+    border-bottom: 1px solid rgba(15, 42, 68, 0.12);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .prose :global(th),
+    .prose :global(td) {
+      border-bottom-color: rgba(232, 241, 250, 0.12);
+    }
+  }
+
+  .prose :global(ul),
+  .prose :global(ol) {
+    padding-left: 1.25rem;
+  }
+</style>

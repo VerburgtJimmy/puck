@@ -1,0 +1,76 @@
+---
+import Docs from '../../layouts/Docs.astro';
+---
+
+<Docs title="Install" description="Install puck on macOS and Linux.">
+  <h1>Install</h1>
+  <p>
+    macOS and Linux (amd64 / arm64). Linux releases are musl static binaries.
+    Windows is not supported in 0.1. Keep Composer installed.
+  </p>
+
+  <h2>curl</h2>
+  <pre><code>curl -fsSL https://puck.jimmyverburgt.com/install | bash</code></pre>
+  <p>
+    Mirror of <code>install.sh</code>. Pin to a release tag when you want the script
+    locked to that release:
+  </p>
+  <pre><code>curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash</code></pre>
+  <p>Installs into <code>~/.puck/bin</code>. Appends a PATH block unless <code>--no-modify-path</code>.</p>
+  <pre><code># pin binary version
+curl -fsSL https://puck.jimmyverburgt.com/install | bash -s -- v0.1.1
+
+# uninstall binary + PATH block (store left behind)
+curl -fsSL https://puck.jimmyverburgt.com/install | bash -s -- --uninstall</code></pre>
+
+  <table>
+    <thead>
+      <tr><th>Variable / flag</th><th>Default</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>PUCK_INSTALL</code></td><td><code>~/.puck</code></td><td>Install root</td></tr>
+      <tr><td><code>PUCK_VERSION</code> / first arg</td><td>latest via manifest</td><td>Release tag</td></tr>
+      <tr><td><code>--no-modify-path</code></td><td>off</td><td>Do not edit shell rc</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Always verifies SHA256. Verifies minisign when the <code>minisign</code> tool is present.
+  </p>
+
+  <h2>Homebrew</h2>
+  <pre><code>brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck
+brew install puck</code></pre>
+
+  <h2>GitHub Actions</h2>
+  <pre><code>- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.1
+  with:
+    version: latest
+    cache: true</code></pre>
+
+  <h2>Docker</h2>
+  <p>
+    Image push to GHCR is not enabled yet. Build from the repo root{' '}
+    <code>Dockerfile</code>:
+  </p>
+  <pre><code>docker build \
+  --build-arg PUCK_VERSION=v0.1.1 \
+  --build-arg TARGET=x86_64-unknown-linux-musl \
+  -t puck:0.1.1 .
+
+# in another Dockerfile:
+COPY --from=puck:0.1.1 /puck /usr/local/bin/puck</code></pre>
+
+  <h2>From source</h2>
+  <pre><code>git clone https://github.com/VerburgtJimmy/puck.git
+cd puck
+cargo build --release -p puck_cli
+# binary: target/release/puck</code></pre>
+  <p>Requires Rust 1.96+.</p>
+
+  <h2>Upgrade</h2>
+  <pre><code>puck upgrade</code></pre>
+  <p>
+    Reads <code>manifest.json</code> from GitHub Releases, verifies checksums and minisign,
+    replaces the binary. Previous binary kept as <code>puck.previous</code>.
+  </p>
+</Docs>

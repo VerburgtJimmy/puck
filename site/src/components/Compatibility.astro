@@ -1,0 +1,113 @@
+---
+import { COMPAT } from '../data/product';
+---
+
+<section class="section compat" id="compat" aria-labelledby="compat-title">
+  <div class="wrap">
+    <p class="eyebrow">Before you switch</p>
+    <h2 class="section__title" id="compat-title">Run doctor first.</h2>
+    <p class="section__lede">
+      Keep Composer installed. puck reads and writes the same files, and you can switch back at any time.
+    </p>
+
+    <div class="compat__grid">
+      <div class="term term--mini" aria-label="Sample puck doctor output">
+        <pre><code>$ puck doctor
+project: acme/app
+
+blocker  unsupported plugin  foo/bar-installer
+warning  abandoned package   old/lib
+warning  platform php        ^8.2 (host 8.4.23)
+info     store               ~/.puck/store
+
+1 blocker</code></pre>
+      </div>
+
+      <table class="compat__table">
+        <thead>
+          <tr>
+            <th scope="col">Area</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            COMPAT.map((row) => (
+              <tr>
+                <td>{row.area}</td>
+                <td data-status={row.status}>{row.status}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<style>
+  .compat__grid {
+    display: grid;
+    gap: 1.75rem;
+  }
+
+  @media (min-width: 900px) {
+    .compat__grid {
+      grid-template-columns: 1.1fr 0.9fr;
+      align-items: start;
+    }
+  }
+
+  .term--mini {
+    border-radius: 1rem;
+    background: var(--terminal-bg);
+    color: var(--terminal-fg);
+    overflow: hidden;
+  }
+
+  .term--mini pre {
+    margin: 0;
+    padding: 1.25rem 1.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+  }
+
+  .compat__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+  }
+
+  .compat__table th,
+  .compat__table td {
+    text-align: left;
+    padding: 0.7rem 0.4rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .compat__table th {
+    color: var(--ink-faint);
+    font-weight: 600;
+    font-size: 0.75rem;
+  }
+
+  .compat__table td[data-status='Supported'] {
+    color: #2f7a45;
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .compat__table td[data-status='Supported'] {
+      color: #7dca8d;
+    }
+  }
+
+  .compat__table td[data-status='0.2'] {
+    color: var(--ink-muted);
+  }
+
+  .compat__table td[data-status='Not planned'] {
+    color: var(--ink-faint);
+  }
+</style>

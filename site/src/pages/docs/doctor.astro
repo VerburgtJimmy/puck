@@ -1,0 +1,33 @@
+---
+import Docs from '../../layouts/Docs.astro';
+---
+
+<Docs title="Doctor" description="Run puck doctor before switching a project from Composer.">
+  <h1>Doctor</h1>
+  <p>
+    Preflight for the current project. Run it before you switch from Composer.
+    Exit non-zero when there is a blocker.
+  </p>
+  <pre><code>puck doctor
+puck doctor --json</code></pre>
+
+  <h2>What it checks</h2>
+  <ul>
+    <li>Unsupported Composer plugins (Tier 3 refusal)</li>
+    <li>Repository types beyond Composer + path (0.2)</li>
+    <li>Abandoned packages and platform hints (warnings)</li>
+    <li>Store path info</li>
+  </ul>
+
+  <h2>Example</h2>
+  <pre><code>$ puck doctor
+project: acme/app
+
+blocker  unsupported plugin  foo/bar-installer
+warning  abandoned package   old/lib
+warning  platform php        ^8.2 (host 8.4.23)
+info     store               ~/.puck/store
+
+1 blocker</code></pre>
+  <p>Warnings do not block. Fix blockers, or stay on Composer for that project.</p>
+</Docs>

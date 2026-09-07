@@ -1,0 +1,41 @@
+---
+import GlassCloud from './GlassCloud.astro';
+---
+
+<div class="sky" aria-hidden="true">
+  <div class="sky__wash"></div>
+  <div class="sky__cloud">
+    <GlassCloud />
+  </div>
+</div>
+
+<style>
+  .sky {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .sky__wash {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #f2f5f9 0%, #ffffff 70%);
+  }
+
+  .sky__cloud {
+    position: absolute;
+    right: max(-1rem, calc((100% - var(--max)) / 2 - 0.5rem));
+    top: 16%;
+    width: min(46vw, 30rem);
+  }
+
+  @media (max-width: 860px) {
+    .sky__cloud {
+      right: -10%;
+      top: 8%;
+      width: 72vw;
+      opacity: 0.85;
+    }
+  }
+</style>

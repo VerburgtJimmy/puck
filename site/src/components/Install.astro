@@ -1,0 +1,158 @@
+---
+const tabs = [
+  {
+    id: 'curl',
+    label: 'curl',
+    code: `curl -fsSL https://puck.jimmyverburgt.com/install | bash`,
+  },
+  {
+    id: 'brew',
+    label: 'Homebrew',
+    code: `brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck
+brew install puck`,
+  },
+  {
+    id: 'actions',
+    label: 'GitHub Actions',
+    code: `- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.1
+  with:
+    version: latest`,
+  },
+  {
+    id: 'docker',
+    label: 'Docker',
+    code: `docker build \\
+  --build-arg PUCK_VERSION=v0.1.1 \\
+  --build-arg TARGET=x86_64-unknown-linux-musl \\
+  -t puck:0.1.1 .
+# then: COPY --from=puck:0.1.1 /puck /usr/local/bin/puck`,
+  },
+];
+---
+
+<section class="section install" id="install" aria-labelledby="install-title">
+  <div class="wrap">
+    <p class="eyebrow">Install</p>
+    <h2 class="section__title" id="install-title">One binary. Same files.</h2>
+    <p class="section__lede">
+      macOS and Linux. Installs into <code>~/.puck/bin</code>. Upgrade later with{' '}
+      <code>puck upgrade</code>. Manifest truth stays on GitHub Releases.
+    </p>
+
+    <div class="install__panel" data-install>
+      <div class="install__tabs" role="tablist">
+        {
+          tabs.map((tab, i) => (
+            <button
+              type="button"
+              class:list={['install__tab', { 'is-active': i === 0 }]}
+              role="tab"
+              aria-selected={i === 0}
+              data-install-tab={tab.id}
+            >
+              {tab.label}
+            </button>
+          ))
+        }
+      </div>
+      {
+        tabs.map((tab, i) => (
+          <div
+            class:list={['install__pane', { 'is-active': i === 0 }]}
+            data-install-pane={tab.id}
+            role="tabpanel"
+            hidden={i !== 0}
+          >
+            <pre><code>{tab.code}</code></pre>
+            <button type="button" class="install__copy" data-copy-text={tab.code}>Copy</button>
+          </div>
+        ))
+      }
+    </div>
+
+    <p class="install__meta">
+      Current release <a href="https://github.com/VerburgtJimmy/puck/releases/tag/v0.1.1">v0.1.1</a>
+      · checksums and minisign on the release page ·
+      <a href="/docs/install">install docs</a>
+    </p>
+  </div>
+</section>
+
+<style>
+  .install__panel {
+    position: relative;
+    border-radius: calc(var(--radius) + 0.1rem);
+    background: var(--terminal-bg);
+    color: var(--terminal-fg);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 28px 60px rgba(26, 29, 36, 0.12);
+  }
+
+  .install__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.75rem 0.75rem 0;
+    background: rgba(0, 0, 0, 0.15);
+  }
+
+  .install__tab {
+    border: none;
+    background: transparent;
+    color: var(--terminal-muted);
+    padding: 0.65rem 0.9rem;
+    border-radius: 0.65rem 0.65rem 0 0;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.8125rem;
+  }
+
+  .install__tab.is-active {
+    background: var(--terminal-bg);
+    color: var(--terminal-fg);
+  }
+
+  .install__pane {
+    display: none;
+    position: relative;
+    padding: 1.25rem 1.35rem 1.4rem;
+  }
+
+  .install__pane.is-active {
+    display: block;
+  }
+
+  .install__pane pre {
+    margin: 0;
+    padding-right: 4rem;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+  }
+
+  .install__copy {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--terminal-fg);
+    font-weight: 600;
+    font-size: 0.75rem;
+    padding: 0.4rem 0.7rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .install__meta {
+    margin: 1rem 0 0;
+    font-size: 0.875rem;
+    color: var(--ink-muted);
+  }
+
+  .install__meta a {
+    color: var(--ink);
+  }
+</style>

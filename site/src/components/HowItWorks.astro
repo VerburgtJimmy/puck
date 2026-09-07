@@ -1,0 +1,465 @@
+---
+const packages = [
+  { name: 'laravel/framework', hash: 'sha...' },
+  { name: 'nesbot/carbon', hash: 'sha...' },
+  { name: 'symfony/http-foundation', hash: 'sha...' },
+  { name: 'illuminate/support', hash: 'sha...' },
+];
+
+const beats = [
+  {
+    icon: 'archive',
+    title: 'Land once',
+    body: 'Each archive extracts into a content-addressed store. Same bytes never unpack twice.',
+  },
+  {
+    icon: 'link',
+    title: 'Link cheap',
+    body: 'Projects hardlink or reflink from the store. vendor/ looks normal to PHP, IDEs, and Docker.',
+  },
+  {
+    icon: 'bolt',
+    title: 'Stay native',
+    body: 'Install is a Rust binary. Composer stays installed so you can switch back any time.',
+  },
+];
+---
+
+<section class="section how" id="how" aria-labelledby="how-title">
+  <div class="wrap">
+    <p class="eyebrow">How it works</p>
+    <h2 class="section__title" id="how-title">One shelf. Every project.</h2>
+    <p class="section__lede">
+      Packages settle into a shared store under <code>~/.puck/store</code>. Linking them into{' '}
+      <code>vendor/</code> is nearly free. Two apps can share the same bytes on disk.
+    </p>
+
+    <div class="how__stage" data-how>
+      <div class="how__store">
+        <div class="how__store-glass">
+          <div class="how__store-head">
+            <span class="how__pill">~/.puck/store</span>
+            <span class="how__hint">content-addressed</span>
+          </div>
+          <ul class="how__pkgs">
+            {
+              packages.map((pkg, i) => (
+                <li class="how__pkg" style={`--d:${i * 70}ms`}>
+                  <span class="how__pkg-mark" aria-hidden="true" />
+                  <span class="how__pkg-name">{pkg.name}</span>
+                  <span class="how__pkg-hash">{pkg.hash}</span>
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+
+      <div class="how__links" aria-hidden="true">
+        <svg class="how__wires" viewBox="0 0 160 280" preserveAspectRatio="none">
+          <path class="how__wire how__wire--1" d="M8 70 C 70 70, 90 50, 152 48" />
+          <path class="how__wire how__wire--2" d="M8 110 C 70 110, 90 100, 152 118" />
+          <path class="how__wire how__wire--3" d="M8 150 C 70 160, 90 200, 152 210" />
+          <path class="how__wire how__wire--4" d="M8 190 C 70 200, 90 230, 152 250" />
+        </svg>
+        <span class="how__spark"></span>
+      </div>
+
+      <div class="how__projects">
+        <div class="how__project" style="--d:180ms">
+          <div class="how__project-head">
+            <span class="how__folder" aria-hidden="true"></span>
+            <span>app-api/vendor</span>
+          </div>
+          <ul>
+            <li>laravel/framework <em>→ store</em></li>
+            <li>nesbot/carbon <em>→ store</em></li>
+            <li>symfony/http-foundation <em>→ store</em></li>
+          </ul>
+        </div>
+        <div class="how__project" style="--d:280ms">
+          <div class="how__project-head">
+            <span class="how__folder" aria-hidden="true"></span>
+            <span>app-web/vendor</span>
+          </div>
+          <ul>
+            <li>laravel/framework <em>→ store</em></li>
+            <li>nesbot/carbon <em>→ store</em></li>
+            <li>pestphp/pest <em>→ store</em></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <ol class="how__captions">
+      {
+        beats.map((b) => (
+          <li>
+            <span class="how__icon" data-icon={b.icon} aria-hidden="true">
+              {b.icon === 'archive' && (
+                <svg viewBox="0 0 24 24" fill="none">
+                  <rect x="4" y="3" width="16" height="5" rx="1.5" stroke="currentColor" stroke-width="1.6" />
+                  <path d="M5 8h14v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8Z" stroke="currentColor" stroke-width="1.6" />
+                  <path d="M10 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                </svg>
+              )}
+              {b.icon === 'link' && (
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M9 12a4 4 0 0 1 0-5.7l1.4-1.4a4 4 0 0 1 5.7 5.7L15 12"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    d="M15 12a4 4 0 0 1 0 5.7l-1.4 1.4a4 4 0 1 1-5.7-5.7L9 12"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              )}
+              {b.icon === 'bolt' && (
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M13 2 5 14h7l-1 8 8-12h-7l1-8Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              )}
+            </span>
+            <strong>{b.title}</strong>
+            <span>{b.body}</span>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .how code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  .how__stage {
+    display: grid;
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+    align-items: stretch;
+  }
+
+  @media (min-width: 960px) {
+    .how__stage {
+      grid-template-columns: 1.15fr 0.35fr 1fr;
+      gap: 0.5rem;
+      min-height: 22rem;
+    }
+  }
+
+  .how__store-glass {
+    height: 100%;
+    border-radius: calc(var(--radius) + 0.15rem);
+    padding: 1.15rem;
+    background: #f7f9fc;
+    border: 1px solid var(--line);
+    box-shadow: 0 16px 40px rgba(26, 29, 36, 0.05);
+  }
+
+  .how__store-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .how__pill {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid var(--line);
+  }
+
+  .how__hint {
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+  }
+
+  .how__pkgs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .how__pkg {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 0.85rem;
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid var(--line);
+  }
+
+  .how__stage.is-on .how__pkg {
+    animation: how-rise 450ms ease both;
+    animation-delay: var(--d);
+  }
+
+  .how__pkg-mark {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 0.2rem;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .how__pkg-name {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+  }
+
+  .how__pkg-hash {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--ink-faint);
+  }
+
+  .how__links {
+    position: relative;
+    min-height: 4rem;
+  }
+
+  @media (min-width: 960px) {
+    .how__links {
+      min-height: auto;
+    }
+  }
+
+  .how__wires {
+    display: none;
+    width: 100%;
+    height: 100%;
+  }
+
+  @media (min-width: 960px) {
+    .how__wires {
+      display: block;
+    }
+  }
+
+  .how__wire {
+    fill: none;
+    stroke: #9bb8d8;
+    stroke-width: 2;
+    stroke-dasharray: 6 6;
+    opacity: 0.55;
+  }
+
+  .how__stage.is-on .how__wire {
+    opacity: 0.85;
+    animation: dash 1.2s linear infinite;
+  }
+
+  .how__wire--2 {
+    stroke: color-mix(in srgb, var(--accent) 55%, #9bb8d8);
+  }
+  .how__wire--3,
+  .how__wire--4 {
+    stroke: color-mix(in srgb, var(--accent) 35%, #9bb8d8);
+  }
+
+  .how__spark {
+    position: absolute;
+    left: 40%;
+    top: 35%;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: #ffe08a;
+    box-shadow: 0 0 16px 6px rgba(232, 163, 23, 0.35);
+    opacity: 0.45;
+    animation: spark 2.4s ease-in-out infinite 0.6s;
+  }
+
+  .how__projects {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .how__project {
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    background: var(--page);
+    border: 1px solid var(--line);
+    box-shadow: 0 12px 30px rgba(26, 29, 36, 0.04);
+  }
+
+  .how__stage.is-on .how__project {
+    animation: how-slide 500ms ease both;
+    animation-delay: var(--d);
+  }
+
+  .how__project-head {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+
+  .how__folder {
+    width: 1rem;
+    height: 0.8rem;
+    border-radius: 0.15rem 0.15rem 0.2rem 0.2rem;
+    background: var(--accent);
+    position: relative;
+  }
+
+  .how__folder::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -0.22rem;
+    width: 0.45rem;
+    height: 0.25rem;
+    border-radius: 0.12rem 0.12rem 0 0;
+    background: var(--accent-deep);
+  }
+
+  .how__project ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .how__project li {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .how__project em {
+    font-style: normal;
+    color: var(--ink-faint);
+  }
+
+  .how__captions {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 800px) {
+    .how__captions {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.75rem;
+    }
+  }
+
+  .how__captions li {
+    display: grid;
+    gap: 0.45rem;
+    align-content: start;
+  }
+
+  .how__icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.75rem;
+    display: grid;
+    place-items: center;
+    background: var(--page);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    margin-bottom: 0.15rem;
+  }
+
+  .how__icon svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .how__captions strong {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 36, "WONK" 0;
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .how__captions span:last-child {
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+  }
+
+  @keyframes how-rise {
+    from {
+      opacity: 0.35;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes how-slide {
+    from {
+      opacity: 0.4;
+      transform: translateX(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes dash {
+    to {
+      stroke-dashoffset: -24;
+    }
+  }
+
+  @keyframes spark {
+    0%,
+    100% {
+      transform: translate(0, 0);
+      opacity: 0.2;
+    }
+    40% {
+      transform: translate(18px, -12px);
+      opacity: 1;
+    }
+    70% {
+      transform: translate(40px, 8px);
+      opacity: 0.6;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .how__pkg,
+    .how__project,
+    .how__wire,
+    .how__spark {
+      animation: none !important;
+    }
+  }
+</style>

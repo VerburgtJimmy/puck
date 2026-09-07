@@ -1,0 +1,137 @@
+---
+import { COMPOSER_INSTALL_FRAMES, PUCK_INSTALL_FRAMES } from '../data/product';
+---
+
+<section class="section terminal-section" id="terminal" aria-labelledby="terminal-title">
+  <div class="river" aria-hidden="true">
+    <div class="wrap">
+      <img src="/art/field-tail.webp" alt="" width="1385" height="138" />
+    </div>
+  </div>
+
+  <div class="wrap terminal-section__body">
+    <p class="eyebrow">Live feel</p>
+    <h2 class="section__title" id="terminal-title">Watch the wait.</h2>
+    <p class="section__lede">
+      Real-ish timings from Linux CI on <code>laravel-app</code> with require-dev.
+      puck first, then Composer at real speed. The pause is the point.
+    </p>
+
+    <div class="term" data-term>
+      <div class="term__tabs" role="tablist">
+        <button type="button" class="term__tab is-active" role="tab" aria-selected="true" data-term-tab="puck">puck</button>
+        <button type="button" class="term__tab" role="tab" aria-selected="false" data-term-tab="composer">composer</button>
+      </div>
+      <pre class="term__body" aria-live="polite"><code data-term-out></code></pre>
+      <p class="term__caption">
+        Replay derived from CI cold install timings (run{' '}
+        <a href="https://github.com/VerburgtJimmy/puck/actions/runs/34124132162">34124132162</a>).
+        Not a typed fiction of package names. A paced walk through a real install.
+      </p>
+    </div>
+  </div>
+</section>
+
+<script
+  type="application/json"
+  id="term-frames"
+  set:html={JSON.stringify({ puck: PUCK_INSTALL_FRAMES, composer: COMPOSER_INSTALL_FRAMES })}
+/>
+
+<style>
+  /* The hero's river is cut off flush with the fold; this is the rest of the
+     same stroke, laid out with the same width and right offset so the water
+     carries across the section boundary as one continuous line. */
+  .river {
+    display: none;
+    position: absolute;
+    inset: 0 0 auto;
+    /* Clipped at the same edge the hero clips the scene, so the two halves of
+       the river lose the same pixels and stay joined. */
+    height: calc(var(--art-width) * 138 / 1385);
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .river .wrap {
+    position: relative;
+  }
+
+  .river img {
+    position: absolute;
+    top: 0;
+    right: var(--art-right);
+    width: var(--art-width);
+    height: auto;
+  }
+
+  @media (min-width: 960px) {
+    .river {
+      display: block;
+    }
+  }
+
+  .terminal-section__body {
+    position: relative;
+    z-index: 1;
+  }
+
+  .term {
+    border-radius: calc(var(--radius) + 0.1rem);
+    overflow: hidden;
+    background: var(--terminal-bg);
+    color: var(--terminal-fg);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 28px 60px rgba(26, 29, 36, 0.14);
+  }
+
+  .term__tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.75rem 0.75rem 0;
+    background: rgba(0, 0, 0, 0.15);
+  }
+
+  .term__tab {
+    border: none;
+    background: transparent;
+    color: var(--terminal-muted);
+    padding: 0.65rem 1rem;
+    border-radius: 0.65rem 0.65rem 0 0;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .term__tab.is-active {
+    background: var(--terminal-bg);
+    color: var(--terminal-fg);
+  }
+
+  .term__body {
+    margin: 0;
+    min-height: 18rem;
+    padding: 1.25rem 1.35rem 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    overflow: auto;
+  }
+
+  .term__body code {
+    white-space: pre-wrap;
+  }
+
+  .term__caption {
+    margin: 0;
+    padding: 0.85rem 1.25rem 1.1rem;
+    font-size: 0.8125rem;
+    color: var(--terminal-muted);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .term__caption a {
+    color: var(--accent);
+  }
+</style>

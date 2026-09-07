@@ -1,0 +1,105 @@
+:root {
+  --page: #ffffff;
+  --ink: #1a1d24;
+  --ink-muted: #5b6472;
+  --ink-faint: #8b95a5;
+  --line: rgba(26, 29, 36, 0.08);
+  --accent: #e8a317;
+  --accent-deep: #c4840a;
+  --accent-ink: #1a1d24;
+  --accent-soft: rgba(232, 163, 23, 0.14);
+  --sun: #f5c518;
+  --sun-hot: #ff8a2a;
+  --composer-bar: #c3d0dd;
+  --puck-bar: #e8a317;
+  --terminal-bg: #141b26;
+  --terminal-fg: #eef2f7;
+  --terminal-muted: #8b98ac;
+  --font-display: "Fraunces Variable", "Fraunces", Georgia, serif;
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --max: 68rem;
+  /* Hero art anchor. Hero.astro's field and Terminal.astro's river tail must
+     share these exactly, or the water stops lining up across the fold. */
+  --art-width: min(63vw, 50rem);
+  --art-right: calc(-1 * var(--gutter) - 3vw);
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --radius: 1.25rem;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+}
+
+.wrap {
+  width: min(100% - 2 * var(--gutter), var(--max));
+  margin-inline: auto;
+}
+
+.section {
+  position: relative;
+  padding-block: clamp(4rem, 9vw, 7rem);
+  background: var(--page);
+}
+
+.section__title {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "WONK" 1;
+  font-weight: 700;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.75rem;
+}
+
+.section__lede {
+  margin: 0 0 2.25rem;
+  max-width: 36rem;
+  color: var(--ink-muted);
+  font-size: 1.0625rem;
+}
+
+.eyebrow {
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+  margin: 0 0 0.75rem;
+  font-weight: 500;
+}

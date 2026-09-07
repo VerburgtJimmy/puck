@@ -1,0 +1,378 @@
+---
+/**
+ * A thin watercolor sky bleeds off the top of the page and passes behind the
+ * nav, so the middle nav links knock out in white while the brand and the
+ * GitHub link stay on open paper. Copy sits on white below it.
+ *
+ * The painted field is flush with the bottom of the hero and its river carries
+ * on into the next section (see Terminal.astro, .river). Art is baked by
+ * site/tools/make-sky.py and site/tools/make-field.py.
+ */
+---
+
+<header class="hero" id="top">
+  <div class="hero__sky" aria-hidden="true">
+    <img src="/art/sky-band.webp" alt="" width="2400" height="500" fetchpriority="high" />
+  </div>
+
+  <nav class="topnav wrap" aria-label="Primary">
+    <a class="topnav__brand" href="#top">puck</a>
+    <div class="topnav__links">
+      <a href="#numbers">Numbers</a>
+      <a href="#how">How</a>
+      <a href="#install">Install</a>
+      <a href="/docs">Docs</a>
+    </div>
+    <a class="topnav__gh" href="https://github.com/VerburgtJimmy/puck">GitHub</a>
+  </nav>
+
+  <div class="hero__layout wrap">
+    <div class="hero__copy">
+      <h1 class="hero__brand">puck</h1>
+      <p class="hero__lede">
+        Native tooling for PHP and Laravel, starting with the install. Composer-compatible
+        {' '}<code>composer.json</code> / lock, a shared store, one static binary. Bigger layers come next.
+      </p>
+      <div class="cmd" data-copy>
+        <code>curl -fsSL https://puck.jimmyverburgt.com/install | bash</code>
+        <button type="button" class="cmd__btn" data-copy-btn aria-label="Copy install command">Copy</button>
+      </div>
+      <div class="hero__actions">
+        <a class="hero__btn" href="#numbers">See the numbers</a>
+        <a class="hero__link" href="/docs">Docs</a>
+      </div>
+    </div>
+
+    <figure class="hero__scene">
+      <img
+        src="/art/field-scene.webp"
+        alt="Watercolor hill with a stack of packages, one lit warm, beside a lamp. A river runs down from the hill and off the bottom of the page."
+        width="1385"
+        height="620"
+      />
+    </figure>
+  </div>
+</header>
+
+<style>
+  .hero {
+    position: relative;
+    min-height: 100svh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+  }
+
+  /* Sky: thin, bleeding off the top so it reads as sky rather than as a picture
+     of sky. The art carries its own soft edges on every side. */
+  .hero__sky {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(100%, 96rem);
+    height: clamp(10rem, 21vw, 21rem);
+    z-index: 0;
+    pointer-events: none;
+    animation: sky-in 1.6s ease-out both;
+  }
+
+  /* Stretched rather than cropped on purpose: the wash carries its own feather
+     on all four edges, and `cover` would slice that feather off and leave a
+     hard line across the page. Squashing a sky just makes it a lower sky. */
+  .hero__sky img {
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+  }
+
+  .topnav {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-block: 1.15rem;
+  }
+
+  .topnav__brand {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 36, "WONK" 1;
+    font-weight: 700;
+    font-size: 1.35rem;
+    text-decoration: none;
+    letter-spacing: -0.02em;
+  }
+
+  .topnav__links {
+    display: none;
+    gap: 1.4rem;
+    margin-inline: auto;
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+
+  /* The middle of the nav sits on the deepest part of the wash. */
+  .topnav__links a {
+    color: #fff;
+    text-decoration: none;
+    padding-bottom: 2px;
+    border-bottom: 1px solid transparent;
+  }
+
+  .topnav__links a:hover {
+    border-bottom-color: rgba(255, 255, 255, 0.7);
+  }
+
+  @media (min-width: 720px) {
+    .topnav__links {
+      display: flex;
+    }
+  }
+
+  .topnav__gh {
+    margin-left: auto;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--ink-muted);
+  }
+
+  .topnav__gh:hover {
+    color: var(--ink);
+  }
+
+  @media (min-width: 720px) {
+    .topnav__gh {
+      margin-left: 0;
+    }
+  }
+
+  .hero__layout {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+    flex: 1;
+    align-content: center;
+    padding-bottom: 4rem;
+  }
+
+  @media (min-width: 960px) {
+    .hero__layout {
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      align-items: center;
+      gap: 1rem;
+      padding-bottom: 0;
+    }
+  }
+
+  .hero__copy {
+    position: relative;
+    z-index: 3;
+    container-type: inline-size;
+    min-width: 0;
+    max-width: 32rem;
+    animation: hero-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .hero__brand {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144, "WONK" 1;
+    font-weight: 700;
+    font-size: clamp(2.75rem, 6vw, 4rem);
+    letter-spacing: -0.035em;
+    line-height: 0.95;
+    margin: 0 0 1.1rem;
+  }
+
+  .hero__lede {
+    color: var(--ink-muted);
+    max-width: 30rem;
+    margin: 0 0 1.35rem;
+  }
+
+  .hero__lede code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  /* The command is sized to fit. A scrollbar inside the pill is worse than a
+     smaller type size, and on a phone -- where it cannot fit on one line at any
+     readable size -- the command wraps and the button drops below it. */
+  .cmd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.75rem;
+    width: min(100%, 38rem);
+    padding: 0.7rem 0.7rem 0.55rem 0.9rem;
+    border-radius: 1.15rem;
+    background: var(--page);
+    border: 1px solid var(--line);
+    box-shadow: 0 10px 30px rgba(26, 29, 36, 0.04);
+  }
+
+  .cmd code {
+    flex: 1 1 100%;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+
+  /* 500px is the width at which the command, the padding and the Copy button
+     stop fitting on one line. Below it the command wraps and the button drops
+     under it, which beats either a scrollbar or 9px type. */
+  @container (min-width: 500px) {
+    .cmd {
+      flex-wrap: nowrap;
+      padding: 0.65rem 0.7rem 0.65rem 1rem;
+      border-radius: 999px;
+    }
+
+    .cmd code {
+      flex: 1 1 auto;
+      white-space: nowrap;
+    }
+  }
+
+  .cmd__btn {
+    flex: 0 0 auto;
+    margin-left: auto;
+    border: none;
+    background: #f4f6f9;
+    color: var(--ink-muted);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    padding: 0.4rem 0.75rem;
+    border-radius: 999px;
+  }
+
+  .cmd__btn:hover {
+    color: var(--ink);
+  }
+
+  .hero__actions {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    margin-top: 1.15rem;
+  }
+
+  .hero__btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: var(--ink);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .hero__btn:hover {
+    background: #2a2f3a;
+  }
+
+  .hero__link {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ink-muted);
+    text-decoration: none;
+  }
+
+  .hero__link:hover {
+    color: var(--ink);
+  }
+
+  /* The field is scenery, not a card: it sits on the floor of the hero and its
+     bottom edge is the fold. Terminal.astro picks the river back up. */
+  .hero__scene {
+    margin: 0;
+    position: relative;
+    z-index: 1;
+    /* Fade only. Any translate here would slide the river off the tail below
+       the fold for the length of the animation. */
+    animation: hero-settle 1.4s ease-out 0.15s both;
+  }
+
+  .hero__scene img {
+    width: 100%;
+    height: auto;
+  }
+
+  @media (min-width: 960px) {
+    .hero__scene {
+      position: absolute;
+      right: var(--art-right);
+      bottom: 0;
+      width: var(--art-width);
+      pointer-events: none;
+    }
+  }
+
+  @keyframes sky-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes hero-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes hero-settle {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (max-width: 959px) {
+    .hero__sky {
+      height: clamp(8.5rem, 26vw, 14rem);
+    }
+
+    .hero__layout {
+      padding-top: 1.5rem;
+    }
+
+    /* No tail below this breakpoint -- the scene is back in flow and its
+       bottom no longer lands on the fold, so feather the cut here instead. */
+    .hero__scene {
+      margin-inline: calc(-1 * var(--gutter));
+      margin-bottom: -4rem;
+    }
+
+    .hero__scene img {
+      mask-image: linear-gradient(to bottom, #000 80%, transparent 100%);
+    }
+
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero__sky,
+    .hero__copy,
+    .hero__scene {
+      animation: none !important;
+    }
+  }
+</style>

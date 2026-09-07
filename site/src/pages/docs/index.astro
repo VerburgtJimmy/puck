@@ -1,0 +1,35 @@
+---
+import Docs from '../../layouts/Docs.astro';
+---
+
+<Docs title="Docs" description="Install, doctor, and day-to-day use of puck.">
+  <h1>Docs</h1>
+  <p>
+    puck is native tooling for PHP and Laravel, starting with a Composer-compatible install.
+    Same <code>composer.json</code> and lock file, one static binary, a shared store under{' '}
+    <code>~/.puck/store</code>.
+  </p>
+  <p>
+    Keep Composer installed. Run <code>puck doctor</code> before switching a project.
+  </p>
+
+  <h2>Start here</h2>
+  <ul>
+    <li><a href="/docs/install">Install</a>: curl, Homebrew, Actions, Docker</li>
+    <li><a href="/docs/doctor">Doctor</a>: blockers and warnings before you switch</li>
+    <li><a href="/docs/usage">Usage</a>: install, require, update, upgrade, store</li>
+  </ul>
+
+  <h2>Source of truth</h2>
+  <p>
+    Upgrade and release artifacts live on{' '}
+    <a href="https://github.com/VerburgtJimmy/puck/releases">GitHub Releases</a>
+    (<code>manifest.json</code>, checksums, minisign). This site mirrors{' '}
+    <code>/install</code> only. It is not the upgrade authority.
+  </p>
+  <p>
+    Deeper distribution notes:
+    <a href="https://github.com/VerburgtJimmy/puck/blob/master/docs/distribution.md">docs/distribution.md</a>
+    in the repo.
+  </p>
+</Docs>
