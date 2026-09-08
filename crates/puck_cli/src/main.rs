@@ -209,7 +209,9 @@ fn current_pkg_version() -> &'static str {
 fn should_skip_update_notify(command: &Commands) -> bool {
     matches!(
         command,
-        Commands::Doctor { json: true, .. } | Commands::Upgrade { .. }
+        Commands::Doctor { json: true, .. }
+            | Commands::Upgrade { .. }
+            | Commands::Install { offline: true, .. }
     )
 }
 
@@ -1223,6 +1225,7 @@ async fn run_install(
             &RunScriptsOptions {
                 skip_package_discover: packages_written,
                 php: None,
+                dev_mode: !no_dev,
             },
         )
         .map_err(|e| e.to_string())?;

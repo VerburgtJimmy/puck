@@ -1,11 +1,27 @@
 //! composer.lock types and parsing.
 
+use crate::package_name::is_valid_package_name;
 use crate::{Error, Result};
-use serde::{Deserialize, Serialize};
+use serde::de::Error as DeError;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 use std::fs;
 use std::path::Path;
 use std::str::FromStr;
+
+fn deserialize_package_name<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let name = String::deserialize(deserializer)?;
+    if is_valid_package_name(&name) {
+        Ok(name)
+    } else {
+        Err(D::Error::custom(format!(
+            "invalid package name `{name}` (expected Composer vendor/package)"
+        )))
+    }
+}
 
 /// Parsed Composer 2 `composer.lock`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -40,6 +56,7 @@ pub struct LockFile {
 /// A locked package entry in `packages` / `packages-dev`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LockedPackage {
+    #[serde(deserialize_with = "deserialize_package_name")]
     pub name: String,
     pub version: String,
     #[serde(default)]

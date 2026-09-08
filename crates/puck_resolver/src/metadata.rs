@@ -105,6 +105,11 @@ pub fn package_from_composer_package(version: &Value) -> Result<Option<Package>>
         Some(n) => n.to_ascii_lowercase(),
         None => return Ok(None),
     };
+    if !puck_lock::is_valid_package_name(&name) {
+        return Err(Error::Message(format!(
+            "invalid package name `{name}` (expected Composer vendor/package)"
+        )));
+    }
     let pretty = version
         .get("version")
         .and_then(|v| v.as_str())

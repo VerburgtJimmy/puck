@@ -1,6 +1,6 @@
 //! Distribution URL constants. Keep in sync with `install.sh` and `docs/distribution.md`.
 
-/// GitHub Releases manifest — source of truth for `puck upgrade` / install.
+/// GitHub Releases manifest - source of truth for `puck upgrade` / install.
 pub const MANIFEST_URL: &str =
     "https://github.com/VerburgtJimmy/puck/releases/latest/download/manifest.json";
 

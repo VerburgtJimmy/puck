@@ -152,7 +152,7 @@ pub fn packages_json_url(repo_base: &str) -> String {
 
 /// Read Composer 2 `metadata-url` from a packages.json document.
 ///
-/// Returns `None` when absent (V1 provider-includes path — not implemented).
+/// Returns `None` when absent (V1 provider-includes path - not implemented).
 pub fn metadata_url_template(packages_json: &Value) -> Option<String> {
     packages_json
         .get("metadata-url")

@@ -280,10 +280,7 @@ mod tests {
             msg.contains("symlink") || msg.contains("hardlink"),
             "unexpected error: {msg}"
         );
-        assert!(
-            !escape_target.exists(),
-            "escape target must not be written"
-        );
+        assert!(!escape_target.exists(), "escape target must not be written");
         assert!(
             !dest.path().join("link").exists(),
             "symlink must not be planted in dest"

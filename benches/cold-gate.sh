@@ -37,7 +37,7 @@ else
 fi
 
 if [[ "$fail" -ne 0 ]]; then
-  echo "gate: FAILED — report PUCK_TIMINGS phase lines and stop; do not tune further without a root cause" >&2
+  echo "gate: FAILED - report PUCK_TIMINGS phase lines and stop; do not tune further without a root cause" >&2
   exit 1
 fi
 echo "gate: OK"

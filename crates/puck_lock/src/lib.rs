@@ -9,11 +9,13 @@
 mod array_dumper;
 mod content_hash;
 mod lock;
+mod package_name;
 mod write;
 
 pub use array_dumper::{dump_lock_package_from_p2, dump_lock_package_from_path};
 pub use content_hash::content_hash;
 pub use lock::{Abandoned, Dist, LockFile, LockedPackage, Source, abandoned_warnings};
+pub use package_name::is_valid_package_name;
 pub use write::{
     LockWriteInput, PLUGIN_API_VERSION, build_lock_document, format_lock_package,
     sort_lock_packages,
@@ -24,6 +26,8 @@ pub use write::{
 pub enum Error {
     #[error("failed to parse composer.lock: {0}")]
     Parse(String),
+    #[error("invalid package name `{0}` (expected Composer vendor/package)")]
+    InvalidPackageName(String),
     #[error("failed to read {path}: {source}")]
     Io {
         path: String,

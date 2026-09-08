@@ -1,4 +1,4 @@
-# puck — native tooling for PHP and Laravel, starting with the install.
+# puck - native tooling for PHP and Laravel, starting with the install.
 
 Composer-compatible installer for PHP. Faster on CI, drop-in with a preflight.
 
@@ -8,11 +8,11 @@ Reads the same `composer.json` / `composer.lock` as Composer, writes a compatibl
 
 ## Status
 
-**v0.1.1** — macOS and Linux. `install`, `require`, `remove`, `update` / `lock`, Tier 1 adapters for Pest and phpstan/extension-installer, `puck doctor` preflight. Run `puck doctor` before switching a project.
+**v0.1.1** - macOS and Linux. `install`, `require`, `remove`, `update` / `lock`, Tier 1 adapters for Pest and phpstan/extension-installer, `puck doctor` preflight. Run `puck doctor` before switching a project.
 
 ## Benchmarks (Linux CI)
 
-Lead with **warm-wipe** (vendor wiped, cache/store warm) — the honest CI number. **Warm-keep** is a no-op when nothing changed. **Cold** is included for honesty (empty vendor); it is network-heavy and not the headline.
+Lead with **warm-wipe** (vendor wiped, cache/store warm) - the honest CI number. **Warm-keep** is a no-op when nothing changed. **Cold** is included for honesty (empty vendor); it is network-heavy and not the headline.
 
 Same Linux CI run ([34124132162](https://github.com/VerburgtJimmy/puck/actions/runs/34124132162)). Scripts: [`benches/`](benches/).
 
@@ -60,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.s
 
 Pinned to the `v0.1.1` tag so the script matches that release. Site mirror:
 `https://puck.jimmyverburgt.com/install` (same script; never the source of truth
-for upgrades — GitHub Releases `manifest.json` is). Resolving `latest` without
+for upgrades - GitHub Releases `manifest.json` is). Resolving `latest` without
 `PUCK_VERSION` requires `python3` to parse the manifest.
 
 Installs into `~/.puck/bin`. minisign public key: [`dist/minisign/minisign.pub`](dist/minisign/minisign.pub).
@@ -105,21 +105,24 @@ Set `PUCK_TIMINGS=1` to print phase timings on stderr (`plan_ms`, `download_ms`,
 
 ## Roadmap
 
-puck grows in layers. Each layer is usable on its own, and nothing above a layer ships until the layer below is trusted.
+puck grows in layers. Each layer is usable on its own, and nothing above a layer ships until the layer below is trusted. Version bumps follow that: **packages work ships as `0.1.x` patches**; **minors open the next tooling layer**; **`1.0` is the full stack once it is trusted and used**.
 
-| Layer | Status |
-|---|---|
-| Packages | 0.1 shipped |
-| PHP | Planned |
-| Processes | Planned |
-| Runtime | Planned |
-| Artifacts | Planned |
+| Layer | Version | Status |
+|---|---|---|
+| Packages | `0.1.x` | Shipped; keep improving in small releases |
+| PHP | `0.2` | Planned |
+| Processes | `0.3` | Planned |
+| Runtime | `0.4` | Planned |
+| Artifacts | `0.5` | Planned |
+| Full stack | `1.0` | All layers above, hard-tested, real adoption |
 
 The runtime layer embeds the official PHP engine directly, the way FrankenPHP does, with puck's own server and worker model around it. puck will not replace the engine itself.
 
-**0.1 (now):** install path, Composer + path repos with auth, doctor preflight, Pest + phpstan Tier 1, Tier 3 refusal for other plugins.
+**`0.1.x` (packages):** install path, Composer + path repos with auth, doctor, Pest + phpstan Tier 1, Tier 3 refusal. Still on this line (patch releases, not a new minor): VCS / artifact / package repositories, filter-list / audit polish, more Tier 1 adapters, canary after parity stays green on `master`, Apple notarization, and other install-path trust work.
 
-**0.2:** VCS / artifact / package repositories, filter-list / audit polish, more Tier 1 adapters, canary channel after parity stays green on `master`, Apple notarization.
+**`0.2`+:** expand beyond package management into the PHP tooling network (PHP → Processes → Runtime → Artifacts), one layer per minor.
+
+**`1.0`:** every layer above, tested hard, and used widely enough to trust as the default path - not merely “Composer install parity.”
 
 ## How it differs
 

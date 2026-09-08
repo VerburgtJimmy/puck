@@ -66,7 +66,7 @@ mod tests {
         let current = dir.path().join("puck");
         std::fs::write(&current, b"fake-puck-binary-v1").expect("write current");
 
-        // Build routes after we know base — use placeholder then rebuild.
+        // Build routes after we know base - use placeholder then rebuild.
         // Two-step: bind once with closure that reads shared state.
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let port = listener.local_addr().expect("addr").port();

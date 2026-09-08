@@ -27,6 +27,41 @@ jobs:
       - name: test
         run: cargo test --workspace
 
+  check-macos:
+    name: check (macos)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.96.0
+      - uses: Swatinem/rust-cache@v2
+      - name: test
+        run: cargo test --workspace
+
+  install-sh:
+    name: install.sh
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: install → version → uninstall → reinstall
+        env:
+          PUCK_INSTALL: ${{ runner.temp }}/puck-home
+          # Pin to a published release so SHA256SUMS / assets exist.
+          PUCK_VERSION: v0.1.1
+        run: |
+          set -euo pipefail
+          bash ./install.sh --no-modify-path
+          "${PUCK_INSTALL}/bin/puck" --version
+          bash ./install.sh --uninstall --no-modify-path
+          test ! -e "${PUCK_INSTALL}/bin/puck"
+          bash ./install.sh --no-modify-path
+          "${PUCK_INSTALL}/bin/puck" --version
+
   parity:
     name: parity
     runs-on: ubuntu-latest

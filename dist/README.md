@@ -2,7 +2,7 @@
 
 Source of truth: [`../docs/distribution.md`](../docs/distribution.md).
 
-Prebuilt binaries are produced by [`.github/workflows/release.yml`](../.github/workflows/release.yml) on `v*` tags — never from a laptop. Re-tag from the workflow; do not attach hand-built binaries.
+Prebuilt binaries are produced by [`.github/workflows/release.yml`](../.github/workflows/release.yml) on `v*` tags - never from a laptop. Re-tag from the workflow; do not attach hand-built binaries.
 
 ## Artifacts (per tag)
 

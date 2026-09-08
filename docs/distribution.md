@@ -64,13 +64,14 @@ Behaviour, in order:
 8. Print version, path, PATH note, next step: `puck doctor`.
 9. `install.sh --uninstall` removes the binary and PATH block; reports store left behind.
 
-Idempotent. Quiet success except summary. Verbose with `-v`. Manual smoke on
-macOS and Linux (including uninstall and re-install) before tagging; automated
-CI coverage for `install.sh` is not in place yet.
+Idempotent. Quiet success except summary. Verbose with `-v`. CI covers
+`install.sh` install → version → uninstall → reinstall on Ubuntu and macOS
+(pinned release assets); still smoke manually before tagging when the script
+changes.
 
 ## 3. Homebrew
 
-- Tap (0.1): the main repo — `brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck`
+- Tap (0.1): the main repo - `brew tap VerburgtJimmy/puck https://github.com/VerburgtJimmy/puck`
   then `brew install puck`. Live formula is [`Formula/puck.rb`](../Formula/puck.rb),
   regenerated from `SHA256SUMS` on each release (`dist/homebrew/generate-formula.rb`
   pushes an update to `master`). `dist/homebrew/puck.rb` is a template only.
@@ -145,7 +146,7 @@ documented there as a release.yml stub until the first public tag.
    `install.sh` / binary.
 3. macOS ad-hoc codesign in the release workflow for 0.1. Notarization
    (Developer ID + App Store Connect API key in Actions, `spctl --assess`) is a
-   fast follow after first public artifacts — not a blocker for attaching
+   fast follow after first public artifacts - not a blocker for attaching
    darwin tarballs to `v0.1.0`.
 4. Release workflow: matrix build (musl Linux + darwin), sums, signature,
    attestation, `manifest.json`, GitHub release upload, tap formula push,

@@ -21,14 +21,16 @@ puck doctor --json</code></pre>
 
   <h2>Example</h2>
   <pre><code>$ puck doctor
-warning: script `Composer\Config::disableProcessTimeout` is a Class::method callback puck skips or runs differently
-info: PHP /usr/bin/php (8.4.23) (from PATH)
-info: store ~/.puck/store — warm (index non-empty)
-info: optimize-autoloader=true
+warning  script                Composer\Config::disableProcessTimeout  Class::method callback puck skips or runs differently
+info     php                   /usr/bin/php  8.4.23 (from PATH)
+info     store                 ~/.puck/store  warm (index non-empty)
+info     optimize-autoloader   true
 ready to switch</code></pre>
   <p>
-    Findings are <code>severity: message</code> lines, then a summary. Blockers
-    (for example an allowed plugin with no native adapter) exit non-zero.
-    Warnings do not block. Fix blockers, or stay on Composer for that project.
+    Findings are column-aligned (<code>severity</code>, <code>category</code>,
+    <code>subject</code>, optional <code>detail</code>), then a summary.
+    Blockers (for example an allowed plugin with no native adapter) exit
+    non-zero. Warnings do not block. Fix blockers, or stay on Composer for
+    that project.
   </p>
 </Docs>

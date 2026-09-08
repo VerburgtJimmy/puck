@@ -1,7 +1,7 @@
 //! Packagist / composer-repo metadata loader with VCR-first modes for default Packagist.
 //!
 //! - **Replay**: filesystem only for default Packagist (`packagist/p2/`); miss is an error.
-//!   Custom `type: composer` repos are **not** VCR'd (skipped in Replay — see docs).
+//!   Custom `type: composer` repos are **not** VCR'd (skipped in Replay - see docs).
 //! - **Live**: Packagist filesystem first when a VCR root is set, else HTTP; miss → HTTP.
 //!   Custom composer repos always use HTTP (`packages.json` → `metadata-url`).
 //! - **Record**: like Live for Packagist, writing under the VCR root; custom repos live-only.
@@ -206,7 +206,7 @@ impl P2Loader {
 
         let template = self.ensure_metadata_template(repo_base)?;
         let Some(template) = template else {
-            // No Composer 2 metadata-url (V1-only repo) — treat as miss for this source.
+            // No Composer 2 metadata-url (V1-only repo) - treat as miss for this source.
             return Err(Error::Replay(ReplayError::Miss(package.to_owned())));
         };
         let url =

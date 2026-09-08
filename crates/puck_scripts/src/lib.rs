@@ -37,12 +37,24 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Options for running install-related Composer scripts.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct RunScriptsOptions {
     /// When true, skip `@php artisan package:discover` (optional flags allowed).
     pub skip_package_discover: bool,
     /// Override PHP binary; otherwise `puck_php::find_php()`.
     pub php: Option<PathBuf>,
+    /// Maps to Composer's `COMPOSER_DEV_MODE` (`1` / `0`).
+    pub dev_mode: bool,
+}
+
+impl Default for RunScriptsOptions {
+    fn default() -> Self {
+        Self {
+            skip_package_discover: false,
+            php: None,
+            dev_mode: true,
+        }
+    }
 }
 
 /// Summary of what ran for one or more events.
@@ -187,7 +199,7 @@ fn run_handlers(
         }
 
         if is_php_callback(&handler) {
-            run_php_callback(root, event, &handler, php, env, report)?;
+            run_php_callback(root, event, &handler, php, env, options, report)?;
             continue;
         }
 
@@ -208,7 +220,7 @@ fn run_handlers(
             continue;
         }
 
-        run_shell_or_php(root, event, &handler, php, env, report)?;
+        run_shell_or_php(root, event, &handler, php, env, options, report)?;
     }
     Ok(())
 }
@@ -254,6 +266,7 @@ fn run_php_callback(
     handler: &str,
     php: Option<&Path>,
     env: &ScriptEnv,
+    options: &RunScriptsOptions,
     report: &mut ScriptReport,
 ) -> Result<()> {
     let Some((class, method)) = handler.split_once("::") else {
@@ -265,7 +278,7 @@ fn run_php_callback(
     };
 
     if is_laravel_clear_compiled(class, method) {
-        return run_laravel_clear_compiled(root, handler, php, env, report);
+        return run_laravel_clear_compiled(root, handler, php, env, options, report);
     }
 
     // Generic callbacks need a Composer Event object; M2 only covers Laravel clear.
@@ -287,6 +300,7 @@ fn run_laravel_clear_compiled(
     handler: &str,
     php: Option<&Path>,
     env: &ScriptEnv,
+    options: &RunScriptsOptions,
     report: &mut ScriptReport,
 ) -> Result<()> {
     let Some(php) = php else {
@@ -319,8 +333,13 @@ fn run_laravel_clear_compiled(
     cmd.arg("-r")
         .arg(code)
         .current_dir(root)
+        .env(
+            "COMPOSER_DEV_MODE",
+            if options.dev_mode { "1" } else { "0" },
+        )
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
+    prepend_vendor_bin_path(root, &mut cmd);
     env.apply(&mut cmd);
 
     let status = cmd.status()?;
@@ -346,6 +365,7 @@ fn run_shell_or_php(
     handler: &str,
     php: Option<&Path>,
     env: &ScriptEnv,
+    options: &RunScriptsOptions,
     report: &mut ScriptReport,
 ) -> Result<()> {
     let exec = if let Some(rest) = handler.strip_prefix("@php ") {
@@ -365,9 +385,13 @@ fn run_shell_or_php(
     cmd.arg("-c")
         .arg(&exec)
         .current_dir(root)
-        .env("COMPOSER_DEV_MODE", "1")
+        .env(
+            "COMPOSER_DEV_MODE",
+            if options.dev_mode { "1" } else { "0" },
+        )
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
+    prepend_vendor_bin_path(root, &mut cmd);
     env.apply(&mut cmd);
 
     let status = cmd.status()?;
@@ -381,6 +405,16 @@ fn run_shell_or_php(
     }
     report.ran += 1;
     Ok(())
+}
+
+fn prepend_vendor_bin_path(root: &Path, cmd: &mut Command) {
+    let vendor_bin = root.join("vendor").join("bin");
+    let mut path = vendor_bin.display().to_string();
+    if let Ok(existing) = std::env::var("PATH") {
+        path.push(':');
+        path.push_str(&existing);
+    }
+    cmd.env("PATH", path);
 }
 
 fn strip_no_additional_args(s: &str) -> String {
@@ -465,6 +499,7 @@ mod tests {
         let opts = RunScriptsOptions {
             skip_package_discover: true,
             php: None,
+            dev_mode: true,
         };
         let report =
             run_event_scripts(dir.path(), &scripts, "post-autoload-dump", &opts).expect("run");
@@ -547,6 +582,7 @@ mod tests {
         let opts = RunScriptsOptions {
             php: Some(fake_php),
             skip_package_discover: false,
+            dev_mode: true,
         };
         let report =
             run_event_scripts(dir.path(), &scripts, "post-autoload-dump", &opts).expect("run");

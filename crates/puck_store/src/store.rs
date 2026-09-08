@@ -50,7 +50,10 @@ impl Store {
 
 /// Extract archive bytes into the store under `sha256` if not already present.
 ///
-/// Returns the package directory path.
+/// Returns the package directory path. Extracted files are made read-only on
+/// Unix (`0444`) so accidental edits under `vendor/` (hardlinked) do not silently
+/// corrupt the shared store. Package bins are made executable again later by
+/// `puck_install::bins` via those same hardlinks.
 pub fn put_archive(
     store: &Store,
     sha256: &str,
@@ -59,6 +62,8 @@ pub fn put_archive(
 ) -> Result<PathBuf, StoreError> {
     let dest = store.package_dir(sha256);
     if store.contains(sha256) {
+        #[cfg(unix)]
+        ensure_package_readonly(&dest)?;
         return Ok(dest);
     }
 
@@ -80,7 +85,53 @@ pub fn put_archive(
         path: marker.display().to_string(),
         source,
     })?;
+
+    #[cfg(unix)]
+    ensure_package_readonly(&dest)?;
+
     Ok(dest)
+}
+
+#[cfg(unix)]
+fn ensure_package_readonly(root: &Path) -> Result<(), StoreError> {
+    use std::os::unix::fs::PermissionsExt;
+    fn walk(path: &Path) -> Result<(), StoreError> {
+        let meta = fs::symlink_metadata(path).map_err(|source| StoreError::Io {
+            path: path.display().to_string(),
+            source,
+        })?;
+        let ft = meta.file_type();
+        if ft.is_symlink() {
+            return Ok(());
+        }
+        if ft.is_dir() {
+            let mut perms = meta.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).map_err(|source| StoreError::Io {
+                path: path.display().to_string(),
+                source,
+            })?;
+            for entry in fs::read_dir(path).map_err(|source| StoreError::Io {
+                path: path.display().to_string(),
+                source,
+            })? {
+                let entry = entry.map_err(|source| StoreError::Io {
+                    path: path.display().to_string(),
+                    source,
+                })?;
+                walk(&entry.path())?;
+            }
+        } else if ft.is_file() {
+            let mut perms = meta.permissions();
+            perms.set_mode(0o444);
+            fs::set_permissions(path, perms).map_err(|source| StoreError::Io {
+                path: path.display().to_string(),
+                source,
+            })?;
+        }
+        Ok(())
+    }
+    walk(root)
 }
 
 /// Link every file from `from_dir` into `to_dir` (recursive), preferring hardlink/reflink.

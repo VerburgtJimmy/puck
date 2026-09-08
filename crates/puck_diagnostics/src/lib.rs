@@ -4,7 +4,7 @@
 #![cfg_attr(not(test), warn(clippy::unwrap_used))]
 
 use indexmap::IndexMap;
-use puck_lock::{LockFile, PLUGIN_API_VERSION, abandoned_warnings, content_hash};
+use puck_lock::{Abandoned, LockFile, PLUGIN_API_VERSION, content_hash};
 use puck_manifest::Manifest;
 use puck_php::find_php;
 use puck_plugins::unsupported_allowed_plugins;
@@ -56,7 +56,37 @@ pub enum Severity {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Finding {
     pub severity: Severity,
-    pub message: String,
+    /// Short kind label for columns / JSON (e.g. `unsupported plugin`).
+    pub category: String,
+    /// Primary identifier (package name, path, key, ...).
+    pub subject: String,
+    /// Extra detail; empty when unused.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub detail: String,
+}
+
+impl Finding {
+    pub fn new(
+        severity: Severity,
+        category: impl Into<String>,
+        subject: impl Into<String>,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            severity,
+            category: category.into(),
+            subject: subject.into(),
+            detail: detail.into(),
+        }
+    }
+
+    fn severity_label(&self) -> &'static str {
+        match self.severity {
+            Severity::Blocker => "blocker",
+            Severity::Warning => "warning",
+            Severity::Info => "info",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -96,10 +126,12 @@ pub fn diagnose(working_dir: &Path) -> Result<Report> {
     let mut report = Report::default();
 
     if cfg!(windows) {
-        report.findings.push(Finding {
-            severity: Severity::Blocker,
-            message: "blocker: Windows is not supported (macOS and Linux only)".into(),
-        });
+        report.findings.push(Finding::new(
+            Severity::Blocker,
+            "platform",
+            "windows",
+            "macOS and Linux only",
+        ));
     }
 
     let manifest_path = working_dir.join("composer.json");
@@ -141,12 +173,12 @@ pub fn diagnose(working_dir: &Path) -> Result<Report> {
 
 fn collect_repository_blockers(manifest: &Manifest, report: &mut Report) {
     for (label, repo_type) in unsupported_repositories(&manifest.repositories) {
-        report.findings.push(Finding {
-            severity: Severity::Blocker,
-            message: format!(
-                "blocker: repository {label} has type `{repo_type}` (vcs / artifact / package not supported)"
-            ),
-        });
+        report.findings.push(Finding::new(
+            Severity::Blocker,
+            "repository",
+            label,
+            format!("type `{repo_type}` (vcs / artifact / package not supported)"),
+        ));
     }
 }
 
@@ -216,12 +248,12 @@ fn collect_plugin_blockers(manifest: &Manifest, lock: &LockFile, report: &mut Re
         } else {
             "adapter not planned"
         };
-        report.findings.push(Finding {
-            severity: Severity::Blocker,
-            message: format!(
-                "blocker: allowed composer-plugin `{name}` has no native adapter ({note})"
-            ),
-        });
+        report.findings.push(Finding::new(
+            Severity::Blocker,
+            "unsupported plugin",
+            name,
+            format!("no native adapter ({note})"),
+        ));
     }
 }
 
@@ -229,31 +261,32 @@ fn collect_lock_identity_blockers(manifest_text: &str, lock: &LockFile, report: 
     match content_hash(manifest_text) {
         Ok(expected) => {
             if expected != lock.content_hash {
-                report.findings.push(Finding {
-                    severity: Severity::Blocker,
-                    message: format!(
-                        "blocker: lock content-hash mismatch (lock={}, puck recomputed={})",
-                        lock.content_hash, expected
-                    ),
-                });
+                report.findings.push(Finding::new(
+                    Severity::Blocker,
+                    "content-hash",
+                    lock.content_hash.clone(),
+                    format!("puck recomputed {expected}"),
+                ));
             }
         }
         Err(e) => {
-            report.findings.push(Finding {
-                severity: Severity::Blocker,
-                message: format!("blocker: cannot recompute content-hash from composer.json: {e}"),
-            });
+            report.findings.push(Finding::new(
+                Severity::Blocker,
+                "content-hash",
+                "composer.json",
+                format!("cannot recompute: {e}"),
+            ));
         }
     }
 
     let lock_api = lock.plugin_api_version.as_deref().unwrap_or("");
     if lock_api != PLUGIN_API_VERSION {
-        report.findings.push(Finding {
-            severity: Severity::Blocker,
-            message: format!(
-                "blocker: lock plugin-api-version `{lock_api}` != puck `{PLUGIN_API_VERSION}`"
-            ),
-        });
+        report.findings.push(Finding::new(
+            Severity::Blocker,
+            "plugin-api-version",
+            lock_api,
+            format!("puck expects {PLUGIN_API_VERSION}"),
+        ));
     }
 }
 
@@ -309,12 +342,12 @@ fn class_method_callback(handler: &str) -> Option<&str> {
 
 fn collect_script_warnings(manifest: &Manifest, report: &mut Report) {
     for handler in non_laravel_class_method_scripts(&manifest.scripts) {
-        report.findings.push(Finding {
-            severity: Severity::Warning,
-            message: format!(
-                "warning: script `{handler}` is a Class::method callback puck skips or runs differently"
-            ),
-        });
+        report.findings.push(Finding::new(
+            Severity::Warning,
+            "script",
+            handler,
+            "Class::method callback puck skips or runs differently",
+        ));
     }
 }
 
@@ -335,29 +368,32 @@ pub fn unknown_config_keys(config: &serde_json::Map<String, Value>) -> Vec<Strin
 
 fn collect_config_warnings(manifest: &Manifest, report: &mut Report) {
     for key in unknown_config_keys(&manifest.config) {
-        report.findings.push(Finding {
-            severity: Severity::Warning,
-            message: format!("warning: config key `{key}` is ignored by puck"),
-        });
+        report.findings.push(Finding::new(
+            Severity::Warning,
+            "config",
+            key,
+            "ignored by puck",
+        ));
     }
 }
 
 fn collect_php_warnings(manifest: &Manifest, lock: &LockFile, report: &mut Report) {
     let Some(php_path) = find_php() else {
-        report.findings.push(Finding {
-            severity: Severity::Warning,
-            message: "warning: no PHP on PATH (scripts and some checks need php)".into(),
-        });
+        report.findings.push(Finding::new(
+            Severity::Warning,
+            "php",
+            "PATH",
+            "no PHP found (scripts and some checks need php)",
+        ));
         return;
     };
     let Some(version) = php_version_string(&php_path) else {
-        report.findings.push(Finding {
-            severity: Severity::Warning,
-            message: format!(
-                "warning: could not read PHP version from {}",
-                php_path.display()
-            ),
-        });
+        report.findings.push(Finding::new(
+            Severity::Warning,
+            "php",
+            php_path.display().to_string(),
+            "could not read version",
+        ));
         return;
     };
 
@@ -369,7 +405,7 @@ fn collect_php_warnings(manifest: &Manifest, lock: &LockFile, report: &mut Repor
     {
         // config.platform.php is a pinned version Composer pretends to run;
         // PATH PHP should still be able to satisfy `==` that version loosely via the
-        // project's real constraint — warn when PATH PHP fails `== platform` when
+        // project's real constraint - warn when PATH PHP fails `== platform` when
         // used as a constraint string, else when it fails lock platform.
         let constraint = if platform_php.contains('^')
             || platform_php.contains('~')
@@ -385,12 +421,12 @@ fn collect_php_warnings(manifest: &Manifest, lock: &LockFile, report: &mut Repor
         };
         match satisfies(&version, &constraint) {
             Ok(false) => {
-                report.findings.push(Finding {
-                    severity: Severity::Warning,
-                    message: format!(
-                        "warning: PHP {version} on PATH does not satisfy config.platform.php ({platform_php})"
-                    ),
-                });
+                report.findings.push(Finding::new(
+                    Severity::Warning,
+                    "platform php",
+                    platform_php.to_owned(),
+                    format!("host {version} does not satisfy config.platform.php"),
+                ));
             }
             Err(_) => {}
             Ok(true) => {}
@@ -400,12 +436,12 @@ fn collect_php_warnings(manifest: &Manifest, lock: &LockFile, report: &mut Repor
     if let Some(Value::String(constraint)) = lock.platform.get("php") {
         match satisfies(&version, constraint) {
             Ok(false) => {
-                report.findings.push(Finding {
-                    severity: Severity::Warning,
-                    message: format!(
-                        "warning: PHP {version} on PATH does not satisfy lock platform.php ({constraint})"
-                    ),
-                });
+                report.findings.push(Finding::new(
+                    Severity::Warning,
+                    "platform php",
+                    constraint.clone(),
+                    format!("host {version} does not satisfy lock platform.php"),
+                ));
             }
             Err(_) => {}
             Ok(true) => {}
@@ -427,11 +463,20 @@ fn php_version_string(php: &Path) -> Option<String> {
 }
 
 fn collect_abandoned_warnings(lock: &LockFile, report: &mut Report) {
-    for line in abandoned_warnings(&lock.packages, &lock.packages_dev, true) {
-        report.findings.push(Finding {
-            severity: Severity::Warning,
-            message: format!("warning: {line}"),
-        });
+    for pkg in lock.packages.iter().chain(lock.packages_dev.iter()) {
+        let Some(abandoned) = pkg.abandoned() else {
+            continue;
+        };
+        let detail = match &abandoned {
+            Abandoned::NoReplacement => "no replacement suggested".to_owned(),
+            Abandoned::Replacement(r) => format!("use {r} instead"),
+        };
+        report.findings.push(Finding::new(
+            Severity::Warning,
+            "abandoned package",
+            pkg.name.clone(),
+            detail,
+        ));
     }
 }
 
@@ -443,30 +488,34 @@ fn collect_info(manifest: &Manifest, report: &mut Report) {
             } else {
                 "PATH"
             };
-            let ver = php_version_string(&path)
-                .map(|v| format!(" ({v})"))
-                .unwrap_or_default();
-            report.findings.push(Finding {
-                severity: Severity::Info,
-                message: format!("info: PHP {}{ver} (from {why})", path.display()),
-            });
+            let detail = match php_version_string(&path) {
+                Some(v) => format!("{v} (from {why})"),
+                None => format!("from {why}"),
+            };
+            report.findings.push(Finding::new(
+                Severity::Info,
+                "php",
+                path.display().to_string(),
+                detail,
+            ));
         }
         None => {
-            report.findings.push(Finding {
-                severity: Severity::Info,
-                message: "info: no PHP binary selected (none on PATH / PHP_BINARY)".into(),
-            });
+            report.findings.push(Finding::new(
+                Severity::Info,
+                "php",
+                "(none)",
+                "no PHP on PATH / PHP_BINARY",
+            ));
         }
     }
 
     let optimize = manifest.optimize_autoloader();
-    report.findings.push(Finding {
-        severity: Severity::Info,
-        message: format!(
-            "info: optimize-autoloader={}",
-            if optimize { "true" } else { "false" }
-        ),
-    });
+    report.findings.push(Finding::new(
+        Severity::Info,
+        "optimize-autoloader",
+        if optimize { "true" } else { "false" },
+        "",
+    ));
 
     let store = Store::default_global();
     let root = store.root();
@@ -479,10 +528,12 @@ fn collect_info(manifest: &Manifest, report: &mut Report) {
     } else {
         "present (index empty or missing)"
     };
-    report.findings.push(Finding {
-        severity: Severity::Info,
-        message: format!("info: store {} — {warm_label}", root.display()),
-    });
+    report.findings.push(Finding::new(
+        Severity::Info,
+        "store",
+        root.display().to_string(),
+        warm_label,
+    ));
 }
 
 fn store_index_nonempty(root: &Path) -> bool {
@@ -499,9 +550,39 @@ fn store_index_nonempty(root: &Path) -> bool {
     false
 }
 
-/// Plain-text report: one finding per line, then summary.
+/// Plain-text report: aligned columns (`severity category subject [detail]`), then summary.
 pub fn format_text(report: &Report) -> String {
-    let mut lines: Vec<String> = report.findings.iter().map(|f| f.message.clone()).collect();
+    let sev_w = report
+        .findings
+        .iter()
+        .map(|f| f.severity_label().len())
+        .max()
+        .unwrap_or(0)
+        .max("blocker".len());
+    let cat_w = report
+        .findings
+        .iter()
+        .map(|f| f.category.len())
+        .max()
+        .unwrap_or(0);
+
+    let mut lines: Vec<String> = report
+        .findings
+        .iter()
+        .map(|f| {
+            let mut line = format!(
+                "{sev:<sev_w$}  {cat:<cat_w$}  {subj}",
+                sev = f.severity_label(),
+                cat = f.category,
+                subj = f.subject,
+            );
+            if !f.detail.is_empty() {
+                line.push_str("  ");
+                line.push_str(&f.detail);
+            }
+            line
+        })
+        .collect();
     lines.push(report.summary_line());
     lines.join("\n")
 }
@@ -593,17 +674,34 @@ mod tests {
         let mut r = Report::default();
         assert_eq!(r.summary_line(), "ready to switch");
         assert_eq!(r.exit_code(), 0);
-        r.findings.push(Finding {
-            severity: Severity::Blocker,
-            message: "blocker: x".into(),
-        });
+        r.findings
+            .push(Finding::new(Severity::Blocker, "test", "x", ""));
         assert_eq!(r.summary_line(), "1 blocker");
         assert_eq!(r.exit_code(), 1);
-        r.findings.push(Finding {
-            severity: Severity::Blocker,
-            message: "blocker: y".into(),
-        });
+        r.findings
+            .push(Finding::new(Severity::Blocker, "test", "y", ""));
         assert_eq!(r.summary_line(), "2 blockers");
+    }
+
+    #[test]
+    fn format_text_columns() {
+        let mut r = Report::default();
+        r.findings.push(Finding::new(
+            Severity::Warning,
+            "script",
+            "Composer\\Config::disableProcessTimeout",
+            "Class::method callback puck skips or runs differently",
+        ));
+        r.findings.push(Finding::new(
+            Severity::Info,
+            "store",
+            "~/.puck/store",
+            "warm (index non-empty)",
+        ));
+        let text = format_text(&r);
+        assert!(text.contains("warning  script  Composer\\Config::disableProcessTimeout"));
+        assert!(text.contains("info     store   ~/.puck/store  warm (index non-empty)"));
+        assert!(text.ends_with("ready to switch"));
     }
 
     #[test]
@@ -657,8 +755,8 @@ mod tests {
         assert!(report.blocker_count() >= 1);
         assert!(report.findings.iter().any(|f| {
             f.severity == Severity::Blocker
-                && f.message.contains("php-http/discovery")
-                && f.message.contains("planned")
+                && f.subject.contains("php-http/discovery")
+                && f.detail.contains("planned")
         }));
     }
 
@@ -689,12 +787,11 @@ mod tests {
         fs::write(dir.path().join("composer.json"), json).unwrap();
         fs::write(dir.path().join("composer.lock"), lock).unwrap();
         let report = diagnose(dir.path()).unwrap();
-        assert!(
-            report
-                .findings
-                .iter()
-                .any(|f| { f.severity == Severity::Blocker && f.message.contains("vcs") })
-        );
+        assert!(report.findings.iter().any(|f| {
+            f.severity == Severity::Blocker
+                && f.category == "repository"
+                && f.detail.contains("vcs")
+        }));
         assert_eq!(report.exit_code(), 1);
     }
 }

@@ -13,7 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.s
 ```
 
 Pinned to the release tag so the script matches that release. Site mirror:
-`https://puck.jimmyverburgt.com/install` — never the source of truth for upgrades;
+`https://puck.jimmyverburgt.com/install` - never the source of truth for upgrades;
 the GitHub Releases `manifest.json` is. Resolving `latest` without pinning
 `PUCK_VERSION` requires `python3` on PATH (to parse the manifest).
 
@@ -87,4 +87,4 @@ puck upgrade --version 0.1.0
 puck upgrade --rollback   # restore ~/.puck/bin/puck.previous
 ```
 
-Homebrew installs must use `brew upgrade puck` — `puck upgrade` refuses Cellar paths.
+Homebrew installs must use `brew upgrade puck` - `puck upgrade` refuses Cellar paths.

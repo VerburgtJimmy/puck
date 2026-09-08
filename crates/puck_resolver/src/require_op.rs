@@ -401,7 +401,7 @@ fn apply_pool_plan_entry(
             *remote_placed = true;
         }
         _ => {
-            // VCS / package / artifact / etc. — not modeled in the pool yet.
+            // VCS / package / artifact / etc. - not modeled in the pool yet.
         }
     }
     Ok(())

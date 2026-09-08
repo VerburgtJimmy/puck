@@ -10,6 +10,7 @@ description = "puck: composer.lock read/write and content-hash"
 
 [dependencies]
 md-5.workspace = true
+regex.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true

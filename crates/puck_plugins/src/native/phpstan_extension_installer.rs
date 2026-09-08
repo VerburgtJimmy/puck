@@ -280,7 +280,7 @@ fn build_generated_config(
     // Upstream intersects all bounded constraints via Intervals::compactConstraint.
     // For the common single-constraint case (larastan only), emit that string.
     // Multi-constraint intersection is deferred; emit first for now if one, else null
-    // when empty. When multiple, compact via pairwise is not yet ported — use null
+    // when empty. When multiple, compact via pairwise is not yet ported - use null
     // only if empty; if multiple, join is wrong so take Intervals-equivalent for
     // identical majors by preferring the single known fixture case.
     let phpstan_version_constraint = match constraint_strings.as_slice() {
