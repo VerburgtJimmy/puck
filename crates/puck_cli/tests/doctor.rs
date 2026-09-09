@@ -97,7 +97,7 @@ fn doctor_unsupported_plugin_exits_1() {
 }
 
 #[test]
-fn doctor_vcs_repo_exits_1() {
+fn doctor_vcs_repo_ready() {
     let dir = tempdir().unwrap();
     let json = r#"{
       "name": "acme/tmp",
@@ -128,6 +128,6 @@ fn doctor_vcs_repo_exits_1() {
         .output()
         .expect("run doctor");
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(out.status.code(), Some(1), "stdout={stdout}");
-    assert!(stdout.contains("vcs"));
+    assert_eq!(out.status.code(), Some(0), "stdout={stdout}");
+    assert!(stdout.contains("ready to switch"), "stdout={stdout}");
 }

@@ -114,8 +114,10 @@ pub async fn execute_install(
         .collect();
 
     let to_install: Vec<&PlannedPackage> = plan.to_install().collect();
-    let (path_pkgs, archive_pkgs): (Vec<&PlannedPackage>, Vec<&PlannedPackage>) =
+    let (path_pkgs, rest): (Vec<&PlannedPackage>, Vec<&PlannedPackage>) =
         to_install.iter().copied().partition(|p| is_path_dist(p));
+    let (source_pkgs, archive_pkgs): (Vec<&PlannedPackage>, Vec<&PlannedPackage>) =
+        rest.into_iter().partition(|p| is_git_source(p));
 
     // Path dist: symlink or mirror from project-relative url (no store fetch).
     for pkg in &path_pkgs {
@@ -126,6 +128,12 @@ pub async fn execute_install(
             )));
         };
         install_path_package(project_root, &vendor, pkg, locked)?;
+        eprintln!("puck: {} {}", action_word(pkg.action), pkg.name);
+    }
+
+    // Git source: checkout lock `source.reference` from a local mirror.
+    for pkg in &source_pkgs {
+        install_git_source_package(project_root, &vendor, pkg)?;
         eprintln!("puck: {} {}", action_word(pkg.action), pkg.name);
     }
 
@@ -329,7 +337,7 @@ async fn pipeline_one(p: PipelineOne<'_>) -> Result<(String, InstallAction)> {
 
     let url = p.url.ok_or_else(|| {
         Error::Message(format!(
-            "package {} has no dist url (source installs not implemented yet)",
+            "package {} has no dist url (and no git source to install)",
             p.name
         ))
     })?;
@@ -486,6 +494,61 @@ fn is_path_dist(pkg: &PlannedPackage) -> bool {
     pkg.dist_type
         .as_deref()
         .is_some_and(|t| t.eq_ignore_ascii_case("path"))
+}
+
+fn is_git_source(pkg: &PlannedPackage) -> bool {
+    let typ = pkg.source_type.as_deref().unwrap_or("");
+    (typ.eq_ignore_ascii_case("git") || typ.eq_ignore_ascii_case("vcs"))
+        && pkg.source_url.is_some()
+        && pkg.source_reference.is_some()
+}
+
+fn install_git_source_package(
+    project_root: &Path,
+    vendor: &Path,
+    pkg: &PlannedPackage,
+) -> Result<()> {
+    let url = pkg
+        .source_url
+        .as_deref()
+        .ok_or_else(|| Error::Message(format!("git package {} missing source.url", pkg.name)))?;
+    let reference = pkg.source_reference.as_deref().ok_or_else(|| {
+        Error::Message(format!("git package {} missing source.reference", pkg.name))
+    })?;
+
+    let resolved_url =
+        if Path::new(url).is_absolute() || url.starts_with("git@") || url.contains("://") {
+            url.to_string()
+        } else {
+            project_root.join(url).to_string_lossy().into_owned()
+        };
+
+    let cache = std::env::var_os("PUCK_VCS_CACHE")
+        .map(PathBuf::from)
+        .unwrap_or_else(puck_vcs::default_vcs_cache_root);
+    let mirror = puck_vcs::ensure_git_mirror(&cache, &resolved_url)
+        .map_err(|e| Error::Message(format!("vcs mirror for {}: {e}", pkg.name)))?;
+
+    let target = vendor_package_path(vendor, &pkg.name);
+    remove_vendor_path(&target)?;
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|source| Error::Io {
+            path: parent.display().to_string(),
+            source,
+        })?;
+    }
+
+    let staging = target.with_extension("puck-git-staging");
+    if staging.exists() {
+        remove_vendor_path(&staging)?;
+    }
+    puck_vcs::checkout_reference(&mirror, reference, &staging)
+        .map_err(|e| Error::Message(format!("git checkout {}: {e}", pkg.name)))?;
+    fs::rename(&staging, &target).map_err(|source| Error::Io {
+        path: target.display().to_string(),
+        source,
+    })?;
+    Ok(())
 }
 
 fn path_prefer_symlink(locked: &LockedPackage) -> bool {
@@ -982,5 +1045,84 @@ mod path_dist_tests {
                 .file_type()
                 .is_symlink()
         );
+    }
+
+    #[tokio::test]
+    async fn git_source_installs_from_lock() {
+        let tmp = tempfile::tempdir().expect("temp");
+        let repo = tmp.path().join("repo");
+        fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["git", "init", "-b", "main"]);
+        run_git(&repo, &["git", "config", "user.email", "puck@test"]);
+        run_git(&repo, &["git", "config", "user.name", "puck"]);
+        fs::write(
+            repo.join("composer.json"),
+            r#"{"name":"acme/vcs-hello","autoload":{"psr-4":{"Acme\\":"src/"}}}"#,
+        )
+        .unwrap();
+        run_git(&repo, &["git", "add", "composer.json"]);
+        run_git(&repo, &["git", "commit", "-m", "init"]);
+        let sha = git_stdout(&repo, &["git", "rev-parse", "HEAD"]);
+
+        let root = tmp.path().join("project");
+        fs::create_dir_all(&root).unwrap();
+        let lock_json = format!(
+            r#"{{
+              "content-hash": "abc",
+              "packages": [{{
+                "name": "acme/vcs-hello",
+                "version": "dev-main",
+                "source": {{
+                  "type": "git",
+                  "url": "{}",
+                  "reference": "{sha}"
+                }}
+              }}],
+              "packages-dev": [],
+              "aliases": [],
+              "minimum-stability": "stable",
+              "stability-flags": {{}},
+              "prefer-stable": false,
+              "prefer-lowest": false,
+              "platform": {{}},
+              "platform-dev": {{}},
+              "plugin-api-version": "2.9.0"
+            }}"#,
+            repo.display()
+        );
+        let lock: LockFile = serde_json::from_str(&lock_json).expect("lock");
+        let plan = crate::plan_install(
+            &lock,
+            &crate::InstalledState::default(),
+            InstallOptions::default(),
+        )
+        .expect("plan");
+        assert!(is_git_source(&plan.packages[0]));
+        let store = Store::new(tmp.path().join("store"));
+        execute_install(&root, &lock, &plan, InstallOptions::default(), &store, None)
+            .await
+            .expect("install");
+        assert!(root.join("vendor/acme/vcs-hello/composer.json").is_file());
+    }
+
+    fn run_git(dir: &Path, cmd: &[&str]) {
+        let mut c = std::process::Command::new(cmd[0]);
+        if cmd == ["git", "init", "-b", "main"] {
+            c.args(["-c", "init.templateDir=", "init", "-b", "main"]);
+        } else {
+            c.args(&cmd[1..]);
+        }
+        let st = c.current_dir(dir).status().unwrap();
+        assert!(st.success(), "{cmd:?}");
+    }
+
+    fn git_stdout(dir: &Path, cmd: &[&str]) -> String {
+        let out = std::process::Command::new(cmd[0])
+            .args(&cmd[1..])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
     }
 }

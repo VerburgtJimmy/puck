@@ -177,7 +177,7 @@ fn collect_repository_blockers(manifest: &Manifest, report: &mut Report) {
             Severity::Blocker,
             "repository",
             label,
-            format!("type `{repo_type}` (vcs / artifact / package not supported)"),
+            format!("type `{repo_type}` (artifact / package not supported)"),
         ));
     }
 }
@@ -229,7 +229,7 @@ fn repo_label(item: &Value) -> Option<String> {
 }
 
 fn is_unsupported_repo_type(t: &str) -> bool {
-    matches!(t, "vcs" | "artifact" | "package")
+    matches!(t, "artifact" | "package")
 }
 
 fn collect_plugin_blockers(manifest: &Manifest, lock: &LockFile, report: &mut Report) {
@@ -622,10 +622,10 @@ mod tests {
             {"type": "package", "package": {"name": "acme/pkg", "version": "1.0.0"}}
         ]);
         let got = unsupported_repositories(&repos);
-        assert_eq!(got.len(), 3);
-        assert!(got.iter().any(|(_, t)| t == "vcs"));
+        assert_eq!(got.len(), 2);
         assert!(got.iter().any(|(_, t)| t == "artifact"));
         assert!(got.iter().any(|(_, t)| t == "package"));
+        assert!(!got.iter().any(|(_, t)| t == "vcs"));
     }
 
     #[test]
@@ -761,7 +761,7 @@ mod tests {
     }
 
     #[test]
-    fn vcs_repo_is_blocker() {
+    fn vcs_repo_is_not_blocker() {
         let dir = tempdir().unwrap();
         let json = r#"{
           "name": "acme/tmp",
@@ -787,11 +787,13 @@ mod tests {
         fs::write(dir.path().join("composer.json"), json).unwrap();
         fs::write(dir.path().join("composer.lock"), lock).unwrap();
         let report = diagnose(dir.path()).unwrap();
-        assert!(report.findings.iter().any(|f| {
-            f.severity == Severity::Blocker
-                && f.category == "repository"
-                && f.detail.contains("vcs")
-        }));
-        assert_eq!(report.exit_code(), 1);
+        assert!(
+            !report
+                .findings
+                .iter()
+                .any(|f| f.severity == Severity::Blocker && f.category == "repository"),
+            "{:?}",
+            report.findings
+        );
     }
 }

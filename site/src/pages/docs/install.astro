@@ -15,10 +15,10 @@ import Docs from '../../layouts/Docs.astro';
     Mirror of <code>install.sh</code>. Pin to a release tag when you want the script
     locked to that release:
   </p>
-  <pre><code>curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash</code></pre>
+  <pre><code>curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.2/install.sh | bash</code></pre>
   <p>Installs into <code>~/.puck/bin</code>. Appends a PATH block unless <code>--no-modify-path</code>.</p>
   <pre><code># pin binary version
-curl -fsSL https://puck.jimmyverburgt.com/install | bash -s -- v0.1.1
+curl -fsSL https://puck.jimmyverburgt.com/install | bash -s -- v0.1.2
 
 # uninstall binary + PATH block (store left behind)
 curl -fsSL https://puck.jimmyverburgt.com/install | bash -s -- --uninstall</code></pre>
@@ -42,7 +42,7 @@ curl -fsSL https://puck.jimmyverburgt.com/install | bash -s -- --uninstall</code
 brew install puck</code></pre>
 
   <h2>GitHub Actions</h2>
-  <pre><code>- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.1
+  <pre><code>- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.2
   with:
     version: latest
     cache: true</code></pre>
@@ -53,12 +53,12 @@ brew install puck</code></pre>
     <code>Dockerfile</code>:
   </p>
   <pre><code>docker build \
-  --build-arg PUCK_VERSION=v0.1.1 \
+  --build-arg PUCK_VERSION=v0.1.2 \
   --build-arg TARGET=x86_64-unknown-linux-musl \
-  -t puck:0.1.1 .
+  -t puck:0.1.2 .
 
 # in another Dockerfile:
-COPY --from=puck:0.1.1 /puck /usr/local/bin/puck</code></pre>
+COPY --from=puck:0.1.2 /puck /usr/local/bin/puck</code></pre>
 
   <h2>From source</h2>
   <pre><code>git clone https://github.com/VerburgtJimmy/puck.git

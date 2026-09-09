@@ -8,7 +8,7 @@ Reads the same `composer.json` / `composer.lock` as Composer, writes a compatibl
 
 ## Status
 
-**v0.1.1** - macOS and Linux. `install`, `require`, `remove`, `update` / `lock`, Tier 1 adapters for Pest and phpstan/extension-installer, `puck doctor` preflight. Run `puck doctor` before switching a project.
+**v0.1.2** - macOS and Linux. `install`, `require`, `remove`, `update` / `lock`, Composer + path + git `vcs` repos, Tier 1 adapters for Pest and phpstan/extension-installer, `puck doctor` preflight. Run `puck doctor` before switching a project.
 
 ## Benchmarks (Linux CI)
 
@@ -42,7 +42,7 @@ What blocks switching today (same checks as `puck doctor`):
 | Blocker | Notes |
 |---|---|
 | Unsupported allowed composer-plugin | No silent skip; Tier 1 adapters cover Pest + phpstan/extension-installer only |
-| `vcs` / `artifact` / `package` repositories | Composer + path repos only in 0.1 |
+| `artifact` / `package` repositories | Composer + path + git `vcs` in 0.1.x |
 | Windows | macOS and Linux only |
 | Unreproducible lock | content-hash mismatch or unsupported `plugin-api-version` |
 
@@ -55,10 +55,10 @@ Warnings (abandoned packages, etc.) do not block. Run `puck doctor` or `puck doc
 ### curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.2/install.sh | bash
 ```
 
-Pinned to the `v0.1.1` tag so the script matches that release. Site mirror:
+Pinned to the `v0.1.2` tag so the script matches that release. Site mirror:
 `https://puck.jimmyverburgt.com/install` (same script; never the source of truth
 for upgrades - GitHub Releases `manifest.json` is). Resolving `latest` without
 `PUCK_VERSION` requires `python3` to parse the manifest.
@@ -118,7 +118,7 @@ puck grows in layers. Each layer is usable on its own, and nothing above a layer
 
 The runtime layer embeds the official PHP engine directly, the way FrankenPHP does, with puck's own server and worker model around it. puck will not replace the engine itself.
 
-**`0.1.x` (packages):** install path, Composer + path repos with auth, doctor, Pest + phpstan Tier 1, Tier 3 refusal. Still on this line (patch releases, not a new minor): VCS / artifact / package repositories, filter-list / audit polish, more Tier 1 adapters, canary after parity stays green on `master`, Apple notarization, and other install-path trust work.
+**`0.1.x` (packages):** install path, Composer + path + git `vcs` repos with auth, doctor, Pest + phpstan Tier 1, Tier 3 refusal. Still on this line (patch releases, not a new minor): artifact / package repositories, filter-list / audit polish, more Tier 1 adapters, canary after parity stays green on `master`, Apple notarization, and other install-path trust work.
 
 **`0.2`+:** expand beyond package management into the PHP tooling network (PHP → Processes → Runtime → Artifacts), one layer per minor.
 

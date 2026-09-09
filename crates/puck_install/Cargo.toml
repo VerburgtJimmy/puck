@@ -14,6 +14,7 @@ puck_dist.workspace = true
 puck_lock.workspace = true
 puck_manifest.workspace = true
 puck_store.workspace = true
+puck_vcs.workspace = true
 puck_version.workspace = true
 regex.workspace = true
 reqwest.workspace = true
