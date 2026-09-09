@@ -26,6 +26,7 @@ mod solver;
 mod stability;
 mod transaction;
 mod vcr_pool;
+mod vcs_repo;
 mod watch;
 
 pub use decisions::Decisions;
@@ -55,6 +56,7 @@ pub use solver::{Solver, SolverProblems};
 pub use stability::is_package_acceptable;
 pub use transaction::{Operation, Transaction};
 pub use vcr_pool::{P2Getter, array_repository_from_p2_constraints, p2_dir_getter};
+pub use vcs_repo::{VcsPackage, VcsRepository, load_vcs_repositories, vcs_package_names};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

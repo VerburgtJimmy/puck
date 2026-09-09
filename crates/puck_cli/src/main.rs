@@ -19,7 +19,8 @@ use puck_plugins::{
 };
 use puck_registry::{P2Loader, load_p2_optional};
 use puck_resolver::{
-    UpdateAllowTransitive, expand_update_unlock, load_path_packages, resolve_lock_document,
+    UpdateAllowTransitive, expand_update_unlock, load_path_packages, load_vcs_repositories,
+    resolve_lock_document,
 };
 use puck_scripts::{RunScriptsOptions, run_install_scripts};
 use puck_store::Store;
@@ -500,11 +501,22 @@ async fn run_require(
             .into_iter()
             .map(|p| p.package.name)
             .collect();
+    let vcs_provided: std::collections::BTreeSet<String> = load_vcs_repositories(
+        &root,
+        &root_for_path,
+        std::env::var_os("PUCK_VCS_CACHE")
+            .map(std::path::PathBuf::from)
+            .as_deref(),
+    )
+    .map_err(|e| e.to_string())?
+    .into_iter()
+    .flat_map(|repo| repo.packages.into_iter().map(|p| p.package.name))
+    .collect();
 
     for spec in &packages {
         let req = PackageRequirement::parse(spec).map_err(|e| e.to_string())?;
-        // Ensure metadata is loadable before mutating the project (path repos exempt).
-        if !path_provided.contains(&req.name) {
+        // Ensure metadata is loadable before mutating the project (path / vcs exempt).
+        if !path_provided.contains(&req.name) && !vcs_provided.contains(&req.name) {
             match load_p2_optional(&loader, &req.name) {
                 Ok(Some(_)) => {}
                 Ok(None) => {

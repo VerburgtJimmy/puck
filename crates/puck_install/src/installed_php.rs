@@ -505,6 +505,9 @@ mod tests {
             dist_url: None,
             dist_shasum: None,
             dist_type: None,
+            source_type: None,
+            source_url: None,
+            source_reference: None,
         }];
         let root = RootPackageMeta {
             name: "laravel/laravel".into(),
@@ -553,6 +556,9 @@ mod tests {
             dist_url: None,
             dist_shasum: None,
             dist_type: None,
+            source_type: None,
+            source_url: None,
+            source_reference: None,
         }];
         let root = RootPackageMeta::from_manifest(None);
         let php = render_installed_php(&lock, &planned, &root, true);

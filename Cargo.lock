@@ -837,7 +837,7 @@ dependencies = [
 
 [[package]]
 name = "puck_autoload"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "indexmap",
  "md-5",
@@ -852,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "puck_cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "clap",
  "puck_autoload",
@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "puck_diagnostics"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "indexmap",
  "puck_lock",
@@ -893,7 +893,7 @@ dependencies = [
 
 [[package]]
 name = "puck_dist"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "flate2",
  "reqwest",
@@ -909,13 +909,14 @@ dependencies = [
 
 [[package]]
 name = "puck_install"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "indexmap",
  "puck_dist",
  "puck_lock",
  "puck_manifest",
  "puck_store",
+ "puck_vcs",
  "puck_version",
  "regex",
  "reqwest",
@@ -928,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "puck_laravel"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -937,7 +938,7 @@ dependencies = [
 
 [[package]]
 name = "puck_lock"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "md-5",
  "regex",
@@ -948,7 +949,7 @@ dependencies = [
 
 [[package]]
 name = "puck_manifest"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "indexmap",
  "serde",
@@ -959,21 +960,21 @@ dependencies = [
 
 [[package]]
 name = "puck_php"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "puck_platform"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "puck_plugins"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -982,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "puck_registry"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "puck_dist",
  "puck_version",
@@ -995,10 +996,11 @@ dependencies = [
 
 [[package]]
 name = "puck_resolver"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "indexmap",
  "puck_lock",
+ "puck_vcs",
  "puck_version",
  "serde_json",
  "thiserror",
@@ -1006,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "puck_scripts"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "indexmap",
  "puck_php",
@@ -1017,7 +1019,7 @@ dependencies = [
 
 [[package]]
 name = "puck_store"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "libc",
  "puck_dist",
@@ -1029,7 +1031,7 @@ dependencies = [
 
 [[package]]
 name = "puck_update"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "flate2",
  "puck_version",
@@ -1044,14 +1046,16 @@ dependencies = [
 
 [[package]]
 name = "puck_vcs"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
+ "sha2",
+ "tempfile",
  "thiserror",
 ]
 
 [[package]]
 name = "puck_version"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "insta",
  "regex",

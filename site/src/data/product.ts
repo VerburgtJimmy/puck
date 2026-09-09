@@ -24,10 +24,10 @@ export const BENCHES = {
 
 export const COMPAT = [
   { area: 'composer.json / lock', status: 'Supported' },
-  { area: 'Composer + path repos', status: 'Supported' },
+  { area: 'Composer + path + git vcs repos', status: 'Supported' },
   { area: 'install / require / remove / update', status: 'Supported' },
   { area: 'Pest + phpstan Tier 1 adapters', status: 'Supported' },
-  { area: 'vcs / artifact / package repos', status: 'Not in 0.1' },
+  { area: 'artifact / package repos', status: 'Not in 0.1' },
   { area: 'Windows', status: 'Not in 0.1' },
   { area: 'Broader plugin host', status: 'Not in 0.1' },
   { area: 'Replace Composer entirely', status: 'Not planned' },

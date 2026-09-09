@@ -15,13 +15,14 @@ use crate::request::UpdateAllowTransitive;
 use crate::solver::Solver;
 use crate::transaction::Operation;
 use crate::vcr_pool::{P2Getter, array_repository_from_p2_constraints};
+use crate::vcs_repo::VcsPackage;
 use crate::{Error, Result};
 use indexmap::{IndexMap, IndexSet};
 use puck_lock::{LockWriteInput, PLUGIN_API_VERSION, build_lock_document};
 use puck_version::{Stability, parse_constraints};
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Expand a partial-update package list using lock `require` edges.
 ///
@@ -157,15 +158,17 @@ pub fn resolve_lock_document(
     let prod_requires = root_requires_from_json(&root, false);
     let all_requires = root_requires_from_json(&root, include_dev);
 
-    let (prod_repos, _) =
+    let (prod_repos, _, _) =
         build_ordered_repositories(project_root, &root, load_p2, &prod_requires, stability)?;
-    let (all_repos, path_by_name) =
+    let (all_repos, path_by_name, vcs_by_key) =
         build_ordered_repositories(project_root, &root, load_p2, &all_requires, stability)?;
 
-    // Path packages default to `dev-main` (VersionGuesser fallback); allow them
-    // under stable minimum-stability like Composer root requires of path pkgs.
+    // Path / VCS packages often use `dev-*`; allow them under stable minimum-stability.
     let mut stability_flags: IndexMap<String, Stability> = IndexMap::new();
     for name in path_by_name.keys() {
+        stability_flags.insert(name.clone(), Stability::Dev);
+    }
+    for ((name, _), _) in &vcs_by_key {
         stability_flags.insert(name.clone(), Stability::Dev);
     }
 
@@ -203,6 +206,8 @@ pub fn resolve_lock_document(
                     Error::Message(format!("p2 for {name} has no version {pretty}"))
                 })?
             }
+        } else if let Some(vcs_pkg) = vcs_by_key.get(&(name.clone(), pretty.clone())) {
+            vcs_pkg.to_lock_value()
         } else {
             let bytes = load_p2(name)
                 .map_err(|e| Error::Message(format!("p2 for {name}: {e}")))?
@@ -249,18 +254,23 @@ pub fn resolve_lock_document(
 ///
 /// Names claimed by an earlier canonical repository are omitted from later ones.
 /// Packagist / `type: composer` loads via `load_p2` with `skip_names = claimed`.
-/// Returns path packages that actually entered a path repo (for lock dump).
+/// Returns path packages and VCS `(name, pretty)` packages that entered the pool.
 fn build_ordered_repositories(
     project_root: &Path,
     root: &Value,
     load_p2: &P2Getter<'_>,
     requires: &[(String, String)],
     stability: Stability,
-) -> Result<(Vec<ArrayRepository>, IndexMap<String, PathPackage>)> {
+) -> Result<(
+    Vec<ArrayRepository>,
+    IndexMap<String, PathPackage>,
+    IndexMap<(String, String), VcsPackage>,
+)> {
     let plan = repository_pool_plan(project_root, root)?;
     let mut claimed: IndexSet<String> = IndexSet::new();
     let mut repos: Vec<ArrayRepository> = Vec::new();
     let mut path_by_name: IndexMap<String, PathPackage> = IndexMap::new();
+    let mut vcs_by_key: IndexMap<(String, String), VcsPackage> = IndexMap::new();
 
     for entry in plan {
         match entry {
@@ -287,6 +297,35 @@ fn build_ordered_repositories(
                     }
                 }
             }
+            PoolPlanEntry::Vcs(crate::vcs_repo::VcsRepository {
+                canonical,
+                packages,
+            }) => {
+                let mut repo = ArrayRepository::new();
+                let mut added = Vec::new();
+                for vcs_pkg in packages {
+                    if claimed.contains(&vcs_pkg.package.name) {
+                        continue;
+                    }
+                    added.push(vcs_pkg.package.name.clone());
+                    vcs_by_key.insert(
+                        (
+                            vcs_pkg.package.name.clone(),
+                            vcs_pkg.package.pretty_version.clone(),
+                        ),
+                        vcs_pkg.clone(),
+                    );
+                    repo.add_package(vcs_pkg.package.clone());
+                }
+                if !repo.packages().is_empty() {
+                    repos.push(repo);
+                }
+                if canonical {
+                    for name in added {
+                        claimed.insert(name);
+                    }
+                }
+            }
             PoolPlanEntry::Remote { canonical } => {
                 let repo =
                     array_repository_from_p2_constraints(load_p2, requires, stability, &claimed)?;
@@ -302,12 +341,13 @@ fn build_ordered_repositories(
         }
     }
 
-    Ok((repos, path_by_name))
+    Ok((repos, path_by_name, vcs_by_key))
 }
 
 #[derive(Debug)]
 enum PoolPlanEntry {
     Path(PathRepository),
+    Vcs(crate::vcs_repo::VcsRepository),
     Remote { canonical: bool },
 }
 
@@ -391,6 +431,11 @@ fn apply_pool_plan_entry(
                 plan.push(PoolPlanEntry::Path(repo));
             }
         }
+        "vcs" => {
+            if let Some(repo) = load_one_vcs_repository_for_plan(project_root, entry)? {
+                plan.push(PoolPlanEntry::Vcs(repo));
+            }
+        }
         "composer" => {
             let url = obj.get("url").and_then(|v| v.as_str()).unwrap_or("");
             if is_packagist_org_url(url) {
@@ -401,7 +446,7 @@ fn apply_pool_plan_entry(
             *remote_placed = true;
         }
         _ => {
-            // VCS / package / artifact / etc. - not modeled in the pool yet.
+            // package / artifact / etc. - not modeled in the pool yet.
         }
     }
     Ok(())
@@ -419,6 +464,19 @@ fn load_one_path_repository_for_plan(
     // Re-load via public path loader API surface (single entry wrapped).
     let fake = serde_json::json!({ "repositories": [entry] });
     let mut repos = crate::path_repo::load_path_repositories(project_root, &fake)?;
+    Ok(repos.pop())
+}
+
+fn load_one_vcs_repository_for_plan(
+    project_root: &Path,
+    entry: &Value,
+) -> Result<Option<crate::vcs_repo::VcsRepository>> {
+    let fake = serde_json::json!({ "repositories": [entry] });
+    let cache = std::env::var_os("PUCK_VCS_CACHE")
+        .map(PathBuf::from)
+        .unwrap_or_else(puck_vcs::default_vcs_cache_root);
+    let mut repos =
+        crate::vcs_repo::load_vcs_repositories(project_root, &fake, Some(cache.as_path()))?;
     Ok(repos.pop())
 }
 
@@ -762,6 +820,70 @@ mod tests {
             .unwrap();
         assert_eq!(pkg["dist"]["type"], "path");
         assert_eq!(pkg["dist"]["url"], "packages/acme-hello");
+    }
+
+    #[test]
+    fn resolve_vcs_local_selects_git_source() {
+        let root = std::env::temp_dir().join(format!(
+            "puck-vcs-resolve-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let repo = root.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["git", "init", "-b", "main"]);
+        run_git(&repo, &["git", "config", "user.email", "puck@test"]);
+        run_git(&repo, &["git", "config", "user.name", "puck"]);
+        std::fs::write(
+            repo.join("composer.json"),
+            r#"{"name":"acme/vcs-hello","autoload":{"psr-4":{"Acme\\":"src/"}}}"#,
+        )
+        .unwrap();
+        run_git(&repo, &["git", "add", "composer.json"]);
+        run_git(&repo, &["git", "commit", "-m", "init"]);
+        run_git(&repo, &["git", "tag", "v1.2.3"]);
+
+        let project = root.join("project");
+        std::fs::create_dir_all(&project).unwrap();
+
+        let composer = format!(
+            r#"{{
+              "name": "acme/app",
+              "require": {{ "acme/vcs-hello": "^1.2" }},
+              "repositories": [
+                {{ "type": "vcs", "url": "{}" }},
+                {{ "packagist.org": false }}
+              ]
+            }}"#,
+            repo.display()
+        );
+        std::fs::write(project.join("composer.json"), &composer).unwrap();
+
+        let get = |_name: &str| Ok(None);
+        let doc =
+            resolve_lock_document(&composer, None, &get, &[], true, &project).expect("resolve vcs");
+        let pkg = &doc["packages"].as_array().unwrap()[0];
+        assert_eq!(pkg["name"], "acme/vcs-hello");
+        assert_eq!(pkg["version"], "1.2.3");
+        assert_eq!(pkg["source"]["type"], "git");
+        assert!(pkg["source"]["reference"].as_str().unwrap().len() >= 7);
+        assert!(pkg.get("dist").is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    fn run_git(dir: &std::path::Path, cmd: &[&str]) {
+        let mut c = std::process::Command::new(cmd[0]);
+        if cmd == ["git", "init", "-b", "main"] {
+            c.args(["-c", "init.templateDir=", "init", "-b", "main"]);
+        } else {
+            c.args(&cmd[1..]);
+        }
+        let st = c.current_dir(dir).status().unwrap();
+        assert!(st.success(), "{cmd:?} in {}", dir.display());
     }
 
     fn temp_dual_dir(label: &str) -> PathBuf {

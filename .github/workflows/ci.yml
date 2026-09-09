@@ -52,6 +52,7 @@ jobs:
         env:
           PUCK_INSTALL: ${{ runner.temp }}/puck-home
           # Pin to a published release so SHA256SUMS / assets exist.
+          # Bump after tagging v0.1.2 and the release workflow finishes.
           PUCK_VERSION: v0.1.1
         run: |
           set -euo pipefail

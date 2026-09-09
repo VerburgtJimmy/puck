@@ -35,6 +35,9 @@ pub struct PlannedPackage {
     pub dist_url: Option<String>,
     pub dist_shasum: Option<String>,
     pub dist_type: Option<String>,
+    pub source_type: Option<String>,
+    pub source_url: Option<String>,
+    pub source_reference: Option<String>,
 }
 
 /// Full install plan.
@@ -115,6 +118,9 @@ pub fn plan_install(
             dist_url: None,
             dist_shasum: None,
             dist_type: None,
+            source_type: None,
+            source_url: None,
+            source_reference: None,
         });
     }
 
@@ -150,6 +156,9 @@ fn planned_from_locked(pkg: &LockedPackage, is_dev: bool, action: InstallAction)
         dist_url: pkg.dist.as_ref().and_then(|d| d.url.clone()),
         dist_shasum: pkg.dist.as_ref().and_then(|d| d.shasum.clone()),
         dist_type: pkg.dist.as_ref().and_then(|d| d.dist_type.clone()),
+        source_type: pkg.source.as_ref().and_then(|s| s.source_type.clone()),
+        source_url: pkg.source.as_ref().and_then(|s| s.url.clone()),
+        source_reference: pkg.source.as_ref().and_then(|s| s.reference.clone()),
     }
 }
 
@@ -235,6 +244,9 @@ mod tests {
                 dist_url: None,
                 dist_shasum: None,
                 dist_type: None,
+                source_type: None,
+                source_url: None,
+                source_reference: None,
             }],
         };
         let tmp = tempfile::tempdir().expect("temp");
@@ -256,6 +268,9 @@ mod tests {
                 dist_url: None,
                 dist_shasum: None,
                 dist_type: None,
+                source_type: None,
+                source_url: None,
+                source_reference: None,
             });
         }
         let plan = InstallPlan { packages };

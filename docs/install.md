@@ -9,7 +9,7 @@ See [`distribution.md`](distribution.md) for release artifacts, signing, and upg
 ## curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.2/install.sh | bash
 ```
 
 Pinned to the release tag so the script matches that release. Site mirror:
@@ -21,10 +21,10 @@ Installs into `~/.puck/bin` and appends a PATH block to your shell rc unless `--
 
 ```bash
 # pin a different binary version (script still from the tag above, or swap the tag)
-curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash -s -- v0.1.1
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.2/install.sh | bash -s -- v0.1.2
 
 # uninstall binary + PATH block (store left behind)
-curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.1/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/VerburgtJimmy/puck/v0.1.2/install.sh | bash -s -- --uninstall
 ```
 
 | Variable / flag | Default | Meaning |
@@ -70,7 +70,7 @@ puck install         # same lock/vendor files as Composer
 ## GitHub Actions
 
 ```yaml
-- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.1
+- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.2
   with:
     version: latest
     cache: true

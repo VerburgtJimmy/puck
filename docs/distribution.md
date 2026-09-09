@@ -36,7 +36,7 @@ Built in GitHub Actions from the tag, never from a laptop.
 Do **not** build glibc Linux binaries. Do **not** build Windows until Windows
 support exists.
 
-Version string embedded at build: `puck 0.1.1 (<gitsha> <date>)`.
+Version string embedded at build: `puck 0.1.2 (<gitsha> <date>)`.
 `puck --version` prints exactly that.
 
 **Channels:** `stable` only in 0.1. Canary is a **0.2** feature after
@@ -104,9 +104,9 @@ For 0.1 the action lives at [`.github/actions/setup-puck`](../.github/actions/se
 so consumers can pin:
 
 ```yaml
-- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.1
+- uses: VerburgtJimmy/puck/.github/actions/setup-puck@v0.1.2
   with:
-    version: latest   # or v0.1.1
+    version: latest   # or v0.1.2
     cache: true       # caches ~/.puck/store on composer.lock hash
 ```
 
